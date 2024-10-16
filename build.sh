@@ -100,7 +100,7 @@ build_aidl_hal() {
 build_planecontrol() {
     LOGI "Building PlaneControl service and Client"
     
-    ${CMAKE} -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" -DLINUX_BINDER_OUT_DIR="${LINUX_BINDER_DIR}/local/" -DAIDL_EXAMPLE_GEN_DIR="${PLANECONTROL_AIDL_DIR}" -DPLANECONTROL_AIDL_VERSION="${PLANECONTROL_AIDL_DIR}/${VERSION}" \
+    ${CMAKE} -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" -DLINUX_BINDER_OUT_DIR="${LINUX_BINDER_DIR}/local/" -DAIDL_PLANECONTROL_GEN_DIR="${PLANECONTROL_AIDL_DIR}" -DPLANECONTROL_AIDL_VERSION="${VERSION}" \
     && ${MAKE} install -j"$(nproc)"
 
     if [ $? -ne 0 ]; then
@@ -113,8 +113,30 @@ build_planecontrol() {
     ${CD} "${WORK_DIR}"
 }
 
+build_yaml() {
+    LOGI "Building yaml-cpp library"
+
+    # Clone yaml-cpp repository
+    if [ ! -d "yaml-cpp" ]; then
+        ${GIT} clone https://github.com/jbeder/yaml-cpp.git || { LOGE "Failed to clone yaml-cpp"; exit 1; }
+    fi
+
+    # Create build directory
+    ${MKDIR} "${WORK_DIR}/yaml-cpp/build"
+    ${CD} "${WORK_DIR}/yaml-cpp/build"
+
+    # Configure the build using CMake
+    ${CMAKE} -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" .. || { LOGE "CMake configuration failed for yaml-cpp"; return 1; }
+
+    # Build and install yaml-cpp
+    ${MAKE} -j"$(nproc)" install || { LOGE "Build and install failed for yaml-cpp"; return 1; }
+
+    LOGI "Successfully built and installed yaml-cpp"
+    ${CD} "${WORK_DIR}"
+}
 
 # Main Execution
 clone_hal_repo
 build_aidl_hal
+build_yaml
 build_planecontrol

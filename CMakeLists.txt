@@ -21,33 +21,26 @@ if (NOT DEFINED LINUX_BINDER_OUT_DIR)
 endif()
 message(STATUS "LINUX_BINDER_OUT_DIR set to ${LINUX_BINDER_OUT_DIR}")
 
-# AIDL Example Generation directory
-if (NOT DEFINED AIDL_EXAMPLE_GEN_DIR)
-    message(STATUS "Setting AIDL_EXAMPLE_GEN_DIR to default value")
-    set(AIDL_EXAMPLE_GEN_DIR "${CMAKE_SOURCE_DIR}/hal/planecontrol")
+# AIDL Interface Dependencies
+if (NOT DEFINED AIDL_PLANECONTROL_GEN_DIR)
+        message(STATUS "Setting AIDL_PLANECONTROL_GEN_DIR to default value")
+        set(AIDL_PLANECONTROL_GEN_DIR "${CMAKE_SOURCE_DIR}/hal/planecontrol")
 endif()
-message(STATUS "AIDL_EXAMPLE_GEN_DIR set to ${AIDL_EXAMPLE_GEN_DIR}")
+message(STATUS "AIDL_PLANECONTROL_GEN_DIR set to ${AIDL_PLANECONTROL_GEN_DIR}")
 
-# PlaneControl AIDL Version
+#AIDL Version
 if (NOT DEFINED PLANECONTROL_AIDL_VERSION)
-    message(STATUS "Setting PLANECONTROL_AIDL_VERSION to latest version")
-    set(PLANECONTROL_AIDL_VERSION "${AIDL_EXAMPLE_GEN_DIR}/current")
+        message(STATUS "Setting PLANECONTROL_AIDL_VERSION to current latest")
+        set(PLANECONTROL_AIDL_VERSION "current")
 endif()
 message(STATUS "PLANECONTROL_AIDL_VERSION set to ${PLANECONTROL_AIDL_VERSION}")
+
 
 # Add subdirectories
 # These will invoke the CMakeLists.txt inside MockService and L1Test directories
 add_subdirectory(MockService)
-#add_subdirectory(L1Test)
+add_subdirectory(L1Test)
 
-## Final installation targets
-#install(DIRECTORY ${CMAKE_SOURCE_DIR}/MockService
-#        DESTINATION ${CMAKE_INSTALL_PREFIX}
-#        PATTERN "CMakeLists.txt" EXCLUDE)
-
-#install(DIRECTORY ${CMAKE_SOURCE_DIR}/L1Test
-#        DESTINATION ${CMAKE_INSTALL_PREFIX}
-#        PATTERN "CMakeLists.txt" EXCLUDE)
 
 message(STATUS "PlaneControl project setup is complete.")
 

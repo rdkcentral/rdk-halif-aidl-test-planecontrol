@@ -1,0 +1,43 @@
+videoPlane:
+  pixelFormats:
+    - YCBCR422
+    - RGB
+  maxWidth: 3840
+  maxHeight: 2160
+  frameWidth: 3840
+  frameHeight: 2160
+  supportedDynamicRanges:
+    - SDR
+    - HDR10
+    - DOLBY_VISION
+  colorDepth: 10
+  maxFrameRate: 60
+  supportsAlpha: true
+  supportsZOrder: true
+  vsyncDisplayLatency: 2
+
+graphicsPlane:
+  pixelFormats:
+    - RGB
+  maxWidth: 1920
+  maxHeight: 1080
+  frameWidth: 1920
+  frameHeight: 1080
+  supportedDynamicRanges:
+    - SDR
+  colorDepth: 8
+  maxFrameRate: 60
+  supportsAlpha: false
+  supportsZOrder: false
+  vsyncDisplayLatency: 1
+
+planeProperties:
+  X: 100
+  Y: 200
+  width: 1920
+  height: 1080
+  alpha: 255
+  zorder: 5
+  visible: true
+  overscan: 10
+  aspect_ratio: 1  # 0: 4:3, 1: 16:9, 2: Custom
