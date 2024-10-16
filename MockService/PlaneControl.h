@@ -32,12 +32,15 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#include <unordered_map>
+#include <unordered_set>
 
 #include <android/log.h>
 #include <binder/BinderService.h>
 #include <binder/Status.h>
 #include <utils/Errors.h>
 #include <utils/Log.h>
+#include <yaml-cpp/yaml.h>
 
 #include <utils/String16.h>
 #include <utils/Vector.h>
@@ -71,6 +74,24 @@ using std::vector;
 using std::mutex;
 
 using namespace com::rdk::hal::planecontrol;
+using namespace com::rdk::hal;
+//using com::rdk::hal::PropertyValue::Value;
+using namespace com::rdk::hal::videodecoder;
+
+
+// PlaneProperties structure
+struct PlaneProperties {
+    int resource_id;
+    int X;            
+    int Y;        
+    int width;        
+    int height;   
+    int alpha;     
+    int zorder;       
+    bool visible;   
+    int overscan;    
+    int aspect_ratio; 
+};
 
 class PlaneControl : public android::BinderService<PlaneControl>,
                   public BnPlaneControl {
@@ -81,7 +102,8 @@ class PlaneControl : public android::BinderService<PlaneControl>,
         virtual ~PlaneControl() = default;
 
         static char const* getServiceName() { return "PlaneControl"; }
-
+    std::unordered_map<int, int> currentMappings; // <sourceIndex, destinationPlaneIndex>
+    std::unordered_map<int, PlaneProperties> planePropertiesMap;
     ::android::binder::Status getCapabilities(::std::vector<::com::rdk::hal::planecontrol::Capabilities>* _aidl_return) override;
     ::android::binder::Status getNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t* _aidl_return) override;
     ::android::binder::Status releaseNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t nativeWindowHandle) override;

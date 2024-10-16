@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # Linux Binder Dependencies
 if (NOT DEFINED LINUX_BINDER_OUT_DIR)
     message(STATUS "Setting LINUX_BINDER_OUT_DIR to default value")
-    set(LINUX_BINDER_OUT_DIR "${CMAKE_SOURCE_DIR}/../../../rdk-halif-binder/local")
+    set(LINUX_BINDER_OUT_DIR "${CMAKE_SOURCE_DIR}/../../linux_binder_idl/local")
 endif()
 message(STATUS "LINUX_BINDER_OUT_DIR set to ${LINUX_BINDER_OUT_DIR}")
 
@@ -24,15 +24,16 @@ set(LINUX_BINDER_INCLUDE_DIR "${LINUX_BINDER_OUT_DIR}/include/")
 message(STATUS "LINUX_BINDER_INCLUDE_DIR set to ${LINUX_BINDER_INCLUDE_DIR}")
 
 # AIDL Interface Dependencies
-if (NOT DEFINED AIDL_EXAMPLE_GEN_DIR)
-    message(STATUS "Setting AIDL_EXAMPLE_GEN_DIR to default value")
-    set(AIDL_EXAMPLE_GEN_DIR "${CMAKE_SOURCE_DIR}/../hal/planecontrol")
+if (NOT DEFINED AIDL_PLANECONTROL_GEN_DIR)
+	message(STATUS "Setting AIDL_PLANECONTROL_GEN_DIR to default value")
+	set(AIDL_PLANECONTROL_GEN_DIR "${CMAKE_SOURCE_DIR}/../../vdevice/aidl/hal/planecontrol")
 endif()
-message(STATUS "AIDL_EXAMPLE_GEN_DIR set to ${AIDL_EXAMPLE_GEN_DIR}")
+message(STATUS "AIDL_PLANECONTROL_GEN_DIR set to ${AIDL_PLANECONTROL_GEN_DIR}")
 
+#AIDL Version
 if (NOT DEFINED PLANECONTROL_AIDL_VERSION)
-        message(STATUS "Setting PLANECONTROL_AIDL_VERSION to current latest")
-        set(PLANECONTROL_AIDL_VERSION "${AIDL_EXAMPLE_GEN_DIR}/current")
+	message(STATUS "Setting PLANECONTROL_AIDL_VERSION to current latest")
+        set(PLANECONTROL_AIDL_VERSION "current")
 endif()
 message(STATUS "PLANECONTROL_AIDL_VERSION set to ${PLANECONTROL_AIDL_VERSION}")
 
@@ -51,66 +52,64 @@ if (NOT DEFINED CMAKE_INSTALL_BINDIR)
     message("cmake install bin dir ${CMAKE_INSTALL_BINDIR}")
 endif ()
 
-
 #############################################################
 # MockPlaneService Build
 #############################################################
-
 # Set Service Directory
-set(PLANE_CONTROL_SERVICE ${CMAKE_SOURCE_DIR}/MockService)
-
+set(PLANE_CONTROL_SERVICE ${CMAKE_SOURCE_DIR})
+#Set Source files path
+set(PLANECONTROL_SRC_PATH ${AIDL_PLANECONTROL_GEN_DIR}/gen/${PLANECONTROL_AIDL_VERSION}/cpp/com/rdk/hal/planecontrol)
 # Set AIDL Source files
 set(PLANECONTROL_AIDL_SRCS
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/cpp/com/rdk/hal/planecontrol/AspectRatio.cpp
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/cpp/com/rdk/hal/planecontrol/IPlaneControl.cpp
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/cpp/com/rdk/hal/planecontrol/IPlaneControlListener.cpp
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/cpp/com/rdk/hal/planecontrol/PlaneType.cpp
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/cpp/com/rdk/hal/planecontrol/Capabilities.cpp
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/cpp/com/rdk/hal/planecontrol/Property.cpp
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/cpp/com/rdk/hal/planecontrol/PropertyKVPair.cpp
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/cpp/com/rdk/hal/planecontrol/SourcePlaneMapping.cpp
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/cpp/com/rdk/hal/planecontrol/SourceType.cpp
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/cpp/com/rdk/hal/PropertyValue.cpp
+	${PLANECONTROL_SRC_PATH}/AspectRatio.cpp
+	${PLANECONTROL_SRC_PATH}/IPlaneControl.cpp
+	${PLANECONTROL_SRC_PATH}/IPlaneControlListener.cpp
+	${PLANECONTROL_SRC_PATH}/PlaneType.cpp
+	${PLANECONTROL_SRC_PATH}/Capabilities.cpp
+	${PLANECONTROL_SRC_PATH}/Property.cpp
+	${PLANECONTROL_SRC_PATH}/PropertyKVPair.cpp
+	${PLANECONTROL_SRC_PATH}/SourcePlaneMapping.cpp
+	${PLANECONTROL_SRC_PATH}/SourceType.cpp
+	${PLANECONTROL_SRC_PATH}/../PropertyValue.cpp
 )
+
+# Add yaml-cpp
+#Need to include yaml-cpp in vdevice-manifest and add the corresponding path
+set(YAML_CPP_DIR "~/rdk-halif-binder-test-planecontrol/output/lib/cmake/yaml-cpp")
+find_package(yaml-cpp REQUIRED PATHS ${YAML_CPP_DIR})
 
 add_library(mplanecontrol SHARED
     ${PLANECONTROL_AIDL_SRCS}
     ${PLANE_CONTROL_SERVICE}/PlaneControl.cpp
 )
-
 target_compile_options(mplanecontrol PRIVATE
     -Wall -Wextra -std=c++17
 )
-
 target_include_directories(mplanecontrol PRIVATE
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/h
+    ${AIDL_PLANECONTROL_GEN_DIR}/gen/${PLANECONTROL_AIDL_VERSION}/h
     ${LINUX_BINDER_INCLUDE_DIR}
-
+    ${YAML_CPP_INCLUDE_DIRS}  # Include yaml-cpp headers
 )
-
 # Add the library directory
 link_directories(${LINUX_BINDER_LIB_DIR})
 find_library(BINDER_LIB  binder PATHS ${LINUX_BINDER_LIB_DIR})
 find_library(UTILS_LIB utils PATHS ${LINUX_BINDER_LIB_DIR})
 
-target_link_libraries(mplanecontrol PRIVATE ${BINDER_LIB} ${UTILS_LIB})
+target_link_libraries(mplanecontrol PRIVATE ${BINDER_LIB} ${UTILS_LIB} ${YAML_CPP_LIBRARIES})
 
 # Add Service Executable
 add_executable(PlaneControLService
         ${PLANE_CONTROL_SERVICE}/PlaneControlService.cpp
 )
-
 target_compile_options(PlaneControLService PRIVATE
     -Wall -Wextra -std=c++17
 )
-
 target_include_directories(PlaneControLService PRIVATE
-    ${AIDL_EXAMPLE_GEN_DIR}/gen/current/h
+    ${AIDL_PLANECONTROL_GEN_DIR}/gen/current/h
     ${LINUX_BINDER_INCLUDE_DIR}
+    ${YAML_CPP_INCLUDE_DIRS}  # Include yaml-cpp headers
 )
-
-target_link_libraries(PlaneControLService PRIVATE ${BINDER_LIB} ${UTILS_LIB} mplanecontrol)
-
+target_link_libraries(PlaneControLService PRIVATE ${BINDER_LIB} ${UTILS_LIB} ${YAML_CPP_LIBRARIES} mplanecontrol)
 ###########################################################
 # Install the library
 ###########################################################
@@ -121,7 +120,6 @@ install(
     LIBRARY
     DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
-
 ###########################################################
 # Install the binary
 ###########################################################
