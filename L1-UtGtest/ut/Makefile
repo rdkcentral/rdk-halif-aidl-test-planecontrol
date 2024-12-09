@@ -15,7 +15,7 @@ INC_DIRS += $(ROOT_DIR)/build/usr/include
 XLDFLAGS := -L$(ROOT_DIR)/build/usr/lib
 XLDFLAGS += -Wl,-rpath-link=$(ROOT_DIR)/build/usr/lib
 XLDFLAGS += -lbinder -lutils
-XLDFLAGS += -lplanecontrol
+XLDFLAGS += -lplanecontrolaidl
 
 # required for std::optional
 CXXFLAGS := -std=c++17
