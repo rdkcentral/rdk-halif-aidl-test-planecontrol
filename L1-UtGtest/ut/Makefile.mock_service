@@ -13,8 +13,6 @@ AIDL_GEN_DIR ?= $(BUILD_DIR)/planecontrol_gen/current
 
 MOCK_SERVICE_DIR ?= $(HAL_DIR)/service/src
 
-AIDL_GEN_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/videodecoder/DynamicRange.cpp
-AIDL_GEN_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/videodecoder/PixelFormat.cpp
 AIDL_GEN_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/PropertyValue.cpp
 AIDL_GEN_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/PropertyKVPair.cpp
 AIDL_GEN_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/PlaneType.cpp
