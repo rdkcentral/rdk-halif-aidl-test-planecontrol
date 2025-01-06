@@ -2259,7 +2259,6 @@ int main(int argc, char **argv)
     std::string planeControlpath = "components.IPlaneControl.planes";
     std::string videosink_count_path = "components.IVideoSinkManager.IVideoSink";
 
-    UT_init(argc, argv);
     android::ProcessState::self()->startThreadPool();
 
     if(getService() == -1)
@@ -2281,6 +2280,7 @@ int main(int argc, char **argv)
                 return 1;
         }
     }
+    UT_init(argc, argv);
 
     if (!yaml_file.empty()) 
     {
