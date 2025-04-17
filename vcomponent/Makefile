@@ -4,7 +4,7 @@ HAL_DIR ?= $(CURDIR)
 
 PLANECONTROL_AIDL_LIB_NAME := planecontrolaidl
 
-EMULATE_SERVICE_BIN := PlaneControlService
+EMULATE_SERVICE_BIN := EmulatePlaneControlService
 PLANECONTROL_AIDL_LIB := lib$(PLANECONTROL_AIDL_LIB_NAME).so
 
 BUILD_DIR ?= $(CURDIR)/../build
