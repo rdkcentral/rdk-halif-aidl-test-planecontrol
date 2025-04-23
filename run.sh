@@ -22,8 +22,8 @@ PlaneControlService_pid=$!
 # Need to wait some time for the service to be ready
 sleep 2
 
-echo "Eexecute [hal_test]"
-${RUN_DIR}/hal_test -p profiles/hfp-planecontrol.yaml
+echo "Eexecute [vts_planeControl]"
+${RUN_DIR}/vts_planeControl -p profiles/hfp-planecontrol.yaml
 
 # cleanup
 kill -9 $servicemanager_pid $PlaneControlService_pid

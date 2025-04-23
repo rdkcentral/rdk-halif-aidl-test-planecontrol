@@ -85,6 +85,8 @@ namespace com {
                     std::mutex mHandleLock;
                     int64_t mNextHandle = 0x10000000;
                     std::vector<::com::rdk::hal::planecontrol::Capabilities> mCapabilities;
+                    int mVideoPlaneCount;
+                    int mGraphicsPlaneCount;
 
                     ::com::rdk::hal::planecontrol::Capabilities buildCapabilities(
                             int index,
