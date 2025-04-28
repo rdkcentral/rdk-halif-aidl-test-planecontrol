@@ -1,0 +1,27 @@
+IPlaneControl:
+  AspectRatio:
+    - 0       # FULL_WITH_ASPECT
+    - 1       # FULL_STRECH
+    - 2       # ZOOM_WITH_ASPECT
+  OverScan:
+    minimum: 0
+    maximum: 50
+  Visibility:
+    - 0       # Invisible
+    - 1       # Visible
+  Zorder:
+    - 0       # Primary Video Plane Z order
+    - 1       # Secondary Video plane Z order
+    - 2       # Graphics Plane Z order
+  XPosition:
+    minX: -1920
+    maxX: 1920
+  YPosition:
+    minY: -1080
+    maxY: 1080
+  Height:
+    min: 0
+    max: 1080
+  Width:
+    min: 0
+    max: 1920
