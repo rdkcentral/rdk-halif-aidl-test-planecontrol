@@ -30,7 +30,7 @@ Plane Control Interface Definitions - [Plane Control HAL](https://github.com/rdk
 
 The Plane Control `HAL` service provides the interfaces for the video frame queue and deliver video frames to a video plane under the timing of the vendor AV sync.
 
-## Stram Specification
+## Stream Specification
 
 
 
