@@ -1,20 +1,20 @@
-/*
- * If not stated otherwise in this file or this component's LICENSE file the
- * following copyright and licenses apply:
+/**
+ *  If not stated otherwise in this file or this component's LICENSE
+ *  file the following copyright and licenses apply:
  *
- * Copyright 2024 RDK Management
+ *  Copyright 2025 RDK Management
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the License);
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an AS IS BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 /** @brief
@@ -25,442 +25,584 @@
 
 #include "PlaneControl.h"
 
-using namespace com::rdk::hal;
-//using com::rdk::hal::PropertyValue::Value;
-using namespace com::rdk::hal::planecontrol;
-using namespace com::rdk::hal::videodecoder;
-using android::binder::Status;
-using std::vector;
+namespace com {
+    namespace rdk {
+        namespace hal {
+            namespace planecontrol {
 
 
-// TODO: PlaneResource got renamed in commit `3b32784f33bf8140bfd3dcf3e7239013583c5566` in hal.git
-#if 0
-Status PlaneControl::getResourceCapabilities(
-        std::vector<PlaneResource>* _aidl_return) {
+                int32_t g_plane_indexes_video[NUM_PLANES_VIDEO];
+                int32_t g_plane_indexes_graphic[NUM_PLANES_GRAPHIC];
 
-    if (!_aidl_return) {
-        return Status::fromExceptionCode(Status::EX_ILLEGAL_ARGUMENT);
-    }
+                ::com::rdk::hal::planecontrol::Capabilities PlaneControl::buildCapabilities(
+                    int planeIndex,
+                    ::com::rdk::hal::planecontrol::PlaneType type,
+                    std::vector<::com::rdk::hal::videodecoder::PixelFormat> pixelFormats,
+                    std::vector<::com::rdk::hal::planecontrol::SourceType> sourceTypes,
+                    int maxWidth,
+                    int maxHeight,
+                    int frameWidth,
+                    int frameHeight,
+                    std::vector<::com::rdk::hal::videodecoder::DynamicRange> supportedDynamicRanges,
+                    int colorDepth,
+                    int maxFrameRate,
+                    bool supportsAlpha,
+                    bool supportsZOrder,
+                    int vsyncDisplayLatency
+            )
+                {
+                    ::com::rdk::hal::planecontrol::Capabilities cap;
+                    cap.planeIndex = planeIndex;
+                    cap.type = type;
+                    cap.pixelFormats = pixelFormats;
+                    cap.sourceTypes = sourceTypes;
+                    cap.maxWidth = maxWidth;
+                    cap.maxHeight = maxHeight;
+                    cap.frameWidth = frameWidth;
+                    cap.frameHeight = frameHeight;
+                    cap.supportedDynamicRanges = supportedDynamicRanges;
+                    cap.colorDepth = colorDepth;
+                    cap.maxFrameRate = maxFrameRate;
+                    cap.supportsAlpha = supportsAlpha;
+                    cap.supportsZOrder = supportsZOrder;
+                    cap.vsyncDisplayLatency = vsyncDisplayLatency;
+                    return cap;
+                }
 
-    // Populate the PlaneResource array
-    std::vector<PlaneResource> resources;
 
-    // Example resource for video plane
-    PlaneResource videoPlaneResource;
-    videoPlaneResource.planeIndex = 0;
-    videoPlaneResource.pixelFormats = {PixelFormat::YCBCR422, PixelFormat::RGB};
-    videoPlaneResource.maxWidth = 3840;
-    videoPlaneResource.maxHeight = 2160;
-    videoPlaneResource.frameWidth = 3840;
-    videoPlaneResource.frameHeight = 2160;
-    videoPlaneResource.supportedDynamicRanges = {
-            DynamicRange::SDR, DynamicRange::HDR10, DynamicRange::DOLBY_VISION
-    };
-    videoPlaneResource.colorDepth = 10;
-    videoPlaneResource.maxFrameRate = 60;
-    videoPlaneResource.supportsAlpha = true;
-    videoPlaneResource.supportsZOrder = true;
-    videoPlaneResource.vsyncDisplayLatency = 2; // Measured in vsync periods
+                std::map<::com::rdk::hal::planecontrol::Property, ::com::rdk::hal::PropertyValue> PlaneControl::buildProperties(::com::rdk::hal::planecontrol::Capabilities capabilities)
+                {
+                    std::map<::com::rdk::hal::planecontrol::Property, ::com::rdk::hal::PropertyValue> defaults;
 
-    resources.push_back(videoPlaneResource);
+                    auto makeIntValue = [](int32_t val) {
+                        ::com::rdk::hal::PropertyValue v;
+                        v.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::intValue>(val);
+                        return v;
+                    };
+                    defaults[::com::rdk::hal::planecontrol::Property::RESOURCE_ID] = makeIntValue(capabilities.planeIndex);
+                    defaults[::com::rdk::hal::planecontrol::Property::X] = makeIntValue(0);
+                    defaults[::com::rdk::hal::planecontrol::Property::Y] = makeIntValue(0);
+                    defaults[::com::rdk::hal::planecontrol::Property::WIDTH] = makeIntValue(capabilities.maxWidth);
+                    defaults[::com::rdk::hal::planecontrol::Property::HEIGHT] = makeIntValue(capabilities.maxHeight);
+                    defaults[::com::rdk::hal::planecontrol::Property::ALPHA] = makeIntValue(255);
+                    defaults[::com::rdk::hal::planecontrol::Property::ZORDER] = makeIntValue(capabilities.planeIndex);
+                    defaults[::com::rdk::hal::planecontrol::Property::VISIBLE] = makeIntValue(0);
 
-    // Example resource for graphics plane
-    PlaneResource graphicsPlaneResource;
-    graphicsPlaneResource.planeIndex = 1;
-    graphicsPlaneResource.pixelFormats = {PixelFormat::RGB};
-    graphicsPlaneResource.maxWidth = 1920;
-    graphicsPlaneResource.maxHeight = 1080;
-    graphicsPlaneResource.frameWidth = 1920;
-    graphicsPlaneResource.frameHeight = 1080;
-    graphicsPlaneResource.supportedDynamicRanges = {DynamicRange::SDR};
-    graphicsPlaneResource.colorDepth = 8;
-    graphicsPlaneResource.maxFrameRate = 60;
-    graphicsPlaneResource.supportsAlpha = false;
-    graphicsPlaneResource.supportsZOrder = false; // Primary graphics plane
-    graphicsPlaneResource.vsyncDisplayLatency = 1; // Measured in vsync periods
+                    if (capabilities.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+                        // Defaults for grapics planes
+                        defaults[::com::rdk::hal::planecontrol::Property::OVERSCAN] = makeIntValue(5);
+                        defaults[::com::rdk::hal::planecontrol::Property::ASPECT_RATIO] = makeIntValue(0);
+                    }
 
-    resources.push_back(graphicsPlaneResource);
+                    return defaults;
+                }
 
-    *_aidl_return = std::move(resources);
-    return Status::ok();
-}
-#endif
+                PlaneControl::PlaneControl() : mVideoPlaneCount(0), mGraphicsPlaneCount(0) {
+                    struct PlaneData {
+                        int index;
+                        ::com::rdk::hal::planecontrol::PlaneType type;
+                        std::vector<::com::rdk::hal::videodecoder::PixelFormat> pixelFormats;
+                        int maxWidth;
+                        int maxHeight;
+                        int frameWidth;
+                        int frameHeight;
+                        std::vector<::com::rdk::hal::videodecoder::DynamicRange> dynamicRanges;
+                        int colorDepth;
+                        int maxFrameRate;
+                        bool supportsAlpha;
+                        bool supportsZOrder;
+                        int vsyncDisplayLatency;
+                    };
 
-Status PlaneControl::getNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t* _aidl_return) {
-    if (planeResourceIndex < 0) {
-        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
-    }
+                    const std::vector<PlaneData> planes = {
+                        {0, ::com::rdk::hal::planecontrol::PlaneType::VIDEO, {::com::rdk::hal::videodecoder::PixelFormat::NATIVE}, 3840, 2160, 3840, 2160, {::com::rdk::hal::videodecoder::DynamicRange::SDR, ::com::rdk::hal::videodecoder::DynamicRange::HLG, ::com::rdk::hal::videodecoder::DynamicRange::HDR10, ::com::rdk::hal::videodecoder::DynamicRange::HDR10PLUS, ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION}, 12, 60, true, true, 3},
+                        {1, ::com::rdk::hal::planecontrol::PlaneType::VIDEO, {::com::rdk::hal::videodecoder::PixelFormat::NATIVE}, 3840, 2160, 3840, 2160, {::com::rdk::hal::videodecoder::DynamicRange::SDR}, 10, 60, true, true, 3},
+                        {2, ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS, {::com::rdk::hal::videodecoder::PixelFormat::RGB}, 1920, 1080, 1920, 1080, {::com::rdk::hal::videodecoder::DynamicRange::SDR}, 8, 60, true, false, 1}
+                    };
 
-    // Directly return a dummy handle for demonstration purposes
-    static int64_t dummyHandle = 1234567890;  // Example handle
-    *_aidl_return = dummyHandle;
+                    int videoPlaneCount = 0;
+                    int graphicsPlaneCount = 0;
+                    for (const auto& plane : planes) {
+                        if (plane.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+                            if (videoPlaneCount < NUM_PLANES_VIDEO) {
+                                g_plane_indexes_video[videoPlaneCount++] = plane.index;
+                            }
+                        } else if (plane.type == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+                            if (graphicsPlaneCount < NUM_PLANES_GRAPHIC) {
+                                g_plane_indexes_graphic[graphicsPlaneCount++] = plane.index;
+                            }
+                        }
+                    }
 
-    return android::binder::Status::ok();
-}
+                    if (videoPlaneCount > NUM_PLANES_VIDEO) {
+                        printf("[SERVICE] Warning: Profile defines %d video planes, but NUM_PLANES_VIDEO is %d. Using first %d video planes.\n",
+                               videoPlaneCount, NUM_PLANES_VIDEO, NUM_PLANES_VIDEO);
+                        videoPlaneCount = NUM_PLANES_VIDEO;
+                    }
+                    if (graphicsPlaneCount > NUM_PLANES_GRAPHIC) {
+                        printf("[SERVICE] Warning: Profile defines %d graphics planes, but NUM_PLANES_GRAPHIC is %d. Using first %d graphics planes.\n",
+                               graphicsPlaneCount, NUM_PLANES_GRAPHIC, NUM_PLANES_GRAPHIC);
+                        graphicsPlaneCount = NUM_PLANES_GRAPHIC;
+                    }
+                    mVideoPlaneCount = videoPlaneCount;
+                    mGraphicsPlaneCount = graphicsPlaneCount;
 
-Status PlaneControl::releaseNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t nativeWindowHandle) {
-    if (planeResourceIndex < 0 || nativeWindowHandle <= 0) {
-        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
-    }
+                    for (const auto& plane : planes) {
+                        bool isVideoPlane = false;
+                        bool isGraphicsPlane = false;
+                        for (int i = 0; i < videoPlaneCount; i++) {
+                            if (g_plane_indexes_video[i] == plane.index) {
+                                isVideoPlane = true;
+                                break;
+                            }
+                        }
+                        for (int i = 0; i < graphicsPlaneCount; i++) {
+                            if (g_plane_indexes_graphic[i] == plane.index) {
+                                isGraphicsPlane = true;
+                                break;
+                            }
+                        }
+                        if (!isVideoPlane && !isGraphicsPlane) {
+                            continue;
+                        }
 
-    // In this simplified implementation, we are not tracking handles,
-    // so we'll assume the release is always successful.
-    return android::binder::Status::ok();
-}
+                        auto cap = buildCapabilities(
+                            plane.index,
+                            plane.type,
+                            plane.pixelFormats,
+                            {::com::rdk::hal::planecontrol::SourceType::NONE},
+                            plane.maxWidth,
+                            plane.maxHeight,
+                            plane.frameWidth,
+                            plane.frameHeight,
+                            plane.dynamicRanges,
+                            plane.colorDepth,
+                            plane.maxFrameRate,
+                            plane.supportsAlpha,
+                            plane.supportsZOrder,
+                            plane.vsyncDisplayLatency
+                        );
+                        mPlaneProperties[plane.index] = buildProperties(cap);
+                        mCapabilities.push_back(std::move(cap));
+                    }
 
-Status PlaneControl::flipGraphicsBuffer(int32_t planeResourceIndex, bool *_aidl_return) {
-    (void)_aidl_return;
-if (planeResourceIndex < 0) {
-// Return an exception if the planeResourceIndex is invalid
-return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
-}
+                    printf("[SERVICE] PlaneControl service initialized with %d video planes and %d graphics planes\n",
+                           mVideoPlaneCount, mGraphicsPlaneCount);
+                }
 
-// Simulate the flipping of the graphics buffer
-// In a real implementation, you would interact with your graphics subsystem here.
-// For now, just print a message for demonstration purposes.
-std::cout << "Flipping graphics buffer for plane resource index: " << planeResourceIndex << std::endl;
+                PlaneControl::~PlaneControl() {
+                    printf("[SERVICE] PlaneControl service destroyed\n");
+                }
 
-// Return success status
-return android::binder::Status::ok();
-}
 
-// setVideoSourceDestinationPlane() is refactored to setVideoSourceDestinationPlaneMapping() in
-// fac3ca8b19af81d2fb1f2ae56e754e73a1efb28f in hal.git
-Status PlaneControl::setVideoSourceDestinationPlaneMapping(
-        const std::vector<SourcePlaneMapping>& listSourcePlaneMapping, bool* _aidl_return) {
 
-    (void)_aidl_return;
-    // Map to keep track of current plane mappings.
-    std::unordered_map<int, int> currentMappings; // <sourceIndex, destinationPlaneIndex>
+                android::binder::Status PlaneControl::getCapabilities(std::vector<::com::rdk::hal::planecontrol::Capabilities>* _aidl_return)
+                {
+                    // Plane 0 (VIDEO)
+                    auto cap0 = buildCapabilities(
+                        0,
+                        ::com::rdk::hal::planecontrol::PlaneType::VIDEO,
+                        { ::com::rdk::hal::videodecoder::PixelFormat::NATIVE },
+                        { ::com::rdk::hal::planecontrol::SourceType::NONE },
+                        3840, 2160, 3840, 2160,
+                        { ::com::rdk::hal::videodecoder::DynamicRange::SDR,
+                        ::com::rdk::hal::videodecoder::DynamicRange::HLG,
+                        ::com::rdk::hal::videodecoder::DynamicRange::HDR10,
+                        ::com::rdk::hal::videodecoder::DynamicRange::HDR10PLUS,
+                        ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION },
+                        12, 60, true, true, 3
+                    );
+                    _aidl_return->push_back(cap0);
 
-    for (const auto& mapping : listSourcePlaneMapping) {
-        int sourceIndex = mapping.sourceIndex;
-        int destinationPlaneIndex = mapping.destinationPlaneIndex;
+                    // Plane 1 (VIDEO)
+                    auto cap1 = buildCapabilities(
+                        1,
+                        ::com::rdk::hal::planecontrol::PlaneType::VIDEO,
+                        { ::com::rdk::hal::videodecoder::PixelFormat::NATIVE },
+                        { ::com::rdk::hal::planecontrol::SourceType::NONE },
+                        3840, 2160, 3840, 2160,
+                        { ::com::rdk::hal::videodecoder::DynamicRange::SDR },
+                        10, 60, true, true, 3
+                    );
+                    _aidl_return->push_back(cap1);
 
-        // Check if the destination plane is already mapped
-        auto it = currentMappings.find(sourceIndex);
-        if (it != currentMappings.end() && it->second != destinationPlaneIndex) {
-            return Status::fromExceptionCode(Status::EX_ILLEGAL_STATE);
+                    // Plane 2 (GRAPHICS)
+                    auto cap2 = buildCapabilities(
+                        2,
+                        ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS,
+                        { ::com::rdk::hal::videodecoder::PixelFormat::RGB },
+                        { ::com::rdk::hal::planecontrol::SourceType::NONE },
+                        1920, 1080, 1920, 1080,
+                        { ::com::rdk::hal::videodecoder::DynamicRange::SDR },
+                        8, 60, true, false, 1
+                    );
+                    _aidl_return->push_back(cap2);
+
+                    // Return success status
+                    return android::binder::Status::ok();
+                }
+
+                android::binder::Status PlaneControl::getNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t *_aidl_return)
+                {
+                    std::lock_guard<std::mutex> lock(mHandleLock);
+
+                    // Check if planeResourceIndex is valid
+                    if (planeResourceIndex < 0 || planeResourceIndex >= (NUM_PLANES_GRAPHIC + NUM_PLANES_VIDEO)) {
+                        std::cout << "[SERVICE] Invalid planeResourceIndex " << planeResourceIndex << std::endl;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+
+                    // Check if the planeResourceIndex belongs to a valid GRAPHICS plane
+                    bool isGraphicPlane = false;
+                    for (int i = 0; i < NUM_PLANES_GRAPHIC; ++i) {
+                        if (g_plane_indexes_graphic[i] == planeResourceIndex) {
+                            isGraphicPlane = true;
+                            break;
+                        }
+                    }
+
+                    if (!isGraphicPlane) {
+                        std::cout << "[SERVICE] planeResourceIndex " << planeResourceIndex << " is not a GRAPHICS plane." << std::endl;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+
+                    // Check if the handle already exists for this planeResourceIndex
+                    auto it = mNativeWindowHandles.find(planeResourceIndex);
+                    if (it != mNativeWindowHandles.end()) {
+                        *_aidl_return = it->second;
+                        std::cout << "[SERVICE] Returning existing handle: " << *_aidl_return << " for plane: " << planeResourceIndex << std::endl;
+                        return android::binder::Status::ok();
+                    }
+
+                    // Create a new handle for the planeResourceIndex (if not found)
+                    int64_t newHandle = mNextHandle++;
+                    mNativeWindowHandles[planeResourceIndex] = newHandle;
+                    *_aidl_return = newHandle;
+                    std::cout << "[SERVICE] Created new handle: " << newHandle << " for plane: " << planeResourceIndex << std::endl;
+
+                    return android::binder::Status::ok();
+                }
+
+                android::binder::Status PlaneControl::releaseNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t nativeWindowHandle) {
+                    std::lock_guard<std::mutex> lock(mHandleLock);
+
+                    if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT, "Invalid plane resource index");
+                    }
+
+                    auto it = mNativeWindowHandles.find(planeResourceIndex);
+                    if (it == mNativeWindowHandles.end()) {
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT, "No handle stored for given index");
+                    }
+
+                    if (it->second != nativeWindowHandle) {
+                        return android::binder::Status::fromExceptionCode(
+                            android::binder::Status::EX_ILLEGAL_ARGUMENT,
+                            "Provided handle does not match stored handle");
+                    }
+
+                    mNativeWindowHandles.erase(it);
+                    return android::binder::Status::ok();
+                }
+
+                android::binder::Status PlaneControl::flipGraphicsBuffer(int32_t planeResourceIndex, bool* _aidl_return) {
+                    std::lock_guard<std::mutex> lock(mHandleLock);
+
+                    if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
+                        *_aidl_return = false;
+                        std::cout << "[SERVICE] invalid planeResourceIndex " << planeResourceIndex << std::endl;
+                        return android::binder::Status::ok();
+                    }
+
+                    if (mNativeWindowHandles.find(planeResourceIndex) == mNativeWindowHandles.end()) {
+                        *_aidl_return = false;
+                        std::cout << "[SERVICE] NativeWindowHandle doesnt exist for the planeResourceIndex " << planeResourceIndex << std::endl;
+                        return android::binder::Status::ok();
+                    }
+
+                    *_aidl_return = true;
+                    return android::binder::Status::ok();
+                }
+
+                android::binder::Status PlaneControl::setVideoSourceDestinationPlaneMapping(const ::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>& listSourcePlaneMapping, bool* _aidl_return) {
+                    std::lock_guard<std::mutex> lock(mHandleLock);
+                    std::set<std::pair<SourceType, int>> seenSources;
+                    std::set<int> seenPlanes;
+
+                    for (const auto& mapping : listSourcePlaneMapping) {
+                        if (mapping.destinationPlaneIndex >= mVideoPlaneCount) {
+                            *_aidl_return = false;
+                            std::cout << "[SERVICE] video plane doesnt exist " << mapping.destinationPlaneIndex << std::endl;
+                            return android::binder::Status::ok();
+                        }
+                        if (mapping.destinationPlaneIndex != -1) {
+                            if (!seenPlanes.insert(mapping.destinationPlaneIndex).second) {
+                                *_aidl_return = false;
+                                std::cout << "[SERVICE] duplicate plane " << mapping.destinationPlaneIndex << std::endl;
+                                return android::binder::Status::ok();
+                            }
+                        }
+                        if (mapping.sourceType != SourceType::NONE) {
+                            auto key = std::make_pair(mapping.sourceType, mapping.sourceIndex);
+                            if (!seenSources.insert(key).second) {
+                                *_aidl_return = false;
+                                std::cout << "[SERVICE] duplicate sources " << std::endl;
+                                return android::binder::Status::ok();
+                            }
+                        }
+                    }
+
+                    for (const auto& mapping : listSourcePlaneMapping) {
+                        if (mapping.destinationPlaneIndex != -1) {
+                            auto it = mVideoPlaneMappings.find(mapping.destinationPlaneIndex);
+                            if (it != mVideoPlaneMappings.end()) {
+                                const auto& currentMapping = it->second;
+                                if (currentMapping.sourceType != SourceType::NONE && currentMapping.sourceIndex != -1) {
+                                    std::cout << "[SERVICE] Plane already mapped to another Source " << std::endl;
+                                    return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_STATE);
+                                }
+                            }
+                        }
+                    }
+
+                    for (const auto& mapping : listSourcePlaneMapping) {
+                        if (mapping.destinationPlaneIndex == -1) {
+                            for (auto it = mVideoPlaneMappings.begin(); it != mVideoPlaneMappings.end();) {
+                                if (it->second.sourceType == mapping.sourceType &&
+                                    it->second.sourceIndex == mapping.sourceIndex) {
+                                    std::cout << "[SERVICE] unmapping destinationPlaneIndex " << std::endl;
+                                    it = mVideoPlaneMappings.erase(it);
+                                } else {
+                                    ++it;
+                                }
+                            }
+                        } else {
+                            std::cout << "[SERVICE] Map source to the destination plane " << std::endl;
+                            mVideoPlaneMappings[mapping.destinationPlaneIndex] = mapping;
+                        }
+                    }
+                    *_aidl_return = true;
+                    return android::binder::Status::ok();
+                }
+
+                android::binder::Status PlaneControl::getVideoSourceDestinationPlaneMapping(::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>* _aidl_return) {
+                    std::lock_guard<std::mutex> lock(mHandleLock);
+                    _aidl_return->clear();
+                    for (int planeIndex = 0; planeIndex < mVideoPlaneCount; ++planeIndex) {
+                        ::com::rdk::hal::planecontrol::SourcePlaneMapping mapping;
+
+                        auto it = mVideoPlaneMappings.find(planeIndex);
+                        if (it != mVideoPlaneMappings.end()) {
+                            mapping = it->second;
+                        } else {
+                            mapping.sourceType = SourceType::NONE;
+                            mapping.sourceIndex = -1;
+                            mapping.destinationPlaneIndex = planeIndex;
+                        }
+
+                        _aidl_return->push_back(mapping);
+                    }
+
+                    return android::binder::Status::ok();
+                }
+
+                android::binder::Status PlaneControl::getProperty(int32_t planeResourceIndex, com::rdk::hal::planecontrol::Property property, ::std::optional<::com::rdk::hal::PropertyValue>* _aidl_return) {
+                    // Validate plane index
+                    if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
+                        *_aidl_return = std::nullopt;
+                        std::cout << "[SERVICE] Invalid planeResourceIndex " << planeResourceIndex << std::endl;
+                        return android::binder::Status::ok();
+                    }
+
+                    // Validate property
+                    switch (property) {
+                        case Property::X:
+                        case Property::Y:
+                        case Property::WIDTH:
+                        case Property::HEIGHT:
+                        case Property::ALPHA:
+                        case Property::ZORDER:
+                        case Property::VISIBLE:
+                        case Property::OVERSCAN:
+                        case Property::ASPECT_RATIO:
+                            break;
+                        default:
+                            return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+
+                    // Since we now dynamically populate mPlaneProperties, this should always succeed for valid indices
+                    const auto& propertyMap = mPlaneProperties[planeResourceIndex];
+                    auto propIt = propertyMap.find(property);
+                    if (propIt == propertyMap.end()) {
+                        *_aidl_return = std::nullopt;
+                        return android::binder::Status::ok();
+                    }
+
+                    *_aidl_return = propIt->second;
+                    return android::binder::Status::ok();
+                }
+
+
+                android::binder::Status PlaneControl::setProperty(int32_t planeResourceIndex, ::com::rdk::hal::planecontrol::Property property, const ::com::rdk::hal::PropertyValue& propertyValue, bool* _aidl_return) {
+                    if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
+                        *_aidl_return = false;
+                        std::cout << "[SERVICE] planeResourceIndex is invalid " << planeResourceIndex << std::endl;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+
+                    switch (property) {
+                        case ::com::rdk::hal::planecontrol::Property::X:
+                        case ::com::rdk::hal::planecontrol::Property::Y:
+                        case ::com::rdk::hal::planecontrol::Property::WIDTH:
+                        case ::com::rdk::hal::planecontrol::Property::HEIGHT:
+                        case ::com::rdk::hal::planecontrol::Property::ALPHA:
+                        case ::com::rdk::hal::planecontrol::Property::ZORDER:
+                        case ::com::rdk::hal::planecontrol::Property::VISIBLE:
+                        case ::com::rdk::hal::planecontrol::Property::OVERSCAN:
+                        case ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO:
+                            break;
+                        default:
+                            *_aidl_return = false;
+                            return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+                    if (propertyValue.value.has_value() && propertyValue.value->getTag() != PropertyValue::Value::Tag::intValue) {
+                        *_aidl_return = false;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+
+                    mPlaneProperties[planeResourceIndex][property] = propertyValue;
+                    *_aidl_return = true;
+                    return android::binder::Status::ok();
+                }
+
+                android::binder::Status PlaneControl::getPropertyMulti(
+                    int32_t planeResourceIndex,
+                    std::vector<PropertyKVPair>* propertyKVList,
+                    bool* _aidl_return) {
+
+                    if (propertyKVList == nullptr || _aidl_return == nullptr ||
+                        planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
+                        *_aidl_return = false;
+                        std::cout << "[SERVICE] Invalid planeResourceIndex " << planeResourceIndex
+                                  << " or null propertyKVList/_aidl_return" << std::endl;
+                        return android::binder::Status::ok();
+                    }
+
+                    const auto& propertyMap = mPlaneProperties[planeResourceIndex];
+                    bool allValid = true;
+
+                    for (auto& kv : *propertyKVList) {
+                        Property property = kv.property;
+
+                        // Validate that the enum value is within the known range
+                        if (property < Property::RESOURCE_ID || property > Property::ASPECT_RATIO) {
+                            std::cout << "[SERVICE] Invalid property enum: " << static_cast<int>(property) << std::endl;
+                            allValid = false;
+                            continue;
+                        }
+
+                        auto propIt = propertyMap.find(property);
+                        if (propIt != propertyMap.end()) {
+                            kv.propertyValue = propIt->second;
+                        } else {
+                            PropertyValue invalidValue;
+                            invalidValue.value = std::nullopt;
+                            kv.propertyValue = invalidValue;
+                        }
+                    }
+
+                    *_aidl_return = allValid;
+                    return android::binder::Status::ok();
+                }
+
+                android::binder::Status PlaneControl::setPropertyMultiAtomic( int32_t planeResourceIndex, const std::vector <com::rdk::hal::planecontrol::PropertyKVPair> &propertyKVList, bool* _aidl_return)
+                {
+                    // Input validation
+                    if (planeResourceIndex < 0 || planeResourceIndex > (NUM_PLANES_VIDEO + NUM_PLANES_GRAPHIC)) {
+                        *_aidl_return = false;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+                    std::map<Property, PropertyValue> tempMap;
+                    for (const auto& kv : propertyKVList) {
+                        Property prop = kv.property;
+                        const PropertyValue& val = kv.propertyValue;
+
+                        // Validate property
+                        switch (prop) {
+                            case Property::X:
+                            case Property::Y:
+                            case Property::WIDTH:
+                            case Property::HEIGHT:
+                            case Property::ALPHA:
+                            case Property::ZORDER:
+                            case Property::VISIBLE:
+                            case Property::OVERSCAN:
+                            case Property::ASPECT_RATIO:
+                                break; // Valid
+                            default:
+                                *_aidl_return = false;
+                                return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                        }
+
+                        if (val.value.has_value() && val.value->getTag() != PropertyValue::Value::Tag::intValue)
+                        {
+                            *_aidl_return = false;
+                            return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                        }
+                        tempMap[prop] = val;
+                    }
+
+                    // If all are valid, commit atomically
+                    for (const auto& [prop, val] : tempMap) {
+                        mPlaneProperties[planeResourceIndex][prop] = val;
+                    }
+                    *_aidl_return = true;
+                    return android::binder::Status::ok();
+                }
+
+                android::binder::Status PlaneControl::registerListener(const ::android::sp<::com::rdk::hal::planecontrol::IPlaneControlListener>& listener, bool* _aidl_return)
+                {
+                    if (listener == nullptr)
+                    {
+                        *_aidl_return = false;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+                    android::sp<IBinder> binder = IInterface::asBinder(listener);
+                    for (const auto& l : mListeners)
+                    {
+                        if (IInterface::asBinder(l) == binder)
+                        {
+                            *_aidl_return = false;
+                            std::cout << "[SERVICE] listener already registered "<< std::endl;
+                            return android::binder::Status::ok();
+                        }
+                    }
+                    mListeners.insert(listener);
+                    *_aidl_return = true;
+                    return android::binder::Status::ok();
+                }
+
+                android::binder::Status PlaneControl::unregisterListener(const  ::android::sp<::com::rdk::hal::planecontrol::IPlaneControlListener>& listener, bool* _aidl_return)
+                {
+                    if (listener == nullptr)
+                    {
+                        *_aidl_return = false;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+                    android::sp<IBinder> binderToRemove = IInterface::asBinder(listener);
+                    for (auto it = mListeners.begin(); it != mListeners.end(); ++it)
+                    {
+                        if (IInterface::asBinder(*it) == binderToRemove) {
+                            mListeners.erase(it);
+                            *_aidl_return = true;
+                            return android::binder::Status::ok();
+                        }
+                    }
+                    *_aidl_return = false; // Listener not found
+                    return android::binder::Status::ok();
+                }
+            }
         }
-
-        // Update the mapping
-        currentMappings[sourceIndex] = destinationPlaneIndex;
     }
-
-    // Apply the mappings in the system (simulated here)
-    for (const auto& [sourceIndex, destinationPlaneIndex] : currentMappings) {
-        // Apply the mapping to the system
-        // In a real implementation, you would interact with system services or hardware here
-    }
-
-    return Status::ok();
 }
 
-Status PlaneControl::getProperty(int32_t planeResourceIndex, ::com::rdk::hal::planecontrol::Property property, ::std::optional<::com::rdk::hal::PropertyValue>* _aidl_return) {
-    (void) _aidl_return;
-    // Validate planeResourceIndex
-    if (planeResourceIndex < 0) {
-        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
-    }
-
-    // Initialize the PropertyValue
-    com::rdk::hal::PropertyValue value;
-
-    switch (property) {
-        case com::rdk::hal::planecontrol::Property::X:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(100);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::Y:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(200);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::WIDTH:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(1920);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::HEIGHT:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(1080);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::ALPHA:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::byteValue>(static_cast<int8_t>(255));  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::ZORDER:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(1);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::VISIBLE:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::booleanValue>(true);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::OVERSCAN:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(0);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::ASPECT_RATIO:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(16);  // Example value (e.g., 16:9)
-            break;
-// METRIC_FRAMES_RECEIVED is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_PRESENTED are removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_DROPPED_LATE is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_DROPPED_FRC is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_REPEATED_FRC is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_REPEATED_MISSING_FRAME is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_UNDERFLOWED is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-#if 0
-        case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_RECEIVED:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(100);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_PRESENTED:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(200);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_DROPPED_LATE:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(50);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_DROPPED_FRC:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(20);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_REPEATED_FRC:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(10);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_REPEATED_MISSING_FRAME:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(5);  // Example value
-            break;
-        case com::rdk::hal::planecontrol::Property::METRIC_UNDERFLOWED:
-            value.value = com::rdk::hal::PropertyValue::Value::make<com::rdk::hal::PropertyValue::Value::Tag::intValue>(2);  // Example value
-            break;
-#endif
-        default:
-            return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
-    }
-
-    *_aidl_return = value;
-    return android::binder::Status::ok();
-}
-
-
-Status PlaneControl::setProperty(int32_t planeResourceIndex, Property property, const PropertyValue& propertyValue, bool *aidl_return) {
-    // Dummy implementation: return OK
-    return Status::ok();
-}
-
-Status PlaneControl::getPropertyMulti(int32_t planeResourceIndex, std::vector<PropertyKVPair>* propertyKVList, bool *_aidl_return) {
-    (void)_aidl_return;
-    if (planeResourceIndex < 0) {
-        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
-    }
-
-    for (auto& pair : *propertyKVList) {
-        switch (pair.property) {
-            case Property::X:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(100);  // Example value
-                break;
-            case Property::Y:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(200);  // Example value
-                break;
-            case Property::WIDTH:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(1920);  // Example value
-                break;
-            case Property::HEIGHT:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(1080);  // Example value
-                break;
-            case Property::ALPHA:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::byteValue>(static_cast<int8_t>(255));  // Example value
-                break;
-            case Property::ZORDER:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(1);  // Example value
-                break;
-            case Property::VISIBLE:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::booleanValue>(true);  // Example value
-                break;
-            case Property::OVERSCAN:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(0);  // Example value
-                break;
-            case Property::ASPECT_RATIO:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(16);  // Example value (e.g., 16:9)
-                break;
-// METRIC_FRAMES_RECEIVED is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_PRESENTED are removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_DROPPED_LATE is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_DROPPED_FRC is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_REPEATED_FRC is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_REPEATED_MISSING_FRAME is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_UNDERFLOWED is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-#if 0
-            case Property::METRIC_FRAMES_RECEIVED:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(100);  // Example value
-                break;
-            case Property::METRIC_FRAMES_PRESENTED:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(200);  // Example value
-                break;
-            case Property::METRIC_FRAMES_DROPPED_LATE:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(50);  // Example value
-                break;
-            case Property::METRIC_FRAMES_DROPPED_FRC:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(20);  // Example value
-                break;
-            case Property::METRIC_FRAMES_REPEATED_FRC:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(10);  // Example value
-                break;
-            case Property::METRIC_FRAMES_REPEATED_MISSING_FRAME:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(5);  // Example value
-                break;
-            case Property::METRIC_UNDERFLOWED:
-                pair.propertyValue.value = PropertyValue::Value::make<PropertyValue::Value::Tag::intValue>(2);  // Example value
-                break;
-#endif
-            default:
-                return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
-        }
-    }
-    return android::binder::Status::ok();
-}
-
-Status PlaneControl::setPropertyMultiAtomic(
-        int32_t planeResourceIndex,
-        const std::vector<com::rdk::hal::planecontrol::PropertyKVPair>& propertyKVList,
-        bool *_aidl_return) {
-    (void)_aidl_return;
-
-    // Validate input
-    if (planeResourceIndex < 0) {
-        return android::binder::Status::fromExceptionCode(
-                android::binder::Status::EX_ILLEGAL_ARGUMENT);
-    }
-
-    // Process each property key-value pair
-    for (const auto &pair: propertyKVList) {
-        switch (pair.property) {
-            case com::rdk::hal::planecontrol::Property::X:
-                // Handle Property::X
-                // Example: Update X coordinate
-                // plane->setXCoordinate(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::Y:
-                // Handle Property::Y
-                // Example: Update Y coordinate
-                // plane->setYCoordinate(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::WIDTH:
-                // Handle Property::WIDTH
-                // Example: Update width
-                // plane->setWidth(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::HEIGHT:
-                // Handle Property::HEIGHT
-                // Example: Update height
-                // plane->setHeight(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::ALPHA:
-                // Handle Property::ALPHA
-                // Example: Update alpha value
-                // plane->setAlpha(pair.propertyValue.value->byteValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::ZORDER:
-                // Handle Property::ZORDER
-                // Example: Update Z-order
-                // plane->setZOrder(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::VISIBLE:
-                // Handle Property::VISIBLE
-                // Example: Update visibility
-                // plane->setVisible(pair.propertyValue.value->booleanValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::OVERSCAN:
-                // Handle Property::OVERSCAN
-                // Example: Update overscan value
-                // plane->setOverscan(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::ASPECT_RATIO:
-                // Handle Property::ASPECT_RATIO
-                // Example: Update aspect ratio
-                // plane->setAspectRatio(pair.propertyValue.value->intValue);
-                break;
-
-// METRIC_FRAMES_RECEIVED is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_PRESENTED are removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_DROPPED_LATE is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_DROPPED_FRC is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_REPEATED_FRC is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_FRAMES_REPEATED_MISSING_FRAME is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-// METRIC_UNDERFLOWED is removed in 3b32784f33bf8140bfd3dcf3e7239013583c5566 in hal.git
-#if 0
-            case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_RECEIVED:
-                // Handle Property::METRIC_FRAMES_RECEIVED
-                // Example: Handle metric for frames received
-                // plane->setMetricFramesReceived(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_PRESENTED:
-                // Handle Property::METRIC_FRAMES_PRESENTED
-                // Example: Handle metric for frames presented
-                // plane->setMetricFramesPresented(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_DROPPED_LATE:
-                // Handle Property::METRIC_FRAMES_DROPPED_LATE
-                // Example: Handle metric for frames dropped late
-                // plane->setMetricFramesDroppedLate(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_DROPPED_FRC:
-                // Handle Property::METRIC_FRAMES_DROPPED_FRC
-                // Example: Handle metric for frames dropped due to FRC
-                // plane->setMetricFramesDroppedFRC(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_REPEATED_FRC:
-                // Handle Property::METRIC_FRAMES_REPEATED_FRC
-                // Example: Handle metric for frames repeated due to FRC
-                // plane->setMetricFramesRepeatedFRC(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::METRIC_FRAMES_REPEATED_MISSING_FRAME:
-                // Handle Property::METRIC_FRAMES_REPEATED_MISSING_FRAME
-                // Example: Handle metric for frames repeated due to missing frames
-                // plane->setMetricFramesRepeatedMissingFrame(pair.propertyValue.value->intValue);
-                break;
-
-            case com::rdk::hal::planecontrol::Property::METRIC_UNDERFLOWED:
-                // Handle Property::METRIC_UNDERFLOWED
-                // Example: Handle metric for underflowed frames
-                // plane->setMetricUnderflowed(pair.propertyValue.value->intValue);
-                break;
-#endif
-
-            default:
-                return android::binder::Status::fromExceptionCode(
-                        android::binder::Status::EX_ILLEGAL_ARGUMENT);
-        }
-    }
-
-    return android::binder::Status::ok();
-}
-
-Status PlaneControl::registerListener(const sp<IPlaneControlListener>& listener, bool* _aidl_return) {
-    // Dummy implementation: return OK
-    if (_aidl_return) {
-        *_aidl_return = true;
-    }
-    return Status::ok();
-}
-
-Status PlaneControl::unregisterListener(const sp<IPlaneControlListener>& listener, bool* _aidl_return) {
-    // Dummy implementation: return OK
-    if (_aidl_return) {
-        *_aidl_return = true;
-    }
-    return Status::ok();
-}
-
-Status PlaneControl::getCapabilities(vector<Capabilities>* _aidl_return) {
-    (void) _aidl_return;
-    return Status::ok();
-}
-
-Status PlaneControl::getVideoSourceDestinationPlaneMapping(vector<SourcePlaneMapping>* _aidl_return) {
-    (void) _aidl_return;
-    return Status::ok();
-}

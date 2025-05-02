@@ -1,20 +1,20 @@
-/*
- * If not stated otherwise in this file or this component's LICENSE file the
- * following copyright and licenses apply:
+/**
+ *  If not stated otherwise in this file or this component's LICENSE
+ *  file the following copyright and licenses apply:
  *
- * Copyright 2024 RDK Management
+ *  Copyright 2025 RDK Management
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the License);
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an AS IS BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 /** @brief
@@ -23,82 +23,93 @@
  * The header file contains the PlaneControl service interfaces.
  */
 
-#ifndef _PLANE_CONTROL_H_
-#define _PLANE_CONTROL_H_
+#ifndef PLANE_CONTROL_H
+#define PLANE_CONTROL_H
 
-#include <mutex>
-#include <sstream>
-#include <string>
-#include <thread>
-#include <unistd.h>
-#include <vector>
-
-#include <android/log.h>
 #include <binder/BinderService.h>
-#include <binder/Status.h>
-#include <utils/Errors.h>
-#include <utils/Log.h>
-
-#include <utils/String16.h>
-#include <utils/Vector.h>
+#include <optional>
+#include <string>
+#include <utils/StrongPointer.h>
+#include <vector>
+#include <set>
+#include <mutex>
+#include <condition_variable>
+#include <future>
+#include <chrono>
+#include <thread>
+#include <ctime>
+#include <sstream>
+#include <iomanip>
 
 #include "com/rdk/hal/planecontrol/BnPlaneControl.h"
 #include "com/rdk/hal/planecontrol/IPlaneControlListener.h"
-// TODO: PlaneResource got renamed in commit `3b32784f33bf8140bfd3dcf3e7239013583c5566` in hal.git
-// #include "com/rdk/hal/planecontrol/PlaneResource.h"
-#include "com/rdk/hal/planecontrol/SourcePlaneMapping.h"
-#include "com/rdk/hal/planecontrol/Property.h"
-#include "com/rdk/hal/PropertyValue.h"
-#include "com/rdk/hal/planecontrol/Property.h"
-#include "com/rdk/hal/planecontrol/PropertyKVPair.h"
+#include "com/rdk/hal/videodecoder/DynamicRange.h"
+#include "com/rdk/hal/videodecoder/PixelFormat.h"
 
-// libutils
-using android::OK;
-using android::String8;
-using android::String16;
-using android::sp;
+namespace com {
+    namespace rdk {
+        namespace hal {
+            namespace planecontrol {
 
-// libbinder
-using android::defaultServiceManager;
-using android::binder::Status;
+#define NUM_PLANES_VIDEO 2
+#define NUM_PLANES_GRAPHIC 1
 
-// Generated code
-using com::rdk::hal::planecontrol::BnPlaneControl;
+                class PlaneControl : public android::BinderService<PlaneControl>,
+                                     public BnPlaneControl {
 
-// Standard library
-using std::string;
-using std::unique_ptr;
-using std::vector;
-using std::mutex;
+                public:
 
-using namespace com::rdk::hal::planecontrol;
+                    PlaneControl();
+                    virtual ~PlaneControl();
 
-class PlaneControl : public android::BinderService<PlaneControl>,
-                  public BnPlaneControl {
-    private:
-        friend class BinderService<PlaneControl>;
+                    static char const *getServiceName() { return IPlaneControl::serviceName().c_str(); }
 
-    PlaneControl() {}
-        virtual ~PlaneControl() = default;
+                    ::android::binder::Status getCapabilities(::std::vector<::com::rdk::hal::planecontrol::Capabilities>* _aidl_return) override;
+                    ::android::binder::Status getNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t* _aidl_return) override;
+                    ::android::binder::Status releaseNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t nativeWindowHandle) override;
+                    ::android::binder::Status flipGraphicsBuffer(int32_t planeResourceIndex, bool* _aidl_return) override;
+                    ::android::binder::Status setVideoSourceDestinationPlaneMapping(const ::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>& listSourcePlaneMapping, bool* _aidl_return) override;
+                    ::android::binder::Status getVideoSourceDestinationPlaneMapping(::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>* _aidl_return) override;
+                    ::android::binder::Status getProperty(int32_t planeResourceIndex, ::com::rdk::hal::planecontrol::Property property, ::std::optional<::com::rdk::hal::PropertyValue>* _aidl_return) override;
+                    ::android::binder::Status setProperty(int32_t planeResourceIndex, ::com::rdk::hal::planecontrol::Property property, const ::com::rdk::hal::PropertyValue& propertyValue, bool* _aidl_return) override;
+                    ::android::binder::Status getPropertyMulti(int32_t planeResourceIndex, ::std::vector<::com::rdk::hal::planecontrol::PropertyKVPair>* propertyKVList, bool* _aidl_return) override;
+                    ::android::binder::Status setPropertyMultiAtomic(int32_t planeResourceIndex, const ::std::vector<::com::rdk::hal::planecontrol::PropertyKVPair>& propertyKVList, bool* _aidl_return) override;
+                    ::android::binder::Status registerListener(const ::android::sp<::com::rdk::hal::planecontrol::IPlaneControlListener>& listener, bool* _aidl_return) override;
+                    ::android::binder::Status unregisterListener(const ::android::sp<::com::rdk::hal::planecontrol::IPlaneControlListener>& listener, bool* _aidl_return) override;
 
-        static char const* getServiceName() { return IPlaneControl::serviceName().c_str(); }
+                private:
+                    std::unordered_map<int, long> mNativeWindowHandles;
+                    std::unordered_map<int, ::com::rdk::hal::planecontrol::SourcePlaneMapping> mVideoPlaneMappings;
+                    std::map<int32_t, std::map<Property, PropertyValue>> mPlaneProperties;
+                    std::set<android::sp<IPlaneControlListener>> mListeners;
+                    std::mutex mHandleLock;
+                    int64_t mNextHandle = 0x10000000;
+                    std::vector<::com::rdk::hal::planecontrol::Capabilities> mCapabilities;
+                    int mVideoPlaneCount;
+                    int mGraphicsPlaneCount;
 
-    // ::android::binder::Status getResourceCapabilities(::std::vector<::com::rdk::hal::planecontrol::PlaneResource>* _aidl_return) override;
-    ::android::binder::Status getNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t* _aidl_return) override;
-    ::android::binder::Status releaseNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t nativeWindowHandle) override;
-    ::android::binder::Status flipGraphicsBuffer(int32_t planeResourceIndex, bool* _aidl_return) override;
-    // ::android::binder::Status setVideoSourceDestinationPlane(const ::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>& listSourcePlaneMapping, bool* _aidl_return) override;
-    ::android::binder::Status setVideoSourceDestinationPlaneMapping(const ::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>& listSourcePlaneMapping, bool* _aidl_return) override;
-    ::android::binder::Status getProperty(int32_t planeResourceIndex, ::com::rdk::hal::planecontrol::Property property, ::std::optional<::com::rdk::hal::PropertyValue>* _aidl_return) override;
-    ::android::binder::Status setProperty(int32_t planeResourceIndex, ::com::rdk::hal::planecontrol::Property property, const ::com::rdk::hal::PropertyValue& propertyValue, bool* _aidl_return) override;
-    // ::android::binder::Status getPropertyMulti(int32_t planeResourceIndex, ::std::vector<::com::rdk::hal::planecontrol::PropertyKVPair>* propertyKVList) override;
-    ::android::binder::Status getPropertyMulti(int32_t planeResourceIndex, ::std::vector<::com::rdk::hal::planecontrol::PropertyKVPair>* propertyKVList, bool* _aidl_return) override;
-    // ::android::binder::Status setPropertyMultiAtomic(int32_t planeResourceIndex, const ::std::vector<::com::rdk::hal::planecontrol::PropertyKVPair>& propertyKVList) override;
-    ::android::binder::Status setPropertyMultiAtomic(int32_t planeResourceIndex, const ::std::vector<::com::rdk::hal::planecontrol::PropertyKVPair>& propertyKVList, bool* _aidl_return) override;
-    ::android::binder::Status registerListener(const ::android::sp<::com::rdk::hal::planecontrol::IPlaneControlListener>& listener, bool* _aidl_return) override;
-    ::android::binder::Status unregisterListener(const ::android::sp<::com::rdk::hal::planecontrol::IPlaneControlListener>& listener, bool* _aidl_return) override;
-    ::android::binder::Status getCapabilities(::std::vector<::com::rdk::hal::planecontrol::Capabilities>* _aidl_return) override;
-    ::android::binder::Status getVideoSourceDestinationPlaneMapping(::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>* _aidl_return) override;
-};
+                    ::com::rdk::hal::planecontrol::Capabilities buildCapabilities(
+                            int index,
+                            ::com::rdk::hal::planecontrol::PlaneType type,
+                            std::vector<::com::rdk::hal::videodecoder::PixelFormat> pixelFormats,
+                            std::vector<::com::rdk::hal::planecontrol::SourceType> sourceTypes,
+                            int maxWidth,
+                            int maxHeight,
+                            int frameWidth,
+                            int frameHeight,
+                            std::vector<::com::rdk::hal::videodecoder::DynamicRange> dynamicRanges,
+                            int colorDepth,
+                            int maxFrameRate,
+                            bool supportsAlpha,
+                            bool supportsZOrder,
+                            int vsyncDisplayLatency
+                    );
 
-#endif //_PLANE_CONTROL_H_
+                    std::map<::com::rdk::hal::planecontrol::Property, ::com::rdk::hal::PropertyValue> buildProperties(::com::rdk::hal::planecontrol::Capabilities capabilities);
+                };
+            }
+        }
+    }
+}
+
+#endif PLANE_CONTROL_H
