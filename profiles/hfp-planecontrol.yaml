@@ -22,16 +22,6 @@ IPlaneControl:              # Component object begins
         supportsAlpha: true
         supportsZOrder: true
         vsyncDisplayLatency: 3
-        AspectRatio:
-          - FULL_WITH_ASPECT       # 0 FULL_WITH_ASPECT
-          - FULL_STRECH            # 1 FULL_STRECH
-          - ZOOM_WITH_ASPECT       # 2 ZOOM_WITH_ASPECT
-        Zorder:
-          - PRIMARY         # 0 Primary Video Plane Z order
-          - SECONDARY       # 1 Secondary Video plane Z order
-        OverScan:
-          minimum: 0        # minimum Overscan %
-          maximum: 50       # maximum overscan % TBD
     - 1:                    # Resource object begins
         type: VIDEO
         pixelFormats:
@@ -47,16 +37,6 @@ IPlaneControl:              # Component object begins
         supportsAlpha: true
         supportsZOrder: true
         vsyncDisplayLatency: 3
-        AspectRatio:
-          - FULL_WITH_ASPECT       # 0 FULL_WITH_ASPECT
-          - FULL_STRECH            # 1 FULL_STRECH
-          - ZOOM_WITH_ASPECT       # 2 ZOOM_WITH_ASPECT
-        Zorder:
-          - PRIMARY         # 0 Primary Video Plane Z order
-          - SECONDARY       # 1 Secondary Video plane Z order
-        OverScan:
-          minimum: 0        # minimum Overscan %
-          maximum: 50       # maximum overscan % TBD
     - 2:                    # Resource object begins
         type: GRAPHICS
         pixelFormats:
@@ -72,7 +52,3 @@ IPlaneControl:              # Component object begins
         supportsAlpha: true
         supportsZOrder: false
         vsyncDisplayLatency: 1
-        Zorder:
-          - PRIMARY         # 0 Primary Video Plane Z order
-          - SECONDARY       # 1 Secondary Video plane Z order
-          - GRAPHICS        # 2 Graphics z order
