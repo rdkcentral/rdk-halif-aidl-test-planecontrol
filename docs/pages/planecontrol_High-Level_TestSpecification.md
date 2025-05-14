@@ -7,6 +7,7 @@
 - [Module Description](#module-description)
 - [Video Playback Specification](#video-playback-specification)
 - [Graphics Plane Test Application](#graphics-plane-test-application)
+- [vsyncDisplayLatency Measurement](#vsyncdisplaylatency-measurement)
 - [Video Plane Geometry Specification](#video-plane-geometry-specification)
 - [L2 Test Specification](#l2-test-specification)
 - [L3 Test Specification](#l3-test-specification)
@@ -55,6 +56,10 @@ To Validate the Graphics plane we need to create an EGL sample app which will pr
 
 _TBD: EGL a separate Binary or Within VTS binary so that VTS has control over what it draws ?_
 
+## vsyncDisplayLatency Measurement
+
+_TBD: How to measure the time delay between presenting the frame to displayed_
+
 ## Video Plane Geometry Specification
 
 Video Plane can be set to different size and shapes by setting following properties of the planes
@@ -91,3 +96,4 @@ Video Plane can be set to different size and shapes by setting following propert
 |Verify Dynamic Range|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all the video plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><l1>Loop through all the dynamic range values supported</li><li>Playback the Stream specific to each dynamic range and verify the output</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping</li></ul>|
 |Verify Supported pixel format|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all the video plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><li>Update the video plane geometry of each plane as per the geometry specification</li><l1>Loop through all the pixel format supported</li><li>Playback the Stream specific to each dynamic range and verify the output</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping</li></ul>|
 |Verify graphics Window Handle |<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all the graphics plane indices</li><li> Register event listeners using `registerEventListener`</li><li>get the graphics plan handle for EGL application using `getNativeGraphicsWindowHandle`</li><li>Draw a sample graphics using the handle from HAL</li><li>Force the graphics draw using `flipGraphicsBuffer`</li><li>Verify the graphics plane is updated as intended </li><li>Release the Graphics window handle using `releaseNativeGraphicsWindowHandle`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping</li></ul>|
+|Verify vsyncDisplayLatency |<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all the video plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><li>Update the video plane geometry of each plane as per the geometry specification</li><li>Playback the Stream verify the output</li><li>Measure the time difference between teh frame presented to viewed in the display</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping</li></ul>|
