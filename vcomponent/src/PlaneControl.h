@@ -92,7 +92,6 @@ namespace com {
                             int index,
                             ::com::rdk::hal::planecontrol::PlaneType type,
                             std::vector<::com::rdk::hal::videodecoder::PixelFormat> pixelFormats,
-                            std::vector<::com::rdk::hal::planecontrol::SourceType> sourceTypes,
                             int maxWidth,
                             int maxHeight,
                             int frameWidth,

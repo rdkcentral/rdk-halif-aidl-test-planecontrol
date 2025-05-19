@@ -47,6 +47,7 @@ fi
 # whiling running the script
 declare -r AIDL_BIN=`realpath ${AIDL_BIN}`
 declare -r LINUX_BINDER_OUT_DIR=`realpath ${LINUX_BINDER_OUT_DIR}`
+RDK_HALIF_AIDL_VERSION="0.7.1"
 
 install_linux_binder()
 {
@@ -65,7 +66,7 @@ generate_planecontrol_hal() {
 
     # Clone the repository if not already present
     if [ ! -d "$RDK_HAL_DIR" ]; then
-        git clone -b develop 'ssh://git@github.com/rdkcentral/rdk-halif-aidl.git' $RDK_HAL_DIR
+        git clone -b $RDK_HALIF_AIDL_VERSION 'ssh://git@github.com/rdkcentral/rdk-halif-aidl.git' $RDK_HAL_DIR
     fi
 
     cmake \
