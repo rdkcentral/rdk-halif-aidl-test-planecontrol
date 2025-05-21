@@ -37,6 +37,7 @@ The Plane Control `HAL` service provides the interfaces for the video frame queu
 ## Video Playback Specification
 
 Plane control supports 3 types of Video sources
+Supported source types and its indices are provided in [configuration YAML](../../profiles/hfp-planecontrol.yaml)
 
 * HDMI
 * Composite
