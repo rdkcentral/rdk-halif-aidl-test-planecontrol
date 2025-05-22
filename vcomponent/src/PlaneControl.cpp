@@ -38,7 +38,6 @@ namespace com {
                     int planeIndex,
                     ::com::rdk::hal::planecontrol::PlaneType type,
                     std::vector<::com::rdk::hal::videodecoder::PixelFormat> pixelFormats,
-                    std::vector<::com::rdk::hal::planecontrol::SourceType> sourceTypes,
                     int maxWidth,
                     int maxHeight,
                     int frameWidth,
@@ -55,7 +54,6 @@ namespace com {
                     cap.planeIndex = planeIndex;
                     cap.type = type;
                     cap.pixelFormats = pixelFormats;
-                    cap.sourceTypes = sourceTypes;
                     cap.maxWidth = maxWidth;
                     cap.maxHeight = maxHeight;
                     cap.frameWidth = frameWidth;
@@ -170,7 +168,6 @@ namespace com {
                             plane.index,
                             plane.type,
                             plane.pixelFormats,
-                            {::com::rdk::hal::planecontrol::SourceType::NONE},
                             plane.maxWidth,
                             plane.maxHeight,
                             plane.frameWidth,
@@ -203,7 +200,6 @@ namespace com {
                         0,
                         ::com::rdk::hal::planecontrol::PlaneType::VIDEO,
                         { ::com::rdk::hal::videodecoder::PixelFormat::NATIVE },
-                        { ::com::rdk::hal::planecontrol::SourceType::NONE },
                         3840, 2160, 3840, 2160,
                         { ::com::rdk::hal::videodecoder::DynamicRange::SDR,
                         ::com::rdk::hal::videodecoder::DynamicRange::HLG,
@@ -219,7 +215,6 @@ namespace com {
                         1,
                         ::com::rdk::hal::planecontrol::PlaneType::VIDEO,
                         { ::com::rdk::hal::videodecoder::PixelFormat::NATIVE },
-                        { ::com::rdk::hal::planecontrol::SourceType::NONE },
                         3840, 2160, 3840, 2160,
                         { ::com::rdk::hal::videodecoder::DynamicRange::SDR },
                         10, 60, true, true, 3
@@ -231,7 +226,6 @@ namespace com {
                         2,
                         ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS,
                         { ::com::rdk::hal::videodecoder::PixelFormat::RGB },
-                        { ::com::rdk::hal::planecontrol::SourceType::NONE },
                         1920, 1080, 1920, 1080,
                         { ::com::rdk::hal::videodecoder::DynamicRange::SDR },
                         8, 60, true, false, 1
