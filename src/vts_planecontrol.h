@@ -326,6 +326,186 @@ const std::vector<::com::rdk::hal::planecontrol::Property> GRAPHICS_PROPERTIES =
         kvList.push_back(kvPair); \
     }
 
+// Macro to log and assert API call status and result
+#define PLANE_CONTROL_ASSERT_STATUS(api_name, status, result, plane_index, ...) \
+    do { \
+        UT_LOG_INFO("Result %s(planeIndex:[%d], " #__VA_ARGS__ ", OUT:result:[%s], status:[isOK:%s, exception:%s])", \
+        #api_name, plane_index, UT_Control_GetMapString(bool_mapTable, result), \
+        UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+        UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
+        UT_ASSERT_TRUE(status.isOk()) << "Failed to call " #api_name " for plane " << plane_index; \
+        UT_ASSERT_TRUE(result) << "Result failed for " #api_name " for plane " << plane_index; \
+    } while (0)
+
+#define PLANE_CONTROL_SET_GET_CONFIG_UINT32_PROPERTY(PLANE_INDEX, PROP, PROP_NAME, PATH_SUFFIX) \
+    do { \
+        std::string propPath = "IPlaneControl.planes." + std::to_string(PLANE_INDEX) + "." #PATH_SUFFIX; \
+        uint32_t value = UT_KVP_PROFILE_GET_UINT32(propPath.c_str()); \
+        ::com::rdk::hal::PropertyValue propertyValue; \
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(value); \
+        bool setResult; \
+        UT_LOG_INFO("Calling setProperty(IN:planeIndex:[%d], IN:property:[%s], IN:propertyValue:[%d], OUT:setResult)", \
+                    PLANE_INDEX, #PROP_NAME, value); \
+        auto status = gPlaneControlservice->setProperty(PLANE_INDEX, ::com::rdk::hal::planecontrol::Property::PROP, propertyValue, &setResult); \
+        PLANE_CONTROL_ASSERT_STATUS(setProperty, status, setResult, PLANE_INDEX, PROP_NAME); \
+        std::optional<::com::rdk::hal::PropertyValue> getPropertyValue; \
+        UT_LOG_INFO("Calling getProperty(IN:planeIndex:[%d], IN:property:[%s], OUT:getPropertyValue)", \
+                    PLANE_INDEX, #PROP_NAME); \
+        status = gPlaneControlservice->getProperty(PLANE_INDEX, ::com::rdk::hal::planecontrol::Property::PROP, &getPropertyValue); \
+        UT_LOG_INFO("Result getProperty(IN:planeIndex:[%d], IN:property:[%s], OUT:getPropertyValue:[%d], status:[isOK:%s, exception:%s])", \
+                    PLANE_INDEX, #PROP_NAME, \
+                    getPropertyValue->value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>(), \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
+        UT_ASSERT_TRUE(status.isOk()) << "Failed to get property " #PROP_NAME " for plane " << PLANE_INDEX; \
+        UT_ASSERT_TRUE(getPropertyValue.has_value()) << "No value returned for property " #PROP_NAME " for plane " << PLANE_INDEX; \
+        UT_ASSERT_EQUAL(getPropertyValue->value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>(), value) \
+            << "Value mismatch for property " #PROP_NAME " for plane " << PLANE_INDEX; \
+    } while (0)
+
+#define PLANE_CONTROL_SET_GET_CONFIG_BOOL_PROPERTY(PLANE_INDEX, PROP, PROP_NAME, PATH_SUFFIX) \
+    do { \
+        std::string propPath = "IPlaneControl.planes." + std::to_string(PLANE_INDEX) + "." #PATH_SUFFIX; \
+        bool value = UT_KVP_PROFILE_GET_BOOL(propPath.c_str()); \
+        ::com::rdk::hal::PropertyValue propertyValue; \
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(value); \
+        bool setResult; \
+        UT_LOG_INFO("Calling setProperty(IN:planeIndex:[%d], IN:property:[%s], IN:propertyValue:[%d], OUT:setResult)", \
+                    PLANE_INDEX, #PROP_NAME, value); \
+        auto status = gPlaneControlservice->setProperty(PLANE_INDEX, ::com::rdk::hal::planecontrol::Property::PROP, propertyValue, &setResult); \
+        PLANE_CONTROL_ASSERT_STATUS(setProperty, status, setResult, PLANE_INDEX, PROP_NAME); \
+        std::optional<::com::rdk::hal::PropertyValue> getPropertyValue; \
+        UT_LOG_INFO("Calling getProperty(IN:planeIndex:[%d], IN:property:[%s], OUT:getPropertyValue)", \
+                    PLANE_INDEX, #PROP_NAME); \
+        status = gPlaneControlservice->getProperty(PLANE_INDEX, ::com::rdk::hal::planecontrol::Property::PROP, &getPropertyValue); \
+        UT_LOG_INFO("Result getProperty(IN:planeIndex:[%d], IN:property:[%s], OUT:getPropertyValue:[%d], status:[isOK:%s, exception:%s])", \
+                    PLANE_INDEX, #PROP_NAME, \
+                    getPropertyValue->value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>(), \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
+        UT_ASSERT_TRUE(status.isOk()) << "Failed to get property " #PROP_NAME " for plane " << PLANE_INDEX; \
+        UT_ASSERT_TRUE(getPropertyValue.has_value()) << "No value returned for property " #PROP_NAME " for plane " << PLANE_INDEX; \
+        UT_ASSERT_EQUAL(getPropertyValue->value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>(), value) \
+            << "Value mismatch for property " #PROP_NAME " for plane " << PLANE_INDEX; \
+    } while (0)
+
+#define PLANE_CONTROL_SET_GET_INT_ZERO_PROPERTY(PLANE_INDEX, PROP_ENUM)                                                      \
+    do {                                                                                                           \
+        PropertyValue propertyValue;                                                                              \
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<                                        \
+            ::com::rdk::hal::PropertyValue::Value::intValue>(0);                                                 \
+        bool setResult;                                                                                           \
+        UT_LOG_INFO("Calling setProperty(IN:planeIndex:[%d], IN:property:[%s], IN:propertyValue:[intValue:0])",  \
+                    PLANE_INDEX, #PROP_ENUM);                                                                     \
+        auto status = gPlaneControlservice->setProperty(PLANE_INDEX, PROP_ENUM, propertyValue, &setResult);      \
+        UT_LOG_INFO("Result setProperty(IN:planeIndex:[%d], IN:property:[%s], IN:propertyValue:[intValue:0], status:[isOK:%s, exception:%s], setResult:[%s])", \
+                    PLANE_INDEX, #PROP_ENUM,                                                                      \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()),                                       \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()),                   \
+                    setResult ? "true" : "false");                                                                \
+        UT_ASSERT_TRUE(status.isOk());                                                                            \
+        UT_ASSERT_TRUE(setResult);                                                                                \
+                                                                                                                  \
+        std::optional<PropertyValue> getPropertyValue;                                                            \
+        UT_LOG_INFO("Calling getProperty(IN:planeIndex:[%d], IN:property:[%s], OUT:getPropertyValue)",           \
+                    PLANE_INDEX, #PROP_ENUM);                                                                     \
+        status = gPlaneControlservice->getProperty(PLANE_INDEX, PROP_ENUM, &getPropertyValue);                   \
+        UT_LOG_INFO("Result getProperty(IN:planeIndex:[%d], IN:property:[%s], OUT:getPropertyValue:[%d], status:[isOK:%s, exception:%s])", \
+                    PLANE_INDEX, #PROP_ENUM,                                                                      \
+                    getPropertyValue->value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>(),        \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()),                                       \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));                  \
+        UT_ASSERT_TRUE(status.isOk());                                                                            \
+        UT_ASSERT_TRUE(getPropertyValue.has_value());                                                             \
+        UT_ASSERT_EQUAL(getPropertyValue->value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>(),    \
+                        propertyValue.value);                                                                     \
+    } while (0)
+
+#define PLANE_CONTROL_SET_GET_INT_ONE_PROPERTY(PLANE_INDEX, PROP_ENUM)                                                      \
+    do {                                                                                                           \
+        PropertyValue propertyValue;                                                                              \
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<                                        \
+            ::com::rdk::hal::PropertyValue::Value::intValue>(1);                                                 \
+        bool setResult;                                                                                           \
+        UT_LOG_INFO("Calling setProperty(IN:planeIndex:[%d], IN:property:[%s], IN:propertyValue:[intValue:1])",  \
+                    PLANE_INDEX, #PROP_ENUM);                                                                     \
+        auto status = gPlaneControlservice->setProperty(PLANE_INDEX, PROP_ENUM, propertyValue, &setResult);      \
+        UT_LOG_INFO("Result setProperty(IN:planeIndex:[%d], IN:property:[%s], IN:propertyValue:[intValue:1], status:[isOK:%s, exception:%s], setResult:[%s])", \
+                    PLANE_INDEX, #PROP_ENUM,                                                                      \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()),                                       \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()),                   \
+                    setResult ? "true" : "false");                                                                \
+        UT_ASSERT_TRUE(status.isOk());                                                                            \
+        UT_ASSERT_TRUE(setResult);                                                                                \
+                                                                                                                  \
+        std::optional<PropertyValue> getPropertyValue;                                                            \
+        UT_LOG_INFO("Calling getProperty(IN:planeIndex:[%d], IN:property:[%s], OUT:getPropertyValue)",           \
+                    PLANE_INDEX, #PROP_ENUM);                                                                     \
+        status = gPlaneControlservice->getProperty(PLANE_INDEX, PROP_ENUM, &getPropertyValue);                   \
+        UT_LOG_INFO("Result getProperty(IN:planeIndex:[%d], IN:property:[%s], OUT:getPropertyValue:[%d], status:[isOK:%s, exception:%s])", \
+                    PLANE_INDEX, #PROP_ENUM,                                                                      \
+                    getPropertyValue->value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>(),        \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()),                                       \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));                  \
+        UT_ASSERT_TRUE(status.isOk());                                                                            \
+        UT_ASSERT_TRUE(getPropertyValue.has_value());                                                             \
+        UT_ASSERT_EQUAL(getPropertyValue->value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>(),    \
+                        propertyValue.value);                                                                     \
+    } while (0)
+
+// Macro to set and verify video source destination plane mapping
+#define PLANE_CONTROL_SET_GET_MAPPING(source_type, plane_index_1, plane_index_2) \
+    do { \
+        std::vector<SourcePlaneMapping> unmapMappings; \
+        for (const auto& unmapSource : sAllSourceTypes) { \
+            for (int sourceIndex = 0; sourceIndex <= 1; ++sourceIndex) { \
+                SourcePlaneMapping unmap; \
+                unmap.sourceType = unmapSource; \
+                unmap.sourceIndex = sourceIndex; \
+                unmap.destinationPlaneIndex = -1; \
+                unmapMappings.push_back(unmap); \
+            } \
+        } \
+        bool mappingResult; \
+        UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping to unmap all sources for planes:[%d,%d]", \
+                    plane_index_1, plane_index_2); \
+        auto status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(unmapMappings, &mappingResult); \
+        PLANE_CONTROL_ASSERT_STATUS(setVideoSourceDestinationPlaneMapping, status, mappingResult, -1, unmap); \
+        std::vector<SourcePlaneMapping> sourcePlaneMappings; \
+        SourcePlaneMapping mapdata_1; \
+        mapdata_1.sourceType = source_type; \
+        mapdata_1.sourceIndex = 0; \
+        mapdata_1.destinationPlaneIndex = plane_index_1; \
+        SourcePlaneMapping mapdata_2; \
+        mapdata_2.sourceType = source_type; \
+        mapdata_2.sourceIndex = 1; \
+        mapdata_2.destinationPlaneIndex = plane_index_2; \
+        sourcePlaneMappings = {mapdata_1, mapdata_2}; \
+        UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:sourceType:%d, planes:[%d,%d])", \
+                    static_cast<int>(source_type), plane_index_1, plane_index_2); \
+        status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(sourcePlaneMappings, &mappingResult); \
+        PLANE_CONTROL_ASSERT_STATUS(setVideoSourceDestinationPlaneMapping, status, mappingResult, -1, sourceType); \
+        std::vector<SourcePlaneMapping> retrievedMappings; \
+        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])"); \
+        status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings); \
+        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])", \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
+        UT_ASSERT_TRUE(status.isOk()) << "Failed to get mappings for sourceType " << static_cast<int>(source_type); \
+        for (const auto& mapping : sourcePlaneMappings) { \
+            auto it = std::find_if(retrievedMappings.begin(), retrievedMappings.end(), \
+                                [&mapping](const SourcePlaneMapping& retrieved) { \
+                                    return retrieved.destinationPlaneIndex == mapping.destinationPlaneIndex && \
+                                           retrieved.sourceType == mapping.sourceType && \
+                                           retrieved.sourceIndex == mapping.sourceIndex; \
+                                }); \
+            UT_ASSERT_NOT_EQUAL(it, retrievedMappings.end()) << "Mapping not found for sourceType " << static_cast<int>(source_type) \
+                                                            << ", sourceIndex " << mapping.sourceIndex \
+                                                            << ", plane " << mapping.destinationPlaneIndex; \
+            UT_ASSERT_EQUAL(it->sourceType, mapping.sourceType) << "SourceType mismatch for plane " << mapping.destinationPlaneIndex; \
+            UT_ASSERT_EQUAL(it->sourceIndex, mapping.sourceIndex) << "SourceIndex mismatch for plane " << mapping.destinationPlaneIndex; \
+        } \
+    } while (0)
 
 #endif //__VTS_PLANECONTROL_H__
 
