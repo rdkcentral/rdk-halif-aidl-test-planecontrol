@@ -318,13 +318,16 @@ namespace com {
                     return android::binder::Status::ok();
                 }
 
-                android::binder::Status PlaneControl::setVideoSourceDestinationPlaneMapping(const ::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>& listSourcePlaneMapping, bool* _aidl_return) {
+                android::binder::Status PlaneControl::setVideoSourceDestinationPlaneMapping(
+                    const ::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>& listSourcePlaneMapping,
+                    bool* _aidl_return)
+                {
                     std::lock_guard<std::mutex> lock(mHandleLock);
                     std::set<std::pair<SourceType, int>> seenSources;
                     std::set<int> seenPlanes;
 
                     for (const auto& mapping : listSourcePlaneMapping) {
-                        if (mapping.destinationPlaneIndex >= mVideoPlaneCount) {
+                        if (mapping.destinationPlaneIndex >= mVideoPlaneCount && mapping.destinationPlaneIndex != -1) {
                             *_aidl_return = false;
                             std::cout << "[SERVICE] video plane doesnt exist " << mapping.destinationPlaneIndex << std::endl;
                             return android::binder::Status::ok();
@@ -352,6 +355,7 @@ namespace com {
                             if (it != mVideoPlaneMappings.end()) {
                                 const auto& currentMapping = it->second;
                                 if (currentMapping.sourceType != SourceType::NONE && currentMapping.sourceIndex != -1) {
+                                    *_aidl_return = false; // Set false for EX_ILLEGAL_STATE
                                     std::cout << "[SERVICE] Plane already mapped to another Source " << std::endl;
                                     return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_STATE);
                                 }
@@ -364,14 +368,14 @@ namespace com {
                             for (auto it = mVideoPlaneMappings.begin(); it != mVideoPlaneMappings.end();) {
                                 if (it->second.sourceType == mapping.sourceType &&
                                     it->second.sourceIndex == mapping.sourceIndex) {
-                                    std::cout << "[SERVICE] unmapping destinationPlaneIndex " << std::endl;
+                                    std::cout << "[SERVICE] unmapping destinationPlaneIndex " << it->first << std::endl;
                                     it = mVideoPlaneMappings.erase(it);
                                 } else {
                                     ++it;
                                 }
                             }
                         } else {
-                            std::cout << "[SERVICE] Map source to the destination plane " << std::endl;
+                            std::cout << "[SERVICE] Map source to the destination plane " << mapping.destinationPlaneIndex << std::endl;
                             mVideoPlaneMappings[mapping.destinationPlaneIndex] = mapping;
                         }
                     }
@@ -379,22 +383,25 @@ namespace com {
                     return android::binder::Status::ok();
                 }
 
-                android::binder::Status PlaneControl::getVideoSourceDestinationPlaneMapping(::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>* _aidl_return) {
+                android::binder::Status PlaneControl::getVideoSourceDestinationPlaneMapping(
+                    ::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>* _aidl_return)
+                {
                     std::lock_guard<std::mutex> lock(mHandleLock);
                     _aidl_return->clear();
-                    for (int planeIndex = 0; planeIndex < mVideoPlaneCount; ++planeIndex) {
-                        ::com::rdk::hal::planecontrol::SourcePlaneMapping mapping;
 
+                    // Return all mappings for video planes
+                    for (int planeIndex = 0; planeIndex < mVideoPlaneCount; ++planeIndex) {
                         auto it = mVideoPlaneMappings.find(planeIndex);
                         if (it != mVideoPlaneMappings.end()) {
-                            mapping = it->second;
+                            _aidl_return->push_back(it->second);
                         } else {
+                            // Return unmapped plane with correct plane index
+                            ::com::rdk::hal::planecontrol::SourcePlaneMapping mapping;
                             mapping.sourceType = SourceType::NONE;
                             mapping.sourceIndex = -1;
                             mapping.destinationPlaneIndex = planeIndex;
+                            _aidl_return->push_back(mapping);
                         }
-
-                        _aidl_return->push_back(mapping);
                     }
 
                     return android::binder::Status::ok();

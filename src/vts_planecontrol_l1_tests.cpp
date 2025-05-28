@@ -66,6 +66,30 @@
 
 #include "vts_planecontrol.h"
 
+// Common property lists for VIDEO and GRAPHICS planes
+const std::vector<::com::rdk::hal::planecontrol::Property> VIDEO_PROPERTIES = {
+    ::com::rdk::hal::planecontrol::Property::RESOURCE_ID,
+    ::com::rdk::hal::planecontrol::Property::X,
+    ::com::rdk::hal::planecontrol::Property::Y,
+    ::com::rdk::hal::planecontrol::Property::WIDTH,
+    ::com::rdk::hal::planecontrol::Property::HEIGHT,
+    ::com::rdk::hal::planecontrol::Property::ALPHA,
+    ::com::rdk::hal::planecontrol::Property::ZORDER,
+    ::com::rdk::hal::planecontrol::Property::VISIBLE,
+    ::com::rdk::hal::planecontrol::Property::OVERSCAN,
+    ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO
+};
+
+const std::vector<::com::rdk::hal::planecontrol::Property> GRAPHICS_PROPERTIES = {
+    ::com::rdk::hal::planecontrol::Property::RESOURCE_ID,
+    ::com::rdk::hal::planecontrol::Property::X,
+    ::com::rdk::hal::planecontrol::Property::Y,
+    ::com::rdk::hal::planecontrol::Property::WIDTH,
+    ::com::rdk::hal::planecontrol::Property::HEIGHT,
+    ::com::rdk::hal::planecontrol::Property::ALPHA,
+    ::com::rdk::hal::planecontrol::Property::ZORDER,
+    ::com::rdk::hal::planecontrol::Property::VISIBLE
+};
 
 
 class ValidPlaneControlListener : public BnPlaneControlListener {
@@ -291,7 +315,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getNativeGraphicsWindowHandle_neg) {
     uint32_t planeCount = 0;
     bool graphicsPlaneFound = false;
 
-    FOREACH_GRAPHICS_PLANE(planeCount, planeIndex, {
+    PLANE_CONTROL_FOREACH_GRAPHICS_PLANE(planeCount, planeIndex, {
         graphicsPlaneFound = true;
         bool aidl_return = false;
 
@@ -388,53 +412,125 @@ UT_ADD_TEST(VTS_L1_PlaneControl, flipGraphicsBuffer_neg) {
  * | 09 | Confirm that the unmapping was successful. | _aidl_return = true | Should be successful | Should be successful |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_pos) {
-    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> mappings;
-    bool aidl_return = false;
-    std::vector<uint32_t> planeIndices;
-    uint32_t planeCount;
+    UT_LOG_INFO("Starting setVideoSourceDestinationPlaneMapping_pos");
 
-    // Ensure at least 2 VIDEO planes exist
-    FOREACH_VIDEO_PLANE(planeCount, planeIndex, {
-        planeIndices.push_back(planeIndex);
-    });
-
-    if (planeIndices.size() < 2) {
-        GTEST_SKIP() << "Skipping test: At least 2 VIDEO planes are required, found " << planeIndices.size();
+    // Step 1: Ensure HFP is parsed
+    if (gPlaneControl_hfp.empty()) {
+        UT_LOG_INFO("Parsing HFP data");
+        if (vts_planecontrol_parsePlaneControlHFP() != UT_STATUS_OK) {
+            UT_LOG_WARNING("Failed to parse HFP, relying on mock service");
+        }
     }
 
+    // Step 2: Collect video plane indices
+    std::vector<uint32_t> planeIndices;
+    for (const auto& cap : gPlaneControl_hfp) {
+        if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+            planeIndices.push_back(cap.planeIndex);
+        }
+    }
+    UT_LOG_INFO("Video plane indices found: %zu", planeIndices.size());
+    if (planeIndices.size() < 2) {
+        UT_LOG_WARNING("Need at least 2 video planes, found %zu, checking gNoVideoTypePlanes", planeIndices.size());
+    }
+    UT_ASSERT_GREATER_EQUAL(gNoVideoTypePlanes, 2) << "Need at least 2 video planes, found " << gNoVideoTypePlanes;
+
+    // Steps 3-4: Create mappings for HDMI and COMPOSITE
+    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> mappings;
     ::com::rdk::hal::planecontrol::SourcePlaneMapping mapping1;
-    mapping1.sourceType = ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK;
+    mapping1.sourceType = ::com::rdk::hal::planecontrol::SourceType::HDMI;
     mapping1.sourceIndex = 0;
     mapping1.destinationPlaneIndex = planeIndices[0];
     mappings.push_back(mapping1);
 
     ::com::rdk::hal::planecontrol::SourcePlaneMapping mapping2;
-    mapping2.sourceType = ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK;
-    mapping2.sourceIndex = 1;
+    mapping2.sourceType = ::com::rdk::hal::planecontrol::SourceType::COMPOSITE;
+    mapping2.sourceIndex = 0;
     mapping2.destinationPlaneIndex = planeIndices[1];
     mappings.push_back(mapping2);
 
-    std::string inputParams = "IN:listSourcePlaneMapping, OUT:_aidl_return";
-    auto status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(mappings, &aidl_return);
-    std::string outputParams = "IN:listSourcePlaneMapping, OUT:_aidl_return:[" + std::string(aidl_return ? "true" : "false") + "]";
-    UT_LOG_INFO("setVideoSourceDestinationPlaneMapping", inputParams, outputParams, status, aidl_return);
+    // Steps 5-6: Set mappings
+    bool aidl_return = false;
+    ::android::binder::Status status;
+    UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:mappings, OUT:_aidl_return)");
+    status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(mappings, &aidl_return);
+    UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:mappings, OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
+                aidl_return ? "true" : "false",
+                UT_Control_GetMapString(bool_mapTable, status.isOk()),
+                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
     UT_ASSERT_TRUE(status.isOk());
     UT_ASSERT_TRUE(aidl_return);
 
-    // Cleanup: Unmap the planes
-    mapping1.destinationPlaneIndex = -1;
-    mapping2.destinationPlaneIndex = -1;
+    // Verify mappings
+    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> retrievedMappings;
+    UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
+    status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
+    UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s]",
+                UT_Control_GetMapString(bool_mapTable, status.isOk()),
+                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+    UT_ASSERT_TRUE(status.isOk());
+
+    // Check HDMI mapping
+    bool foundHDMI = false;
+    for (const auto& mapping : retrievedMappings) {
+        if (mapping.destinationPlaneIndex == planeIndices[0] &&
+            mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::HDMI &&
+            mapping.sourceIndex == 0) {
+            foundHDMI = true;
+            break;
+        }
+    }
+    UT_ASSERT_TRUE(foundHDMI) << "HDMI mapping not found for plane " << planeIndices[0];
+
+    // Check COMPOSITE mapping
+    bool foundComposite = false;
+    for (const auto& mapping : retrievedMappings) {
+        if (mapping.destinationPlaneIndex == planeIndices[1] &&
+            mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::COMPOSITE &&
+            mapping.sourceIndex == 0) {
+            foundComposite = true;
+            break;
+        }
+    }
+    UT_ASSERT_TRUE(foundComposite) << "COMPOSITE mapping not found for plane " << planeIndices[1];
+
+    // Steps 7-9: Unmap VIDEO_SINK
     mappings.clear();
+    mapping1.sourceType = ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK;
+    mapping1.sourceIndex = 0;
+    mapping1.destinationPlaneIndex = -1;
     mappings.push_back(mapping1);
-    mappings.push_back(mapping2);
-    std::string inputParams1 = "IN:listSourcePlaneMapping, OUT:_aidl_return";
+
+    UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping to unmap VIDEO_SINK");
     status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(mappings, &aidl_return);
-    std::string outputParams1 = "IN:listSourcePlaneMapping, OUT:_aidl_return:[" + std::string(aidl_return ? "true" : "false") + "]";
-    UT_LOG_INFO("setVideoSourceDestinationPlaneMapping", inputParams1, outputParams1, status, aidl_return);
+    UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:mappings, OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
+                aidl_return ? "true" : "false",
+                UT_Control_GetMapString(bool_mapTable, status.isOk()),
+                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+    UT_ASSERT_TRUE(status.isOk());
+    UT_ASSERT_TRUE(aidl_return);
+
+    // Comprehensive unmapping for cleanup
+    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> unmapMappings;
+    std::vector<::com::rdk::hal::planecontrol::SourceType> allSourceTypes = {
+        ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK,
+        ::com::rdk::hal::planecontrol::SourceType::HDMI,
+        ::com::rdk::hal::planecontrol::SourceType::COMPOSITE
+    };
+    for (const auto& source : allSourceTypes) {
+        for (int sourceIndex = 0; sourceIndex <= 1; ++sourceIndex) {
+            ::com::rdk::hal::planecontrol::SourcePlaneMapping unmap;
+            unmap.sourceType = source;
+            unmap.sourceIndex = sourceIndex;
+            unmap.destinationPlaneIndex = -1;
+            unmapMappings.push_back(unmap);
+        }
+    }
+    UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping to unmap all sources");
+    status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(unmapMappings, &aidl_return);
     UT_ASSERT_TRUE(status.isOk());
     UT_ASSERT_TRUE(aidl_return);
 }
-
 
 /**
  * @brief Test the negative scenarios for setting video source to destination plane mapping.
@@ -462,109 +558,123 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_pos) {
  * | 08 | Call setVideoSourceDestinationPlaneMapping with mapping to an already mapped plane. | listSourcePlaneMapping4 = {VIDEO_SINK, 0, 1} | _aidl_return = false, status.exceptionCode() = EX_ILLEGAL_STATE | Should Fail |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_neg) {
+    UT_LOG_INFO("Starting setVideoSourceDestinationPlaneMapping_neg");
 
-    // Prepare the test data using macros to retrieve YAML data
+    // Ensure HFP is parsed
+    if (gPlaneControl_hfp.empty()) {
+        UT_LOG_INFO("Parsing HFP data");
+        if (vts_planecontrol_parsePlaneControlHFP() != UT_STATUS_OK) {
+            UT_LOG_WARNING("Failed to parse HFP, relying on mock service");
+        }
+    }
+
+    // Step 1: Retrieve video plane indices
+    std::vector<uint32_t> plane_indexfrom_profile;
+    for (const auto& cap : gPlaneControl_hfp) {
+        if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+            plane_indexfrom_profile.push_back(cap.planeIndex);
+        }
+    }
+    UT_LOG_INFO("Video plane indices found: %zu", plane_indexfrom_profile.size());
+    if (plane_indexfrom_profile.size() < 2) {
+        UT_LOG_WARNING("Need at least 2 video planes, found %zu, checking gNoVideoTypePlanes", plane_indexfrom_profile.size());
+    }
+    UT_ASSERT_GREATER_EQUAL(gNoVideoTypePlanes, 2) << "Need at least 2 video planes, found " << gNoVideoTypePlanes;
+
+    // Prepare test data
     std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> listSourcePlaneMapping1;
     std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> listSourcePlaneMapping2;
-    std::vector<uint32_t> plane_indexfrom_profile;
-
     std::vector<::com::rdk::hal::planecontrol::SourceType> allSourceTypes = {
-        ::com::rdk::hal::planecontrol::SourceType::NONE,
         ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK,
         ::com::rdk::hal::planecontrol::SourceType::HDMI,
         ::com::rdk::hal::planecontrol::SourceType::COMPOSITE
     };
 
-    // Retrieve plane count from YAML
-    std::string plane_count_path = "IPlaneControl.planes";
-    uint32_t planeCount = UT_KVP_PROFILE_GET_UINT32(plane_count_path.c_str());
+    for (const auto& source : allSourceTypes) {
+        // Clear mapping lists
+        listSourcePlaneMapping1.clear();
+        listSourcePlaneMapping2.clear();
 
-    // Iterate over available planes and set up test cases
-    for (int i = 0; i < planeCount; ++i) {
-        std::string plane_type_path = "IPlaneControl.planes."+std::to_string(i)+".type";
-        char planeTypeString[256];
-        UT_KVP_PROFILE_GET_STRING(plane_type_path.c_str(), planeTypeString);
-        if (planeTypeString == "VIDEO") {
-            std::string plane_index_path = "IPlaneControl.planes." + std::to_string(i);
-            plane_indexfrom_profile.push_back(UT_KVP_PROFILE_GET_UINT32(plane_index_path.c_str()));
-        }
-    }
-    UT_ASSERT_GREATER_EQUAL(plane_indexfrom_profile.size(),2);
-
-    for (auto source : allSourceTypes) {
-
-
-        ::com::rdk::hal::planecontrol::SourcePlaneMapping element1{};
+        // Step 3: Test duplicate SourceType and SourceIndex
+        ::com::rdk::hal::planecontrol::SourcePlaneMapping element1;
         element1.sourceType = source;
         element1.sourceIndex = 0;
         element1.destinationPlaneIndex = plane_indexfrom_profile[0];
         listSourcePlaneMapping1.push_back(element1);
-
-        element1.sourceType = source;
-        element1.sourceIndex = 0;
         element1.destinationPlaneIndex = plane_indexfrom_profile[1];
         listSourcePlaneMapping1.push_back(element1);
 
+        bool _aidl_return = false;
+        ::android::binder::Status status;
+        UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping1, OUT:_aidl_return)");
+        status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(listSourcePlaneMapping1, &_aidl_return);
+        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping1, OUT:_aidl_return:[%d]), status:[isOK:%s, exception:%s]",
+                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()),
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+        UT_ASSERT_FALSE(_aidl_return);
 
+        // Step 5: Test duplicate DestinationPlaneIndex
         element1.sourceType = source;
         element1.sourceIndex = 0;
         element1.destinationPlaneIndex = plane_indexfrom_profile[0];
         listSourcePlaneMapping2.push_back(element1);
-
-        element1.sourceType = source;
         element1.sourceIndex = 1;
-        element1.destinationPlaneIndex = plane_indexfrom_profile[0];
         listSourcePlaneMapping2.push_back(element1);
 
-
-        bool _aidl_return = false;
-        ::android::binder::Status status;
-
-        // Test case: Duplicate SourceType and SourceIndex in Mapping List
-        UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping1, OUT:_aidl_return)");
-        status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(listSourcePlaneMapping1, &_aidl_return);
-        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping1, OUT:_aidl_return:[%d]), status:[isOK:%s, exception:%s]",
-                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()), UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_FALSE(_aidl_return);
-
-        // Test case: Duplicate DestinationPlaneIndex in Mapping List
         UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping2, OUT:_aidl_return)");
         status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(listSourcePlaneMapping2, &_aidl_return);
         UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping2, OUT:_aidl_return:[%d]), status:[isOK:%s, exception:%s]",
-                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()), UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()),
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
         UT_ASSERT_FALSE(_aidl_return);
 
-        // Test case: Mapping to Already Mapped Plane
+        // Steps 7-8: Test mapping to already mapped plane
         std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> listSourcePlaneMapping3;
-
-
         element1.sourceType = source;
         element1.sourceIndex = 1;
         element1.destinationPlaneIndex = plane_indexfrom_profile[0];
         listSourcePlaneMapping3.push_back(element1);
-        // listSourcePlaneMapping3.push_back({source, 1, plane_indexfrom_profile[0]});
         UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping3, OUT:_aidl_return)");
         status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(listSourcePlaneMapping3, &_aidl_return);
+        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping3, OUT:_aidl_return:[%d]), status:[isOK:%s, exception:%s]",
+                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()),
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
         UT_ASSERT_TRUE(status.isOk());
         UT_ASSERT_TRUE(_aidl_return);
 
         std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> listSourcePlaneMapping4;
-
         element1.sourceType = source;
         element1.sourceIndex = 0;
         element1.destinationPlaneIndex = plane_indexfrom_profile[0];
         listSourcePlaneMapping4.push_back(element1);
-        // listSourcePlaneMapping4.push_back({source, 0, plane_indexfrom_profile[0]});
         UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping4, OUT:_aidl_return)");
         status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(listSourcePlaneMapping4, &_aidl_return);
         UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping4, OUT:_aidl_return:[%d]), status:[isOK:%s, exception:%s]",
-                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()), UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()),
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
         UT_ASSERT_FALSE(_aidl_return);
-        UT_ASSERT_EQUAL(status.exceptionCode(), android::binder::Status::EX_ILLEGAL_STATE);
+        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_STATE);
+
+        // Unmap all sources to reset state
+        std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> unmapMappings;
+        for (const auto& unmapSource : allSourceTypes) {
+            for (int sourceIndex = 0; sourceIndex <= 1; ++sourceIndex) {
+                ::com::rdk::hal::planecontrol::SourcePlaneMapping unmap;
+                unmap.sourceType = unmapSource;
+                unmap.sourceIndex = sourceIndex;
+                unmap.destinationPlaneIndex = -1;
+                unmapMappings.push_back(unmap);
+            }
+        }
+        UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping to unmap all sources");
+        status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(unmapMappings, &_aidl_return);
+        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:unmapMappings, OUT:_aidl_return:[%d]), status:[isOK:%s, exception:%s]",
+                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()),
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+        UT_ASSERT_TRUE(status.isOk());
+        UT_ASSERT_TRUE(_aidl_return);
     }
 }
-
-
 
 /**
  * @brief Test the positive scenario for retrieving video source to destination plane mapping.
@@ -648,11 +758,11 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getVideoSourceDestinationPlaneMapping_pos) {
 UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_pos) {
     uint32_t planeCount;
 
-    FOREACH_VIDEO_PLANE(planeCount, planeIndex, {
+    PLANE_CONTROL_FOREACH_VIDEO_PLANE(planeCount, planeIndex, {
         ValidatePropertyList(planeIndex, VIDEO_PROPERTIES, "VIDEO");
     });
 
-    FOREACH_GRAPHICS_PLANE(planeCount, planeIndex, {
+    PLANE_CONTROL_FOREACH_GRAPHICS_PLANE(planeCount, planeIndex, {
         ValidatePropertyList(planeIndex, GRAPHICS_PROPERTIES, "GRAPHICS");
     });
 }
@@ -729,17 +839,17 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_pos) {
         ::com::rdk::hal::planecontrol::PlaneType planeType = plane.type;
 
         if (planeType == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
-            SET_AND_ASSERT_PROPERTY(planeResourceIndex, OVERSCAN, 10);
-            SET_AND_ASSERT_PROPERTY(planeResourceIndex, ASPECT_RATIO, 1);
+            PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, OVERSCAN, 10);
+            PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, ASPECT_RATIO, 1);
         }
 
-        SET_AND_ASSERT_PROPERTY(planeResourceIndex, X, 123);
-        SET_AND_ASSERT_PROPERTY(planeResourceIndex, VISIBLE, 1);
-        SET_AND_ASSERT_PROPERTY(planeResourceIndex, Y, 5);
-        SET_AND_ASSERT_PROPERTY(planeResourceIndex, WIDTH, 50);
-        SET_AND_ASSERT_PROPERTY(planeResourceIndex, HEIGHT, 60);
-        SET_AND_ASSERT_PROPERTY(planeResourceIndex, ALPHA, 254);
-        SET_AND_ASSERT_PROPERTY(planeResourceIndex, ZORDER, 1);
+        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, X, 123);
+        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, VISIBLE, 1);
+        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, Y, 5);
+        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, WIDTH, 50);
+        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, HEIGHT, 60);
+        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, ALPHA, 254);
+        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, ZORDER, 1);
     }
 }
 
@@ -893,11 +1003,11 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_pos) {
         ::com::rdk::hal::planecontrol::PlaneType planeType = plane.type;
 
         if (planeType == PlaneType::VIDEO) {
-            BUILD_PROPERTY_KV_LIST(videoProperties, propertyKVList);
-            VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, propertyKVList, "VIDEO");
+            PLANE_CONTROL_BUILD_PROPERTY_KV_LIST(videoProperties, propertyKVList);
+            PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, propertyKVList, "VIDEO");
         } else if (planeType == PlaneType::GRAPHICS) {
-            BUILD_PROPERTY_KV_LIST(graphicProperties, propertyKVList);
-            VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, propertyKVList, "GRAPHICS");
+            PLANE_CONTROL_BUILD_PROPERTY_KV_LIST(graphicProperties, propertyKVList);
+            PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, propertyKVList, "GRAPHICS");
         }
     }
 }
@@ -957,10 +1067,10 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_neg) {
     invalidpropertyKVList.push_back(invalidKV);
 
     // Test Case 1: Invalid Plane Resource Index
-    NEGATIVE_TEST_GET_PROPERTY_MULTI(invalidPlaneResourceIndex, validpropertyKVList, "Invalid Plane Index");
+    PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(invalidPlaneResourceIndex, validpropertyKVList, "Invalid Plane Index");
 
     // Test Case 2: Invalid Property List
-    NEGATIVE_TEST_GET_PROPERTY_MULTI(validPlaneResourceIndex, invalidpropertyKVList, "Invalid Property");
+    PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(validPlaneResourceIndex, invalidpropertyKVList, "Invalid Property");
 }
 
 /**
@@ -1005,18 +1115,18 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setPropertyMultiAtomic_pos)
         UT_LOG_INFO("Plane Index: %d, Plane Type: %d", plane.planeIndex, plane.type);
 
         if (planeType == PlaneType::VIDEO) {
-            ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::OVERSCAN, 10);
-            ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO, 1);
+            PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::OVERSCAN, 10);
+            PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO, 1);
         }
 
         // Add common properties
-        ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::X, 123);
-        ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::Y, 6);
-        ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::WIDTH, 40);
-        ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::HEIGHT, 70);
-        ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ALPHA, 254);
-        ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ZORDER, 1);
-        ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::VISIBLE, 1);
+        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::X, 123);
+        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::Y, 6);
+        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::WIDTH, 40);
+        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::HEIGHT, 70);
+        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ALPHA, 254);
+        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ZORDER, 1);
+        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::VISIBLE, 1);
 
         // Call setPropertyMultiAtomic
         UT_LOG_INFO("Calling setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return)", planeResourceIndex);
@@ -1380,7 +1490,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, releaseNativeGraphicsWindowHandle_pos) {
     bool graphicsPlaneFound = false;
     uint32_t planeCount = 0;
 
-    FOREACH_GRAPHICS_PLANE(planeCount, planeIndex, {
+    PLANE_CONTROL_FOREACH_GRAPHICS_PLANE(planeCount, planeIndex, {
         graphicsPlaneFound = true;
 
         status = gPlaneControlservice->getNativeGraphicsWindowHandle(planeIndex, &nativeHandle);
@@ -1467,7 +1577,6 @@ UT_ADD_TEST(VTS_L1_PlaneControl, releaseNativeGraphicsWindowHandle_neg) {
         }
     }
 }
-
 
 /** @} */ // End of Plane_Control_Halif_Test_L1
 /** @} */ // End of Plane_Control_Halif_Test

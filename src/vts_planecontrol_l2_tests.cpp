@@ -163,33 +163,42 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetProperty) {
     for (const auto& capability : sCapabilities) {
         int32_t planeIndex = capability.planeIndex;
 
-        // Set and get WIDTH
-        PLANE_CONTROL_SET_GET_CONFIG_UINT32_PROPERTY(planeIndex, WIDTH, WIDTH, frameWidth);
+        std::string propPath_width = "IPlaneControl.planes." + std::to_string(planeIndex) + ".frameWidth";
+        uint32_t value_width = UT_KVP_PROFILE_GET_UINT32(propPath_width.c_str());
+        PLANE_CONTROL_SET_CONFIG_UINT32_PROPERTY(planeIndex, WIDTH, WIDTH, frameWidth);
+        PLANE_CONTROL_GET_CONFIG_UINT32_PROPERTY(planeIndex, WIDTH, WIDTH, value_width);
 
-        // Set and get HEIGHT
-        PLANE_CONTROL_SET_GET_CONFIG_UINT32_PROPERTY(planeIndex, HEIGHT, HEIGHT, frameHeight);
+        std::string propPath_height = "IPlaneControl.planes." + std::to_string(planeIndex) + ".frameHeight";
+        uint32_t value_height = UT_KVP_PROFILE_GET_UINT32(propPath_height.c_str());
+        PLANE_CONTROL_SET_CONFIG_UINT32_PROPERTY(planeIndex, HEIGHT, HEIGHT, frameHeight);
+        PLANE_CONTROL_GET_CONFIG_UINT32_PROPERTY(planeIndex, HEIGHT, HEIGHT, value_height);
 
-        // Set and get X
-        PLANE_CONTROL_SET_GET_INT_ZERO_PROPERTY(planeIndex, Property::X);
+        PLANE_CONTROL_SET_INT_ZERO_PROPERTY(planeIndex, X, X);
+        PLANE_CONTROL_GET_INT_ZERO_PROPERTY(planeIndex, X, X);
 
-        // Set and get Y
-        PLANE_CONTROL_SET_GET_INT_ZERO_PROPERTY(planeIndex, Property::Y);
+        PLANE_CONTROL_SET_INT_ZERO_PROPERTY(planeIndex, Y, Y);
+        PLANE_CONTROL_GET_INT_ZERO_PROPERTY(planeIndex, Y, Y);
 
-        // Set and get ALPHA
+
         PLANE_CONTROL_SET_GET_CONFIG_BOOL_PROPERTY(planeIndex, ALPHA, ALPHA, supportsAlpha);
 
-        // Set and get ZORDER
         PLANE_CONTROL_SET_GET_CONFIG_BOOL_PROPERTY(planeIndex, ZORDER, ZORDER, supportsZOrder);
 
-        // Set and get VISIBLE
-        PLANE_CONTROL_SET_GET_INT_ONE_PROPERTY(planeIndex, Property::VISIBLE);
+        // VISIBLE
+        PLANE_CONTROL_SET_INT_ONE_PROPERTY(planeIndex, VISIBLE, VISIBLE);
+        PLANE_CONTROL_GET_INT_ONE_PROPERTY(planeIndex, VISIBLE, VISIBLE);
+
 
         std::string planeTypePath = "IPlaneControl.planes." + std::to_string(planeIndex) + ".type";
         char planeTypeString[256];
         UT_KVP_PROFILE_GET_STRING(planeTypePath.c_str(), planeTypeString);
         if (std::string(planeTypeString) == "VIDEO") {
-            PLANE_CONTROL_SET_GET_INT_ZERO_PROPERTY(planeIndex, Property::OVERSCAN);
-            PLANE_CONTROL_SET_GET_INT_ONE_PROPERTY(planeIndex, Property::ASPECT_RATIO);
+
+            PLANE_CONTROL_SET_INT_ZERO_PROPERTY(planeIndex, OVERSCAN, OVERSCAN);
+            PLANE_CONTROL_GET_INT_ZERO_PROPERTY(planeIndex, OVERSCAN, OVERSCAN);
+
+            PLANE_CONTROL_SET_INT_ONE_PROPERTY(planeIndex, ASPECT_RATIO, ASPECT_RATIO);
+            PLANE_CONTROL_GET_INT_ONE_PROPERTY(planeIndex, ASPECT_RATIO, ASPECT_RATIO);
         }
     }
 }
@@ -330,10 +339,12 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
  * **Test Case ID:** 003@n
  */
 UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetVideoSourceDestinationPlaneMapping) {
+    UT_LOG_INFO("Starting TestGetSetVideoSourceDestinationPlaneMapping");
     UT_ASSERT_GREATER_EQUAL(sVideoPlaneIndices.size(), 2) << "Need at least 2 video planes, found " << sVideoPlaneIndices.size();
 
     for (const auto& sourceType : sAllSourceTypes) {
-        PLANE_CONTROL_SET_GET_MAPPING(sourceType, sVideoPlaneIndices[0], sVideoPlaneIndices[1]);
+        PLANE_CONTROL_SET_MAPPING(sourceType, sVideoPlaneIndices[0], sVideoPlaneIndices[1]);
+        PLANE_CONTROL_GET_MAPPING(sourceType, sVideoPlaneIndices[0], sVideoPlaneIndices[1]);
     }
 }
 
