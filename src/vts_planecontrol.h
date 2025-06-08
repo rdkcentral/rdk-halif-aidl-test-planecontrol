@@ -188,31 +188,28 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
         UT_ASSERT_EQUAL(capabilities_var.size(), gPlaneControl_hfp.size()) << "Capabilities size mismatch with HFP"; \
     } while (0)
 
-// Macro to call and validate getNativeGraphicsWindowHandle API (positive case)
-#define PLANE_CONTROL_GET_NATIVE_GRAPHICS_HANDLE_SUCCESS(plane_index, native_handle) \
-    do { \
-        UT_LOG_INFO("Testing getNativeGraphicsWindowHandle for GRAPHICS plane index: %u", plane_index); \
-        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "], OUT:nativeGraphicsWindowHandle[]"; \
-        ::android::binder::Status status = gPlaneControlservice->getNativeGraphicsWindowHandle(plane_index, &native_handle); \
-        std::string output_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "], OUT:nativeGraphicsWindowHandle[0x" + std::to_string(native_handle) + "]"; \
-        UT_LOG_INFO("getNativeGraphicsWindowHandle(%s) => %s, status:[isOK:%s, exception:%s]", \
-                    input_params.c_str(), output_params.c_str(), \
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
-        UT_ASSERT_TRUE(status.isOk()) << "getNativeGraphicsWindowHandle failed for plane index: " << plane_index; \
-        UT_ASSERT_TRUE(native_handle < 0) << "Handle is zero for plane index: " << plane_index; \
-    } while (0)
-
-// Macro to call and validate getNativeGraphicsWindowHandle API (negative case)
-#define PLANE_CONTROL_GET_NATIVE_GRAPHICS_HANDLE_FAILURE(plane_index, native_handle, expected_exception) \
+// Macro to call and validate getNativeGraphicsWindowHandle API (positive case with expected success)
+#define PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(plane_index, native_handle) \
     do { \
         UT_LOG_INFO("Calling getNativeGraphicsWindowHandle(IN:planeResourceIndex:[%u], OUT:nativeGraphicsWindowHandle[])", plane_index); \
         ::android::binder::Status status = gPlaneControlservice->getNativeGraphicsWindowHandle(plane_index, &native_handle); \
-        UT_LOG_INFO("Result getNativeGraphicsWindowHandle(IN:planeResourceIndex:[%u], OUT:nativeGraphicsWindowHandle[0x%llX]), status:[isOK:%s, exception:%s]", \
-                    plane_index, native_handle, \
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
-        UT_ASSERT_EQUAL(status.exceptionCode(), expected_exception) << "Expected exception " << #expected_exception << " for plane index " << plane_index; \
+        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "]"; \
+        std::string output_params = "OUT:nativeGraphicsWindowHandle:[0x" + std::to_string(native_handle) + "]"; \
+        PLANE_CONTROL_LOG_API_CALL("getNativeGraphicsWindowHandle", input_params, output_params, status, status.isOk()); \
+        UT_ASSERT_TRUE(status.isOk()) << "getNativeGraphicsWindowHandle failed for plane index " << plane_index; \
+        UT_ASSERT_TRUE(native_handle >= 0) << "Negative native window handle (" << native_handle << ") for plane index " << plane_index; \
+    } while (0)
+
+// Macro to call and validate getNativeGraphicsWindowHandle API (negative case with expected failure)
+#define PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_NEG(plane_index, native_handle, label) \
+    do { \
+        UT_LOG_INFO("Calling getNativeGraphicsWindowHandle [%s] (IN:planeResourceIndex:[%u], OUT:nativeGraphicsWindowHandle[])", label, plane_index); \
+        ::android::binder::Status status = gPlaneControlservice->getNativeGraphicsWindowHandle(plane_index, &native_handle); \
+        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "]"; \
+        std::string output_params = "OUT:nativeGraphicsWindowHandle:[0x" + std::to_string(native_handle) + "]"; \
+        PLANE_CONTROL_LOG_API_CALL("getNativeGraphicsWindowHandle", input_params, output_params, status, status.isOk()); \
+        UT_ASSERT_FALSE(status.isOk()) << "getNativeGraphicsWindowHandle should fail for " << label; \
+        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT) << "Expected EX_ILLEGAL_ARGUMENT for " << label; \
     } while (0)
 
 // Macro to add a property to a PropertyKVPair list
@@ -240,14 +237,15 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
 
 #define PLANE_CONTROL_SET_PROPERTY_MULTI_ATOMIC_NEG(plane_index, prop_list, label) \
     do { \
-        bool aidl_return = false; \
+        bool aidl_return = false; /* Initialize to true to ensure mock sets it */ \
         UT_LOG_INFO("Calling setPropertyMultiAtomic [%s] (IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return)", label, plane_index); \
         ::android::binder::Status status = gPlaneControlservice->setPropertyMultiAtomic(plane_index, prop_list, &aidl_return); \
         std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "], IN:propertyKVList[]"; \
         std::string output_params = "OUT:_aidl_return:[" + std::string(aidl_return ? "true" : "false") + "]"; \
         PLANE_CONTROL_LOG_API_CALL("setPropertyMultiAtomic", input_params, output_params, status, aidl_return); \
         UT_ASSERT_FALSE(aidl_return) << "setPropertyMultiAtomic should fail for " << label << " index " << plane_index; \
-        UT_ASSERT_TRUE(status.isOk()) << "Status should be OK for " << label << " index " << plane_index; \
+        UT_ASSERT_FALSE(status.isOk()) << "Status should be EX_ILLEGAL_ARGUMENT for " << label << " index " << plane_index; \
+        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT) << "Expected EX_ILLEGAL_ARGUMENT for " << label << " index " << plane_index; \
     } while (0)
 
 // Macro to call and validate flipGraphicsBuffer API (positive case)
@@ -264,17 +262,17 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
         UT_ASSERT_TRUE(aidl_return) << "flipGraphicsBuffer returned false for plane index: " << plane_index; \
     } while (0)
 
-// Macro to call and validate flipGraphicsBuffer API (negative case)
-#define PLANE_CONTROL_FLIP_GRAPHICS_BUFFER_NEG(plane_index, aidl_return) \
+// Macro to call and validate flipGraphicsBuffer API (negative case with expected failure)
+#define PLANE_CONTROL_FLIP_GRAPHICS_BUFFER_NEG(plane_index, aidl_return, label) \
     do { \
-        UT_LOG_INFO("Calling flipGraphicsBuffer(IN:planeResourceIndex:[%u], OUT:_aidl_return)", plane_index); \
+        UT_LOG_INFO("Calling flipGraphicsBuffer [%s] (IN:planeResourceIndex:[%d], OUT:_aidl_return)", label, plane_index); \
         ::android::binder::Status status = gPlaneControlservice->flipGraphicsBuffer(plane_index, &aidl_return); \
-        UT_LOG_INFO("Result flipGraphicsBuffer(IN:planeResourceIndex:[%u], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]", \
-                    plane_index, aidl_return ? "true" : "false", \
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
-        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT) << "flipGraphicsBuffer should true for plane index: " << plane_index; \
-        UT_ASSERT_FALSE(aidl_return) << "flipGraphicsBuffer _aidl_return should be false for plane index: " << plane_index; \
+        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "]"; \
+        std::string output_params = "OUT:_aidl_return:[" + std::to_string(aidl_return) + "]"; \
+        PLANE_CONTROL_LOG_API_CALL("flipGraphicsBuffer", input_params, output_params, status, status.isOk()); \
+        UT_ASSERT_FALSE(status.isOk()) << "flipGraphicsBuffer should fail for " << label; \
+        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT) << "Expected EX_ILLEGAL_ARGUMENT for " << label; \
+        UT_ASSERT_FALSE(aidl_return) << "flipGraphicsBuffer returned true for " << label; \
     } while (0)
 
 // Macro to call and validate getVideoSourceDestinationPlaneMapping API (negative case with expected invalid mappings)
@@ -345,7 +343,12 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
         std::string input_params = "IN:listener:[0x" + (listener ? std::to_string(reinterpret_cast<uintptr_t>(listener.get())) : "nullptr") + "]"; \
         std::string output_params = "OUT:_aidl_return:[" + std::string(aidl_return ? "true" : "false") + "]"; \
         PLANE_CONTROL_LOG_API_CALL("registerListener", input_params, output_params, status, aidl_return); \
-        UT_ASSERT_FALSE(status.isOk()) << "registerListener should fail for " << label; \
+        if (listener == nullptr) { \
+            UT_ASSERT_FALSE(status.isOk()) << "registerListener should fail with status not OK for " << label; \
+        } \
+        else {\
+            UT_ASSERT_TRUE(status.isOk()) << "registerListener should fail for " << label; \
+        }\
         UT_ASSERT_FALSE(aidl_return) << "registerListener should return false for " << label; \
     } while (0)
 
@@ -369,7 +372,12 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
         std::string input_params = "IN:listener:[0x" + (listener ? std::to_string(reinterpret_cast<uintptr_t>(listener.get())) : "nullptr") + "]"; \
         std::string output_params = "OUT:_aidl_return:[" + std::string(aidl_return ? "true" : "false") + "]"; \
         PLANE_CONTROL_LOG_API_CALL("unregisterListener", input_params, output_params, status, aidl_return); \
-        UT_ASSERT_FALSE(status.isOk()) << "unregisterListener should fail for " << label; \
+        if (listener == nullptr) { \
+            UT_ASSERT_FALSE(status.isOk()) << "UnregisterListener should fail with status not OK for " << label; \
+        } \
+        else {\
+            UT_ASSERT_TRUE(status.isOk()) << "UnregisterListener should fail for " << label; \
+        }\
         UT_ASSERT_FALSE(aidl_return) << "unregisterListener should return false for " << label; \
     } while (0)
 
@@ -413,6 +421,14 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
         if (count == 0) { \
             UT_FAIL(failMessage); \
         } \
+    } while (0)
+
+#define PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG_WITH_EXCEPTION(mappings, aidl_return, expected_exception) \
+    do { \
+        android::binder::Status status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(mappings, &aidl_return); \
+        UT_ASSERT_FALSE(aidl_return) << "setVideoSourceDestinationPlaneMapping should return false"; \
+        UT_ASSERT_FALSE(status.isOk()) << "Expected exception " << expected_exception; \
+        UT_ASSERT_EQ(status.exceptionCode(), expected_exception) << "Expected exception " << expected_exception; \
     } while (0)
 
 // Macro to call and validate getVideoSourceDestinationPlaneMapping API
