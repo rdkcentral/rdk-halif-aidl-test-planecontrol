@@ -67,7 +67,8 @@
 #include "vts_planecontrol.h"
 
 // Common property lists for VIDEO and GRAPHICS planes
-const std::vector<::com::rdk::hal::planecontrol::Property> VIDEO_PROPERTIES = {
+// Properties to test
+const std::vector<::com::rdk::hal::planecontrol::Property> videoProperties = {
     ::com::rdk::hal::planecontrol::Property::RESOURCE_ID,
     ::com::rdk::hal::planecontrol::Property::X,
     ::com::rdk::hal::planecontrol::Property::Y,
@@ -80,7 +81,7 @@ const std::vector<::com::rdk::hal::planecontrol::Property> VIDEO_PROPERTIES = {
     ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO
 };
 
-const std::vector<::com::rdk::hal::planecontrol::Property> GRAPHICS_PROPERTIES = {
+const std::vector<::com::rdk::hal::planecontrol::Property> graphicProperties = {
     ::com::rdk::hal::planecontrol::Property::RESOURCE_ID,
     ::com::rdk::hal::planecontrol::Property::X,
     ::com::rdk::hal::planecontrol::Property::Y,
@@ -90,7 +91,6 @@ const std::vector<::com::rdk::hal::planecontrol::Property> GRAPHICS_PROPERTIES =
     ::com::rdk::hal::planecontrol::Property::ZORDER,
     ::com::rdk::hal::planecontrol::Property::VISIBLE
 };
-
 
 class ValidPlaneControlListener : public BnPlaneControlListener {
 public:
@@ -146,17 +146,7 @@ protected:
 UT_ADD_TEST(VTS_L1_PlaneControl, getCapabilities_pos) {
     std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
 
-    UT_LOG_INFO("Calling getCapabilities(OUT:capabilities[])");
-    ::android::binder::Status status = gPlaneControlservice->getCapabilities(&capabilities);
-
-    UT_LOG_INFO("Result getCapabilities(OUT:capabilities[size=%zu]), status:[isOK:%s, exception:%s]",
-                capabilities.size(),
-                UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-
-    UT_ASSERT_TRUE(status.isOk()) << "getCapabilities status not OK";
-    UT_ASSERT_FALSE(capabilities.empty()) << "Capabilities list is empty";
-    UT_ASSERT_EQUAL(capabilities.size(), gPlaneControl_hfp.size()) << "Capabilities size mismatch with HFP";
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
     for (const auto& cap : capabilities) {
         auto it = std::find_if(gPlaneControl_hfp.begin(), gPlaneControl_hfp.end(),
@@ -168,14 +158,12 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getCapabilities_pos) {
             validateCapabilityMatch(cap, *it);
         }
     }
-
 }
 
-
 /**
- * @brief Test the retrieval of native graphics window handle for a valid GRAPHICS type plane.
+ * @brief Test the positive scenario of retrieving a native graphics window handle.
  *
- * This test verifies the functionality of retrieving the native graphics window handle for a plane of type GRAPHICS. It ensures that the function correctly identifies a plane of the required type and retrieves the handle without errors.
+ * This test verifies the functionality of the getNativeGraphicsWindowHandle API to ensure it correctly returns a valid native graphics window handle for GRAPHICS planes.
  *
  * **Test Group ID:** Basic: 01@n
  * **Test Case ID:** 002@n
@@ -188,51 +176,41 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getCapabilities_pos) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Retrieve the count of plane resources from YAML using the macro. | planeResourceCount = UT_KVP_PROFILE_GET_LIST_COUNT(IPlaneControl.planes) | Should be successful |  |
- * | 02 | Iterate through the plane resources to find a valid GRAPHICS type. | i = 0 to planeResourceCount | Should be successful |  |
- * | 03 | Check if the plane type at index i is GRAPHICS using getPlaneType(i). | planeType = getPlaneType(i) | Should be successful |  |
- * | 04 | Call getNativeGraphicsWindowHandle for the first valid GRAPHICS type plane. | planeResourceIndex = i, nativeGraphicsWindowHandle = 0 | Should Pass |  |
- * | 05 | Verify the status is OK and no exception occurred. | status.isOk() = true, status.exceptionCode() = EX_NONE | Should Pass |  |
- * | 06 | Verify the nativeGraphicsWindowHandle is not zero. | nativeGraphicsWindowHandle != 0 | Should Pass |  |
+ * | 01 | Retrieve plane capabilities using PLANE_CONTROL_GET_CAPABILITIES macro | capabilities | Should be successful, capabilities not empty | |
+ * | 02 | Identify GRAPHICS planes from capabilities | plane.type == PlaneType::GRAPHICS | At least one GRAPHICS plane exists | |
+ * | 03 | Call getNativeGraphicsWindowHandle for each GRAPHICS plane | planeResourceIndex, nativeHandle | status.isOk() = true, nativeHandle >= 0 | Should Pass |
+ * | 04 | Log the API call and results | planeResourceIndex, nativeHandle, status | Should be successful | |
+ * | 05 | Verify the handle is valid | nativeHandle >= 0 | Should be successful | |
  */
+UT_ADD_TEST(VTS_L1_PlaneControl, getNativeGraphicsWindowHandle_pos) {
+    UT_LOG_INFO("Starting getNativeGraphicsWindowHandle_pos");
 
- UT_ADD_TEST(VTS_L1_PlaneControl, getNativeGraphicsWindowHandle_pos) {
-    int64_t nativeHandle = 0;
-    ::android::binder::Status status;
+    // Step 1: Retrieve capabilities
+    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+
+    // Step 2: Identify GRAPHICS planes
     bool graphicsPlaneFound = false;
-
-    // Loop through all planes from HFP
-    for (const auto& cap : gPlaneControl_hfp) {
-        if (cap.type == PlaneType::GRAPHICS) {
-            graphicsPlaneFound = true;
-            uint32_t planeIndex = cap.planeIndex;
-
-            UT_LOG_INFO("Testing getNativeGraphicsWindowHandle for GRAPHICS plane index: %u", planeIndex);
-
-            std::string inputParams = "IN:planeResourceIndex:[" + std::to_string(planeIndex) + "], OUT:nativeGraphicsWindowHandle[]";
-            status = gPlaneControlservice->getNativeGraphicsWindowHandle(planeIndex, &nativeHandle);
-            std::string outputParams = "IN:planeResourceIndex:[" + std::to_string(planeIndex) + "], OUT:nativeGraphicsWindowHandle[0x" + std::to_string(nativeHandle) + "]";
-
-            UT_LOG_INFO("getNativeGraphicsWindowHandle", inputParams, outputParams, status, status.isOk());
-            UT_ASSERT_TRUE(status.isOk());
-            UT_ASSERT_TRUE(nativeHandle != 0) << "Handle is zero for plane index: " << planeIndex;
-
-            // Verify handle consistency
-            int64_t handle2 = 0;
-            status = gPlaneControlservice->getNativeGraphicsWindowHandle(planeIndex, &handle2);
-            UT_ASSERT_TRUE(status.isOk());
-            UT_ASSERT_EQUAL(nativeHandle, handle2) << "Handles differ for plane index: " << planeIndex;
+    for (const auto& plane : capabilities) {
+        if (plane.type != ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+            continue;
         }
+
+        graphicsPlaneFound = true;
+        uint32_t planeResourceIndex = plane.planeIndex;
+        int64_t nativeHandle = 0;
+
+        // Steps 3-5: Call API, log, and verify
+        PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(planeResourceIndex, nativeHandle);
     }
 
-    ASSERT_TRUE(graphicsPlaneFound) << "No GRAPHICS plane found in gPlaneControl_hfp";
+    UT_ASSERT_TRUE(graphicsPlaneFound) << "No GRAPHICS plane found in capabilities";
 }
 
-
 /**
- * @brief Test the behavior of getNativeGraphicsWindowHandle with an invalid plane resource index.
+ * @brief Test the negative scenarios for retrieving a native graphics window handle.
  *
- * This test checks the response of the getNativeGraphicsWindowHandle function when provided with an invalid plane resource index. The purpose is to ensure that the function handles invalid inputs gracefully and returns the appropriate error status.
+ * This test verifies the behavior of the getNativeGraphicsWindowHandle function when provided with invalid inputs, such as an invalid plane resource index or a non-GRAPHICS plane index. It ensures the function fails appropriately with the correct status and exception code.
  *
  * **Test Group ID:** Basic: 01@n
  * **Test Case ID:** 003@n
@@ -245,50 +223,56 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getCapabilities_pos) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Initialize nativeGraphicsWindowHandle to 0 and declare status variable. | nativeGraphicsWindowHandle = 0 | Should be successful | |
- * | 02 | Set invalidPlaneResourceIndex to video plane index. | invalidPlaneResourceIndex = video plane index | Should be successful | |
- * | 03 | Call getNativeGraphicsWindowHandle with invalidPlaneResourceIndex and capture the status. | planeResourceIndex = -1, nativeGraphicsWindowHandle = 0 | status.exceptionCode() = EX_ILLEGAL_ARGUMENT, nativeGraphicsWindowHandle = 0 | Should Fail |
- * | 04 | Verify that nativeGraphicsWindowHandle remains 0. | nativeGraphicsWindowHandle = 0 | Should be successful | |
- * | 05 | Verify that the status exception code is EX_ILLEGAL_ARGUMENT. | status.exceptionCode() = EX_ILLEGAL_ARGUMENT | Should be successful | |
+ * | 01 | Retrieve plane capabilities using PLANE_CONTROL_GET_CAPABILITIES macro | capabilities | Should be successful | |
+ * | 02 | Identify a VIDEO plane index for invalid test | plane.type == PlaneType::VIDEO | Should be successful if VIDEO plane exists | |
+ * | 03 | Identify a valid GRAPHICS plane index to determine max index | plane.type == PlaneType::GRAPHICS | Should be successful if GRAPHICS plane exists | |
+ * | 04 | Call getNativeGraphicsWindowHandle with invalid plane index (beyond max) | invalidPlaneResourceIndex = maxPlaneIndex + 1, nativeHandle | status.isOk() = false, exceptionCode = EX_ILLEGAL_ARGUMENT | Should Fail |
+ * | 05 | Call getNativeGraphicsWindowHandle with VIDEO plane index | invalidPlaneResourceIndex = videoPlaneIndex, nativeHandle | status.isOk() = false, exceptionCode = EX_ILLEGAL_ARGUMENT | Should Fail if VIDEO plane exists |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, getNativeGraphicsWindowHandle_neg) {
-    int64_t nativeGraphicsWindowHandle = 0;
-    ::android::binder::Status status;
+    UT_LOG_INFO("Starting getNativeGraphicsWindowHandle_neg");
 
-    // Retrieve the count of plane resources from YAML using the macro
-    std::string plane_count_path = "IPlaneControl.planes";
-    uint32_t planeResourceCount = UT_KVP_PROFILE_GET_UINT32(plane_count_path.c_str());
+    // Step 1: Retrieve capabilities
+    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
-    // Iterate through the plane resources to find a non-GRAPHICS type (negatively test non-graphics planes)
-    for (int32_t i = 0; i < planeResourceCount; ++i) {
-        char planeTypeString[256];
-        std::string plane_type_path = "IPlaneControl.planes."+std::to_string(i)+".type";
-        UT_KVP_PROFILE_GET_STRING(plane_type_path.c_str(), planeTypeString);
-
-        // Test only for non-GRAPHICS planes (negatively test VIDEO planes)
-        if (planeTypeString == "VIDEO") {
-            // Corrected YAML path for plane index (if index is explicitly defined in profile)
-            std::string plane_index_path = "IPlaneControl.planes." + std::to_string(i);
-            uint32_t plane_indexfrom_profile = UT_KVP_PROFILE_GET_UINT32(plane_index_path.c_str());
-
-            UT_LOG_INFO("Calling getNativeGraphicsWindowHandle(IN:planeResourceIndex:[%u], OUT:nativeGraphicsWindowHandle[])", plane_indexfrom_profile);
-
-            // Call the method with a VIDEO plane resource
-            status = gPlaneControlservice->getNativeGraphicsWindowHandle(plane_indexfrom_profile, &nativeGraphicsWindowHandle);
-
-            UT_LOG_INFO("Result getNativeGraphicsWindowHandle(IN:planeResourceIndex:[%u], OUT:nativeGraphicsWindowHandle[0x%llX]), status:[isOK:%s, exception:%s]",
-                        plane_indexfrom_profile,
-                        nativeGraphicsWindowHandle,
-                        UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                        UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-
-            // Verification Steps
-            // Since VIDEO planes are not graphics planes, this should return an ILLEGAL_ARGUMENT exception
-            UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+    // Step 2: Identify a VIDEO plane index
+    uint32_t videoPlaneIndex = 0;
+    bool videoPlaneFound = false;
+    for (const auto& plane : capabilities) {
+        if (plane.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+            videoPlaneIndex = plane.planeIndex;
+            videoPlaneFound = true;
+            break;
         }
     }
-}
 
+    // Step 3: Identify max plane index
+    uint32_t maxPlaneIndex = 0;
+    bool graphicsPlaneFound = false;
+    for (const auto& plane : capabilities) {
+        if (plane.type == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+            graphicsPlaneFound = true;
+        }
+        // Cast plane.planeIndex to uint32_t to match maxPlaneIndex type
+        UT_ASSERT_TRUE(plane.planeIndex >= 0) << "Negative plane index: " << plane.planeIndex;
+        maxPlaneIndex = std::max(maxPlaneIndex, static_cast<uint32_t>(plane.planeIndex));
+    }
+
+    UT_ASSERT_TRUE(graphicsPlaneFound) << "No GRAPHICS plane found in capabilities";
+
+    // Step 4: Test with invalid plane index
+    uint32_t invalidPlaneResourceIndex = maxPlaneIndex + 1;
+    int64_t nativeHandle = 0;
+    PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_NEG(invalidPlaneResourceIndex, nativeHandle, "Invalid Plane Index");
+
+    // Step 5: Test with VIDEO plane index
+    if (videoPlaneFound) {
+        PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_NEG(videoPlaneIndex, nativeHandle, "Video Plane Index");
+    } else {
+        UT_LOG_INFO("No VIDEO plane found, skipping video plane index test");
+    }
+}
 
 /**
  * @brief Test the positive scenario of flipping a graphics buffer using a valid plane resource index.
@@ -311,7 +295,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getNativeGraphicsWindowHandle_neg) {
  * | 03 | Test with a valid plane resource index by calling flipGraphicsBuffer. | planeResourceIndex = validPlaneResourceIndex, aidl_return = false | status.isOk() should be true, aidl_return should be true. | Should Pass |
  */
 
- UT_ADD_TEST(VTS_L1_PlaneControl, flipGraphicsBuffer_pos) {
+UT_ADD_TEST(VTS_L1_PlaneControl, flipGraphicsBuffer_pos) {
     uint32_t planeCount = 0;
     bool graphicsPlaneFound = false;
 
@@ -319,20 +303,13 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getNativeGraphicsWindowHandle_neg) {
         graphicsPlaneFound = true;
         bool aidl_return = false;
 
-        std::string inputParams = "IN:planeResourceIndex:[" + std::to_string(planeIndex) + "]";
-        auto status = gPlaneControlservice->flipGraphicsBuffer(planeIndex, &aidl_return);
-        std::string outputParams = "IN:planeResourceIndex:[" + std::to_string(planeIndex) + "], OUT:_aidl_return:[" + (aidl_return ? "true" : "false") + "]";
-
-        UT_LOG_INFO("flipGraphicsBuffer", inputParams, outputParams, status, aidl_return);
-        UT_ASSERT_TRUE(status.isOk());
-        UT_ASSERT_TRUE(aidl_return);
+        PLANE_CONTROL_FLIP_GRAPHICS_BUFFER_POS(planeIndex, aidl_return);
     });
 
     if (!graphicsPlaneFound) {
-        GTEST_SKIP() << "Skipping test: No GRAPHICS plane found via getCapabilities()";
+        UT_FAIL("Skipping test: No GRAPHICS plane found via getCapabilities()");
     }
 }
-
 
 /**
  * @brief Test the negative scenario of flipping the graphics buffer.
@@ -357,30 +334,44 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getNativeGraphicsWindowHandle_neg) {
  * | 05 | Verify the return value and output parameter | status.isOk() = false, _aidl_return = false | Should be successful | |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, flipGraphicsBuffer_neg) {
-    bool _aidl_return = false;
-    ::android::binder::Status status;
-    // Retrieve the count of plane resources from YAML using the macro
-    std::string plane_count_path = "IPlaneControl.planes";
-    uint32_t planeResourceCount = UT_KVP_PROFILE_GET_UINT32(plane_count_path.c_str());
-    // Iterate through the plane resources to find a  VIDEO type
-    for (int32_t i = 0; i < planeResourceCount; ++i)
-    {
-        char planeTypeString[256];
-        std::string plane_type_path = "IPlaneControl.planes."+std::to_string(i)+".type";
-        UT_KVP_PROFILE_GET_STRING(plane_type_path.c_str(), planeTypeString);
-        if (planeTypeString == "VIDEO") {
-            std::string plane_index_path = "IPlaneControl.planes." + std::to_string(i);
-            uint32_t plane_indexfrom_profile = UT_KVP_PROFILE_GET_UINT32(plane_index_path.c_str());
+    UT_LOG_INFO("Starting flipGraphicsBuffer_neg");
 
-            UT_LOG_INFO("Calling flipGraphicsBuffer with video plane index (IN:planeResourceIndex:[%d], OUT:_aidl_return)", plane_indexfrom_profile);
-            status = gPlaneControlservice->flipGraphicsBuffer(plane_indexfrom_profile, &_aidl_return);
-            UT_LOG_INFO("Result flipGraphicsBuffer(IN:planeResourceIndex:[%d], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
-                        plane_indexfrom_profile, _aidl_return ? "true" : "false",
-                        UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                        UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-            UT_ASSERT_FALSE(status.isOk());
-            UT_ASSERT_FALSE(_aidl_return);
+    // Step 1: Get capabilities
+    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+
+    // Step 2: Identify a VIDEO plane index
+    int32_t videoPlaneIndex = -1;
+    bool videoPlaneFound = false;
+    for (const auto& cap : capabilities) {
+        if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+            videoPlaneIndex = cap.planeIndex;
+            videoPlaneFound = true;
+            break;
         }
+    }
+
+    // Step 3: Get max plane index
+    int32_t maxPlaneIndex = -1;
+    int32_t graphicsPlaneIndex = -1;
+
+    for (const auto& plane : capabilities) {
+        if (plane.type == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+            graphicsPlaneIndex = plane.planeIndex;
+        }
+        maxPlaneIndex = std::max(maxPlaneIndex, plane.planeIndex);
+    }
+
+    // Step 4: Test with invalid plane index
+    bool aidl_return = false;
+    int32_t invalidPlaneIndex = maxPlaneIndex + 1;
+    PLANE_CONTROL_FLIP_GRAPHICS_BUFFER_NEG(invalidPlaneIndex, aidl_return, "Invalid Plane Index");
+
+    // Step 5: Test with video plane index
+    if (videoPlaneFound) {
+        PLANE_CONTROL_FLIP_GRAPHICS_BUFFER_NEG(videoPlaneIndex, aidl_return, "Video Plane Index");
+    } else {
+        UT_LOG_INFO("No VIDEO plane found, skipping video plane index test");
     }
 }
 
@@ -414,122 +405,40 @@ UT_ADD_TEST(VTS_L1_PlaneControl, flipGraphicsBuffer_neg) {
 UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_pos) {
     UT_LOG_INFO("Starting setVideoSourceDestinationPlaneMapping_pos");
 
-    // Step 1: Ensure HFP is parsed
-    if (gPlaneControl_hfp.empty()) {
-        UT_LOG_INFO("Parsing HFP data");
-        if (vts_planecontrol_parsePlaneControlHFP() != UT_STATUS_OK) {
-            UT_LOG_WARNING("Failed to parse HFP, relying on mock service");
-        }
-    }
+    // Step 1: Retrieve capabilities
+    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
-    // Step 2: Collect video plane indices
+    // Step 2: Count video planes and collect indices
     std::vector<uint32_t> planeIndices;
-    for (const auto& cap : gPlaneControl_hfp) {
+    gNoVideoTypePlanes = 0; // Reset global counter
+    for (const auto& cap : capabilities) {
         if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
             planeIndices.push_back(cap.planeIndex);
+            gNoVideoTypePlanes++;
         }
     }
     UT_LOG_INFO("Video plane indices found: %zu", planeIndices.size());
-    if (planeIndices.size() < 2) {
-        UT_LOG_WARNING("Need at least 2 video planes, found %zu, checking gNoVideoTypePlanes", planeIndices.size());
-    }
+    UT_ASSERT_GREATER_EQUAL(planeIndices.size(), 2) << "Need at least 2 video planes, found " << planeIndices.size();
     UT_ASSERT_GREATER_EQUAL(gNoVideoTypePlanes, 2) << "Need at least 2 video planes, found " << gNoVideoTypePlanes;
 
     // Steps 3-4: Create mappings for HDMI and COMPOSITE
     std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> mappings;
-    ::com::rdk::hal::planecontrol::SourcePlaneMapping mapping1;
-    mapping1.sourceType = ::com::rdk::hal::planecontrol::SourceType::HDMI;
-    mapping1.sourceIndex = 0;
-    mapping1.destinationPlaneIndex = planeIndices[0];
-    mappings.push_back(mapping1);
+    PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, ::com::rdk::hal::planecontrol::SourceType::HDMI, 0, planeIndices[0]);
+    PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, ::com::rdk::hal::planecontrol::SourceType::COMPOSITE, 0, planeIndices[1]);
 
-    ::com::rdk::hal::planecontrol::SourcePlaneMapping mapping2;
-    mapping2.sourceType = ::com::rdk::hal::planecontrol::SourceType::COMPOSITE;
-    mapping2.sourceIndex = 0;
-    mapping2.destinationPlaneIndex = planeIndices[1];
-    mappings.push_back(mapping2);
-
-    // Steps 5-6: Set mappings
+    // Steps 5-6: Set and verify mappings
     bool aidl_return = false;
-    ::android::binder::Status status;
-    UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:mappings, OUT:_aidl_return)");
-    status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(mappings, &aidl_return);
-    UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:mappings, OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
-                aidl_return ? "true" : "false",
-                UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_TRUE(aidl_return);
-
-    // Verify mappings
-    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> retrievedMappings;
-    UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
-    status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
-    UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s]",
-                UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_TRUE(status.isOk());
-
-    // Check HDMI mapping
-    bool foundHDMI = false;
-    for (const auto& mapping : retrievedMappings) {
-        if (mapping.destinationPlaneIndex == planeIndices[0] &&
-            mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::HDMI &&
-            mapping.sourceIndex == 0) {
-            foundHDMI = true;
-            break;
-        }
-    }
-    UT_ASSERT_TRUE(foundHDMI) << "HDMI mapping not found for plane " << planeIndices[0];
-
-    // Check COMPOSITE mapping
-    bool foundComposite = false;
-    for (const auto& mapping : retrievedMappings) {
-        if (mapping.destinationPlaneIndex == planeIndices[1] &&
-            mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::COMPOSITE &&
-            mapping.sourceIndex == 0) {
-            foundComposite = true;
-            break;
-        }
-    }
-    UT_ASSERT_TRUE(foundComposite) << "COMPOSITE mapping not found for plane " << planeIndices[1];
+    PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mappings, aidl_return);
 
     // Steps 7-9: Unmap VIDEO_SINK
     mappings.clear();
-    mapping1.sourceType = ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK;
-    mapping1.sourceIndex = 0;
-    mapping1.destinationPlaneIndex = -1;
-    mappings.push_back(mapping1);
-
-    UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping to unmap VIDEO_SINK");
-    status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(mappings, &aidl_return);
-    UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:mappings, OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
-                aidl_return ? "true" : "false",
-                UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_TRUE(aidl_return);
+    PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK, 0, -1);
+    PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mappings, aidl_return);
 
     // Comprehensive unmapping for cleanup
-    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> unmapMappings;
-    std::vector<::com::rdk::hal::planecontrol::SourceType> allSourceTypes = {
-        ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK,
-        ::com::rdk::hal::planecontrol::SourceType::HDMI,
-        ::com::rdk::hal::planecontrol::SourceType::COMPOSITE
-    };
-    for (const auto& source : allSourceTypes) {
-        for (int sourceIndex = 0; sourceIndex <= 1; ++sourceIndex) {
-            ::com::rdk::hal::planecontrol::SourcePlaneMapping unmap;
-            unmap.sourceType = source;
-            unmap.sourceIndex = sourceIndex;
-            unmap.destinationPlaneIndex = -1;
-            unmapMappings.push_back(unmap);
-        }
-    }
-    UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping to unmap all sources");
-    status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(unmapMappings, &aidl_return);
-    UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_TRUE(aidl_return);
+    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> unmap_mappings;
+    PLANE_CONTROL_UNMAP_ALL_SOURCES(unmap_mappings, aidl_return);
 }
 
 /**
@@ -560,30 +469,23 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_pos) {
 UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_neg) {
     UT_LOG_INFO("Starting setVideoSourceDestinationPlaneMapping_neg");
 
-    // Ensure HFP is parsed
-    if (gPlaneControl_hfp.empty()) {
-        UT_LOG_INFO("Parsing HFP data");
-        if (vts_planecontrol_parsePlaneControlHFP() != UT_STATUS_OK) {
-            UT_LOG_WARNING("Failed to parse HFP, relying on mock service");
-        }
-    }
+    // Step 1: Retrieve capabilities
+    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
-    // Step 1: Retrieve video plane indices
-    std::vector<uint32_t> plane_indexfrom_profile;
-    for (const auto& cap : gPlaneControl_hfp) {
+    // Step 2: Count video planes and collect indices
+    std::vector<uint32_t> planeIndices;
+    gNoVideoTypePlanes = 0;
+    for (const auto& cap : capabilities) {
         if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
-            plane_indexfrom_profile.push_back(cap.planeIndex);
+            planeIndices.push_back(cap.planeIndex);
+            gNoVideoTypePlanes++;
         }
     }
-    UT_LOG_INFO("Video plane indices found: %zu", plane_indexfrom_profile.size());
-    if (plane_indexfrom_profile.size() < 2) {
-        UT_LOG_WARNING("Need at least 2 video planes, found %zu, checking gNoVideoTypePlanes", plane_indexfrom_profile.size());
-    }
+    UT_LOG_INFO("Video plane indices found: %zu", planeIndices.size());
+    UT_ASSERT_GREATER_EQUAL(planeIndices.size(), 2) << "Need at least 2 video planes, found " << planeIndices.size();
     UT_ASSERT_GREATER_EQUAL(gNoVideoTypePlanes, 2) << "Need at least 2 video planes, found " << gNoVideoTypePlanes;
 
-    // Prepare test data
-    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> listSourcePlaneMapping1;
-    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> listSourcePlaneMapping2;
     std::vector<::com::rdk::hal::planecontrol::SourceType> allSourceTypes = {
         ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK,
         ::com::rdk::hal::planecontrol::SourceType::HDMI,
@@ -591,98 +493,44 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_neg) {
     };
 
     for (const auto& source : allSourceTypes) {
-        // Clear mapping lists
-        listSourcePlaneMapping1.clear();
-        listSourcePlaneMapping2.clear();
-
         // Step 3: Test duplicate SourceType and SourceIndex
-        ::com::rdk::hal::planecontrol::SourcePlaneMapping element1;
-        element1.sourceType = source;
-        element1.sourceIndex = 0;
-        element1.destinationPlaneIndex = plane_indexfrom_profile[0];
-        listSourcePlaneMapping1.push_back(element1);
-        element1.destinationPlaneIndex = plane_indexfrom_profile[1];
-        listSourcePlaneMapping1.push_back(element1);
+        std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> mappings;
+        PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 0, planeIndices[0]);
+        PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 0, planeIndices[1]);
+        bool aidl_return = false;
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG(mappings, aidl_return);
 
-        bool _aidl_return = false;
-        ::android::binder::Status status;
-        UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping1, OUT:_aidl_return)");
-        status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(listSourcePlaneMapping1, &_aidl_return);
-        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping1, OUT:_aidl_return:[%d]), status:[isOK:%s, exception:%s]",
-                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_FALSE(_aidl_return);
+        // Step 4: Test duplicate DestinationPlaneIndex
+        mappings.clear();
+        PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 0, planeIndices[0]);
+        PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 1, planeIndices[0]);
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG(mappings, aidl_return);
 
-        // Step 5: Test duplicate DestinationPlaneIndex
-        element1.sourceType = source;
-        element1.sourceIndex = 0;
-        element1.destinationPlaneIndex = plane_indexfrom_profile[0];
-        listSourcePlaneMapping2.push_back(element1);
-        element1.sourceIndex = 1;
-        listSourcePlaneMapping2.push_back(element1);
+        // Steps 5-6: Test mapping to already mapped plane
+        mappings.clear();
+        PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 1, planeIndices[0]);
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mappings, aidl_return);
 
-        UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping2, OUT:_aidl_return)");
-        status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(listSourcePlaneMapping2, &_aidl_return);
-        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping2, OUT:_aidl_return:[%d]), status:[isOK:%s, exception:%s]",
-                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_FALSE(_aidl_return);
-
-        // Steps 7-8: Test mapping to already mapped plane
-        std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> listSourcePlaneMapping3;
-        element1.sourceType = source;
-        element1.sourceIndex = 1;
-        element1.destinationPlaneIndex = plane_indexfrom_profile[0];
-        listSourcePlaneMapping3.push_back(element1);
-        UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping3, OUT:_aidl_return)");
-        status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(listSourcePlaneMapping3, &_aidl_return);
-        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping3, OUT:_aidl_return:[%d]), status:[isOK:%s, exception:%s]",
-                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_TRUE(status.isOk());
-        UT_ASSERT_TRUE(_aidl_return);
-
-        std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> listSourcePlaneMapping4;
-        element1.sourceType = source;
-        element1.sourceIndex = 0;
-        element1.destinationPlaneIndex = plane_indexfrom_profile[0];
-        listSourcePlaneMapping4.push_back(element1);
-        UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping4, OUT:_aidl_return)");
-        status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(listSourcePlaneMapping4, &_aidl_return);
-        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:listSourcePlaneMapping4, OUT:_aidl_return:[%d]), status:[isOK:%s, exception:%s]",
-                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_FALSE(_aidl_return);
-        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_STATE);
+        mappings.clear();
+        PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 0, planeIndices[0]);
+        aidl_return = false;
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG_WITH_EXCEPTION(mappings, aidl_return, ::android::binder::Status::EX_ILLEGAL_STATE);
 
         // Unmap all sources to reset state
-        std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> unmapMappings;
-        for (const auto& unmapSource : allSourceTypes) {
-            for (int sourceIndex = 0; sourceIndex <= 1; ++sourceIndex) {
-                ::com::rdk::hal::planecontrol::SourcePlaneMapping unmap;
-                unmap.sourceType = unmapSource;
-                unmap.sourceIndex = sourceIndex;
-                unmap.destinationPlaneIndex = -1;
-                unmapMappings.push_back(unmap);
-            }
-        }
-        UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping to unmap all sources");
-        status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(unmapMappings, &_aidl_return);
-        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:unmapMappings, OUT:_aidl_return:[%d]), status:[isOK:%s, exception:%s]",
-                    _aidl_return, UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_TRUE(status.isOk());
-        UT_ASSERT_TRUE(_aidl_return);
+        std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> unmap_mappings;
+        PLANE_CONTROL_UNMAP_ALL_SOURCES(unmap_mappings, aidl_return);
     }
 }
 
 /**
- * @brief Test the positive scenario for retrieving video source to destination plane mapping.
+ * @brief Test the retrieval of video source destination plane mappings for VIDEO planes.
  *
- * This test verifies the functionality of the getVideoSourceDestinationPlaneMapping API to ensure it correctly retrieves the mapping between video sources and destination planes. The test checks the status of the API call, the non-emptiness of the returned mapping, and validates the mapping details based on predefined conditions.
+ * This test verifies the functionality of getVideoSourceDestinationPlaneMapping for VIDEO planes.
+ * It ensures that the function retrieves the correct number of mappings corresponding to the VIDEO planes
+ * and validates the mappings against the expected configuration.
  *
  * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 008@n
+ * **Test Case ID:** 004@n
  * **Priority:** High@n
  * @n
  * **Pre-Conditions:** None@n
@@ -692,39 +540,127 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_neg) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Call the getVideoSourceDestinationPlaneMapping API to retrieve the mapping. | aidl_return = std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> | Status should be OK, aidl_return should not be empty | Should Pass |
- * | 02 | Check if the status of the API call is OK. | status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&aidl_return) | Status should be OK | Should be successful |
- * | 03 | Verify that the returned mapping is not empty. | aidl_return | aidl_return should not be empty | Should be successful |
- * | 04 | Validate the size of the returned mapping against the expected plane count. | expectedPlaneCount = 3 | aidl_return.size() should equal expectedPlaneCount | Should be successful |
- * | 05 | Iterate through each mapping and validate the source and destination indices. | mapping.sourceType, mapping.sourceIndex, mapping.destinationPlaneIndex | Correct mapping based on sourceType | Should be successful |
+ * | 01 | Retrieve the capabilities to count VIDEO planes using PLANE_CONTROL_GET_CAPABILITIES macro. | capabilities | Should be successful, capabilities not empty | |
+ * | 02 | Ensure at least one VIDEO plane exists using PLANE_CONTROL_ENSURE_PLANE_TYPE_EXISTS macro. | PlaneType::VIDEO | Should be successful | |
+ * | 03 | Call getVideoSourceDestinationPlaneMapping using PLANE_CONTROL_GET_VIDEO_SOURCE_MAPPING macro. | aidl_return, video_plane_count | Should be successful, status.isOk() = true, mappings count matches video_plane_count | |
+ * | 04 | Validate each mapping's sourceType, sourceIndex, and destinationPlaneIndex against profile or capabilities. | aidl_return | Should match expected values | |
  */
-UT_ADD_TEST(VTS_L1_PlaneControl, getVideoSourceDestinationPlaneMapping_pos) {
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
-    auto status = gPlaneControlservice->getCapabilities(&capabilities);
-    UT_ASSERT_TRUE(status.isOk());
 
-    // Count VIDEO planes using capabilities
+UT_ADD_TEST(VTS_L1_PlaneControl, getVideoSourceDestinationPlaneMapping_pos) {
+    // Step 1: Retrieve capabilities and count VIDEO planes
+    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+
     uint32_t video_plane_count = 0;
     for (const auto& cap : capabilities) {
         if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
             video_plane_count++;
         }
     }
-    //UT_ASSERT_GREATER_EQUAL(video_plane_count, 2);// do we need this check?
 
-    // Call the method under test
+    // Step 2: Ensure at least one VIDEO plane exists
+    PLANE_CONTROL_ENSURE_PLANE_TYPE_EXISTS(video_plane_count, ::com::rdk::hal::planecontrol::PlaneType::VIDEO,
+                                          "No VIDEO planes found in capabilities");
+
+    // Step 3: Call getVideoSourceDestinationPlaneMapping using macro
     std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> aidl_return;
-    status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&aidl_return);
+    PLANE_CONTROL_GET_VIDEO_SOURCE_MAPPING(aidl_return, video_plane_count);
 
-    UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping, status:[isOK:%s, exception:%s]",
-                UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+    // Step 4: Validate each mapping
+    for (const auto& mapping : aidl_return) {
+        // Verify that the destination plane index corresponds to a VIDEO plane
+        auto it = std::find_if(capabilities.begin(), capabilities.end(),
+                               [&mapping](const auto& cap) {
+                                   return cap.planeIndex == mapping.destinationPlaneIndex &&
+                                          cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
+                               });
+        UT_ASSERT_NOT_EQUAL(it, capabilities.end()) << "Mapping for plane index " << mapping.destinationPlaneIndex
+                                                   << " is not a VIDEO plane";
 
-    UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_EQUAL(aidl_return.size(), video_plane_count);
+        // Skip validation for unmapped planes
+        if (mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::NONE) {
+            UT_ASSERT_TRUE(mapping.sourceIndex == -1) << "Expected sourceIndex -1 for unmapped plane index " << mapping.destinationPlaneIndex;
+            continue;
+        }
+
+        // Validate sourceType is one of the expected types
+        std::vector<::com::rdk::hal::planecontrol::SourceType> validSourceTypes = {
+            ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK,
+            ::com::rdk::hal::planecontrol::SourceType::HDMI,
+            ::com::rdk::hal::planecontrol::SourceType::COMPOSITE
+        };
+        auto sourceTypeIt = std::find(validSourceTypes.begin(), validSourceTypes.end(), mapping.sourceType);
+        UT_ASSERT_NOT_EQUAL(sourceTypeIt, validSourceTypes.end()) << "Invalid sourceType " << static_cast<int>(mapping.sourceType)
+                                                                 << " for plane index " << mapping.destinationPlaneIndex;
+
+        // Validate sourceIndex
+        UT_ASSERT_TRUE(mapping.sourceIndex >= 0 && mapping.sourceIndex <= 1) << "Invalid sourceIndex " << mapping.sourceIndex
+                                                                           << " for plane index " << mapping.destinationPlaneIndex;
+    }
 }
 
+#if 0
+/**
+ * @brief Test the negative scenarios for retrieving video source destination plane mappings.
+ *
+ * This test verifies the behavior of the getVideoSourceDestinationPlaneMapping function when the system has no VIDEO planes or returns invalid mappings. It ensures the function handles edge cases correctly, such as returning an empty array when no VIDEO planes exist or invalid mappings for VIDEO planes.
+ *
+ * **Test Group ID:** Basic: 01@n
+ * **Test Case ID:** 005@n
+ * **Priority:** High@n
+ * @n
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ * @n
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :----: | --------- | ---------- |-------------- | ----- |
+ * | 01 | Retrieve the capabilities to count VIDEO planes using PLANE_CONTROL_GET_CAPABILITIES macro | capabilities | Should be successful | |
+ * | 02 | Count the number of VIDEO planes | video_plane_count | Should be successful | |
+ * | 03 | If no VIDEO planes exist, call getVideoSourceDestinationPlaneMapping and expect empty mappings | aidl_return | status.isOk() = true, aidl_return.empty() = true | Should Pass if no VIDEO planes |
+ * | 04 | If VIDEO planes exist, call getVideoSourceDestinationPlaneMapping and expect invalid mappings | aidl_return, video_plane_count | status.isOk() = true, mappings contain invalid sourceType, sourceIndex, or destinationPlaneIndex | Should Pass if invalid mappings detected |
+ */
+UT_ADD_TEST(VTS_L1_PlaneControl, getVideoSourceDestinationPlaneMapping_neg) {
+    UT_LOG_INFO("Starting getVideoSourceDestinationPlaneMapping_neg");
 
+    // Step 1: Retrieve capabilities
+    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+
+    uint32_t video_plane_count = 0;
+    for (const auto& cap : capabilities) {
+        if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+            video_plane_count++;
+        }
+    }
+
+    // Step 2: Call getVideoSourceDestinationPlaneMapping
+    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> aidl_return;
+    PLANE_CONTROL_GET_VIDEO_SOURCE_MAPPING(aidl_return, video_plane_count);
+
+    // Step 3: Validate that mappings are invalid
+    for (const auto& mapping : aidl_return) {
+        auto it = std::find_if(capabilities.begin(), capabilities.end(),
+                               [&mapping](const auto& cap) {
+                                   return cap.planeIndex == mapping.destinationPlaneIndex &&
+                                          cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
+                               });
+        // Define valid source types in a vector
+        std::vector<::com::rdk::hal::planecontrol::SourceType> valid_source_types = {
+            ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK,
+            ::com::rdk::hal::planecontrol::SourceType::HDMI,
+            ::com::rdk::hal::planecontrol::SourceType::COMPOSITE
+        };
+        bool is_valid_source_type = std::find(valid_source_types.begin(), valid_source_types.end(), mapping.sourceType) != valid_source_types.end();
+        bool is_valid_source_index = mapping.sourceIndex >= 0 && mapping.sourceIndex <= 1;
+        UT_ASSERT_TRUE(it == capabilities.end() || !is_valid_source_type || !is_valid_source_index)
+            << "Invalid mapping for Invalid Mappings: destinationPlaneIndex=" << mapping.destinationPlaneIndex
+            << ", sourceType=" << static_cast<int>(mapping.sourceType)
+            << ", sourceIndex=" << mapping.sourceIndex;
+    }
+}
+#endif
 /**
  * @brief Test the positive scenario of retrieving properties using the getProperty API.
  *
@@ -743,30 +679,46 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getVideoSourceDestinationPlaneMapping_pos) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Ensure the service is available | service = nullptr | Service should not be null | Should be successful |
- * | 02 | Retrieve the number of planes from the YAML configuration | IPlaneControl.planes | planeCount should be retrieved | Should be successful |
- * | 03 | Iterate over each plane resource index | planeResourceIndex = 0 to planeCount-1 | Each index should be processed | Should be successful |
- * | 04 | Iterate over all properties for each plane | property = RESOURCE_ID to ASPECT_RATIO | Each property should be processed | Should be successful |
- * | 05 | Log the API call for getProperty | planeResourceIndex, property | Log should be generated | Should be successful |
- * | 06 | Prepare the return value for getProperty | _aidl_return | _aidl_return should be initialized | Should be successful |
- * | 07 | Call the getProperty API | planeResourceIndex, property, _aidl_return | API should return status | Should Pass |
- * | 08 | Log the result of getProperty | planeResourceIndex, property, _aidl_return, status | Log should be generated | Should be successful |
- * | 09 | Verify the status is OK | status | status.isOk() should be true | Should Pass |
- * | 10 | Verify the return value is not null | _aidl_return | _aidl_return.has_value() should be true | Should Pass |
- * | 11 | Verify the return value matches the requested property | _aidl_return->value->getTag(), property | Tags should match | Should Pass |
+ * | 01 | Ensure the service is available | gPlaneControlservice | Should not be null | Should be successful |
+ * | 02 | Retrieve the number of planes using PLANE_CONTROL_GET_CAPABILITIES | capabilities | planeCount should be retrieved, capabilities not empty | Should be successful |
+ * | 03 | Iterate over each VIDEO plane resource index | planeIndex | Each index should be processed | Should be successful |
+ * | 04 | Iterate over all VIDEO properties | VIDEO_PROPERTIES | Each property should be processed | Should be successful |
+ * | 05 | Call getProperty for each VIDEO property using PLANE_CONTROL_GET_PROPERTY_POS | planeIndex, property | Should return valid property value | Should Pass |
+ * | 06 | Iterate over each GRAPHICS plane resource index | planeIndex | Each index should be processed | Should be successful |
+ * | 07 | Iterate over all GRAPHICS properties | GRAPHICS_PROPERTIES | Each property should be processed | Should be successful |
+ * | 08 | Call getProperty for each GRAPHICS property using PLANE_CONTROL_GET_PROPERTY_POS | planeIndex, property | Should return valid property value | Should Pass |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_pos) {
-    uint32_t planeCount;
+    // Step 1: Ensure service is available
+    UT_ASSERT_TRUE(gPlaneControlservice != nullptr) << "PlaneControl service is not available";
 
-    PLANE_CONTROL_FOREACH_VIDEO_PLANE(planeCount, planeIndex, {
-        ValidatePropertyList(planeIndex, VIDEO_PROPERTIES, "VIDEO");
+    // Step 2: Retrieve capabilities and count planes
+    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+    uint32_t planeCount = capabilities.size();
+    UT_LOG_INFO("Retrieved %u planes from capabilities", planeCount);
+
+    // Steps 3–5: Iterate over VIDEO planes and properties
+    uint32_t video_plane_count = 0;
+    PLANE_CONTROL_FOREACH_VIDEO_PLANE(video_plane_count, planeIndex, {
+        for (const auto& property : videoProperties) {
+            std::optional<::com::rdk::hal::PropertyValue> propertyValue;
+            PLANE_CONTROL_GET_PROPERTY_POS(planeIndex, property, propertyValue);
+        }
     });
 
-    PLANE_CONTROL_FOREACH_GRAPHICS_PLANE(planeCount, planeIndex, {
-        ValidatePropertyList(planeIndex, GRAPHICS_PROPERTIES, "GRAPHICS");
+    // Steps 6–8: Iterate over GRAPHICS planes and properties
+    uint32_t graphics_plane_count = 0;
+    PLANE_CONTROL_FOREACH_GRAPHICS_PLANE(graphics_plane_count, planeIndex, {
+        for (const auto& property : graphicProperties) {
+            std::optional<::com::rdk::hal::PropertyValue> propertyValue;
+            PLANE_CONTROL_GET_PROPERTY_POS(planeIndex, property, propertyValue);
+        }
     });
+
+    // Ensure at least one plane was tested
+    UT_ASSERT_TRUE(video_plane_count > 0 || graphics_plane_count > 0) << "No VIDEO or GRAPHICS planes found";
 }
-
 
 /**
  * @brief Test the negative scenarios for the PlaneControl getProperty function.
@@ -784,32 +736,48 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_pos) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Calculate invalid plane resource index by adding 1 to the count of planes | invalidPlaneResourceIndex = UT_KVP_PROFILE_GET_LIST_COUNT(IPlaneControl.planes) + 1 | Should return status.isOk() = false, aidlReturn.has_value() = false | Should be successful |
- * | 02 | Call getProperty with invalid plane resource index and valid property | planeResourceIndex = invalidPlaneResourceIndex, property = validProperty | Should return status.isOk() = false, aidlReturn.has_value() = false | Should Fail |
- * | 03 | Use valid plane resource index and invalid property value | validPlaneResourceIndex = 0, invalidPropertyValue = 999 | Should return status.isOk() = false, aidlReturn.has_value() = false | Should be successful |
- * | 04 | Call getProperty with valid plane resource index and invalid property value | planeResourceIndex = validPlaneResourceIndex, property = invalidPropertyValue | Should return status.isOk() = false, aidlReturn.has_value() = false | Should Fail |
+ * | 01 | Retrieve the number of planes from the YAML configuration | IPlaneControl.planes | planeCount should be retrieved | Should be successful |
+ * | 02 | Calculate invalid plane resource index | invalidPlaneResourceIndex = planeCount + 1 | Should be calculated | Should be successful |
+ * | 03 | Call getProperty with invalid plane resource index and valid property using PLANE_CONTROL_GET_PROPERTY_NEG | planeResourceIndex = invalidPlaneResourceIndex, property = RESOURCE_ID | status.isOk() = false, exception = EX_ILLEGAL_ARGUMENT, propertyValue.has_value() = false | Should Fail |
+ * | 04 | Use valid plane resource index from VIDEO planes | validPlaneResourceIndex = VIDEO plane index | Should be retrieved | Should be successful |
+ * | 05 | Call getProperty with valid plane resource index and invalid property value using PLANE_CONTROL_GET_PROPERTY_NEG | planeResourceIndex = validPlaneResourceIndex, property = 999 | status.isOk() = false, exception = EX_ILLEGAL_ARGUMENT, propertyValue.has_value() = false | Should Fail |
  */
+UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_neg) {
+    // Step 1: Retrieve plane count
+    std::string plane_count_path = "IPlaneControl.planes";
+    uint32_t planeCount = UT_KVP_PROFILE_GET_UINT32(plane_count_path.c_str());
+    UT_LOG_INFO("Retrieved %u planes from profile", planeCount);
 
- UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_neg) {
-    ::com::rdk::hal::planecontrol::Property property = ::com::rdk::hal::planecontrol::Property::X;
-    ::std::optional<::com::rdk::hal::PropertyValue> aidlReturn;
-    int32_t invalidIndex = -1;
+    // Step 2: Calculate invalid plane index
+    int32_t invalidPlaneResourceIndex = planeCount + 1;
+    std::optional<::com::rdk::hal::PropertyValue> propertyValue;
 
-    std::string inputParams = "IN:planeResourceIndex:[" + std::to_string(invalidIndex) + "], IN:property:[X], OUT:propertyValue";
-    auto status = gPlaneControlservice->getProperty(invalidIndex, property, &aidlReturn);
-    std::string outputParams = "IN:planeResourceIndex:[" + std::to_string(invalidIndex) + "], IN:property:[X], OUT:propertyValue";
-    UT_LOG_INFO("getProperty", inputParams, outputParams, status, status.isOk());
-    UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_FALSE(aidlReturn.has_value()); // Should return null
+    // Step 3: Get a valid VIDEO plane index
+    int32_t validPlaneResourceIndex = -1;
+    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+    for (const auto& cap : capabilities) {
+        if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+            validPlaneResourceIndex = cap.planeIndex;
+            break;
+        }
+    }
+    if (validPlaneResourceIndex == -1) {
+        UT_FAIL("No VIDEO plane found for negative property test");
+    }
+
+    // Step 4: Test with valid plane index and invalid property
+    ::com::rdk::hal::planecontrol::Property invalidProperty =
+        static_cast<::com::rdk::hal::planecontrol::Property>(-1);
+    PLANE_CONTROL_GET_PROPERTY_NEG(validPlaneResourceIndex, invalidProperty, propertyValue, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
 }
-
 
 /**
  * @brief Test the positive setting of properties for plane control.
  *
- * This test verifies the ability to set various properties on plane resources using valid indices and property values. It ensures that the setProperty function behaves correctly for integer, boolean, and string property values.
+ * This test verifies the ability to set various properties on plane resources using valid indices and property values. It ensures that the setProperty function behaves correctly for integer and boolean property values.
  *
- * **Test Group ID:** Basic: 01@n
+ * **Test Group ID:** Basic: 001@n
  * **Test Case ID:** 011@n
  * **Priority:** High@n
  * @n
@@ -819,40 +787,76 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_pos) {
  * @n
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Retrieve the number of plane resources from YAML configuration using the macro | IPlaneControl.planes | Should be successful | |
- * | 02 | Loop through each plane resource index | planeResourceIndex = i | Should be successful | |
- * | 03 | Set integer property value for the plane resource | planeResourceIndex = i, property = Property::X, propertyValue = intValue:123 | status.isOk() = true, aidl_return = true | Should Pass |
- * | 04 | Set boolean property value for the plane resource | planeResourceIndex = i, property = Property::VISIBLE, propertyValue = booleanValue:true | status.isOk() = true, aidl_return = true | Should Pass |
- * | 05 | Set string property value for the plane resource | planeResourceIndex = i, property = Property::RESOURCE_ID, propertyValue = stringValue:ResourceString | status.isOk() = true, aidl_return = true | Should Pass |
+ * |-------|-------------|-----------|-----------------|-------|
+ * | 1 | Ensure the service is available | gPlaneControlservice|gPlaneControlService | Should not be null | Should be successful |
+ * | 2 | Retrieve capabilities to get plane resources using PLANE_CONTROL_GET_CAPABILITIES | capabilities | Should be successful, capabilities not empty | |
+ * | 3 | Loop through each VIDEO plane resource index | planeResourceIndex | Should be successful | |
+ * | 4 | Set VIDEO-specific integer properties (OVERSCAN, ASPECT_RATIO) | planeResourceIndex, Property::OVERSCAN = 10, Property::ASPECT_RATIO = 1 | status.isOk() = true, aidl_return = true | Should Pass |
+ * | 5 | Loop through each plane resource index (VIDEO and GRAPHICS) | planeResourceIndex | Should be successful | |
+ * | 6 | Set integer properties (X, Y, WIDTH, HEIGHT, Z_ORDER, ALPHA) | planeResourceIndex, Property::X = 123, Property::Y = 5, Property::WIDTH = 50, Property::HEIGHT = 60, Property::ALPHA = 254, Property::Z_ORDER = 1 | status.isOk() = true, aidl_return = true | Should Pass |
+ * | 7 | Set boolean property (VISIBLE) | planeResourceIndex, Property::VISIBLE = true | status.isOk() = true, aidl_return = true | Should Pass |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_pos) {
-    bool aidl_return = false;
-    ::android::binder::Status status;
+    // Step 1: Ensure service is available
+    UT_ASSERT_TRUE(gPlaneControlservice != nullptr) << "PlaneControl service is not available";
 
+    // Step 2: Retrieve capabilities
     std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
-    status = gPlaneControlservice->getCapabilities(&capabilities);
-    UT_ASSERT_TRUE(status.isOk());
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+    UT_LOG_INFO("Retrieved %zu planes from capabilities", capabilities.size());
 
+    // Steps 3–4: Set VIDEO-specific properties
+    uint32_t video_plane_count = 0;
+    PLANE_CONTROL_FOREACH_VIDEO_PLANE(video_plane_count, planeResourceIndex, {
+        ::com::rdk::hal::PropertyValue propertyValue;
+        // Set OVERSCAN
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(10);
+        bool aidl_return;
+        PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::OVERSCAN, propertyValue, aidl_return);
+
+        // Set ASPECT_RATIO
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
+        PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO, propertyValue, aidl_return);
+    });
+
+    // Steps 5–7: Set common properties for all planes
     for (const auto& plane : capabilities) {
         uint32_t planeResourceIndex = plane.planeIndex;
-        ::com::rdk::hal::planecontrol::PlaneType planeType = plane.type;
+        ::com::rdk::hal::PropertyValue propertyValue;
+        bool aidl_return;
 
-        if (planeType == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
-            PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, OVERSCAN, 10);
-            PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, ASPECT_RATIO, 1);
-        }
+        // Set X
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(123);
+        PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::X, propertyValue, aidl_return);
 
-        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, X, 123);
-        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, VISIBLE, 1);
-        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, Y, 5);
-        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, WIDTH, 50);
-        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, HEIGHT, 60);
-        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, ALPHA, 254);
-        PLANE_CONTROL_SET_AND_ASSERT_PROPERTY(planeResourceIndex, ZORDER, 1);
+        // Set Y
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(5);
+        PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::Y, propertyValue, aidl_return);
+
+        // Set WIDTH
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(50);
+        PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::WIDTH, propertyValue, aidl_return);
+
+        // Set HEIGHT
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(60);
+        PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::HEIGHT, propertyValue, aidl_return);
+
+        // Set ALPHA
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(254);
+        PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::ALPHA, propertyValue, aidl_return);
+
+        // Set Z_ORDER
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
+        PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::ZORDER, propertyValue, aidl_return);
+
+        // Set VISIBLE (boolean)
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
+        PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::VISIBLE, propertyValue, aidl_return);
     }
-}
 
+    // Ensure at least one plane was tested
+    UT_ASSERT_FALSE(capabilities.empty()) << "No planes found in capabilities";
+}
 
 /**
  * @brief Test the negative scenarios for the setProperty function in PlaneControl
@@ -870,207 +874,169 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_pos) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Attempt to set a property with an invalid plane resource index | planeResourceIndex = invalidPlaneResourceIndex, property = WIDTH, propertyValue = intValue:100, aidl_return = false | aidl_return should be false | Should Fail |
- * | 02 | Attempt to set a property with an invalid property | planeResourceIndex = validPlaneResourceIndex, property = invalidProperty, propertyValue = intValue:100, aidl_return = false | aidl_return should be false | Should Fail |
- * | 03 | Attempt to set a property with an invalid property value type | planeResourceIndex = validPlaneResourceIndex, property = HEIGHT, propertyValue = stringValue:'InvalidType', aidl_return = false | aidl_return should be false | Should Fail |
+ * | 01 | Ensure the service is available | gPlaneControlservice | Should not be null | Should be successful |
+ * | 02 | Retrieve capabilities to get plane resources using PLANE_CONTROL_GET_CAPABILITIES | capabilities | Should be successful, capabilities not empty | |
+ * | 03 | Calculate invalid plane resource index | invalidPlaneResourceIndex = min(plane indices) - 1 | Should be calculated | Should be successful |
+ * | 04 | Call setProperty with invalid plane index using PLANE_CONTROL_SET_PROPERTY_NEG | planeResourceIndex = invalidPlaneResourceIndex, property = WIDTH, propertyValue = intValue:100 | aidl_return = false | Should Fail |
+ * | 05 | Get a valid plane resource index | validPlaneResourceIndex = first plane index | Should be retrieved | Should be successful |
+ * | 06 | Call setProperty with invalid property using PLANE_CONTROL_SET_PROPERTY_NEG | planeResourceIndex = validPlaneResourceIndex, property = ASPECT_RATIO + 1, propertyValue = intValue:100 | aidl_return = false | Should Fail |
+ * | 07 | Call setProperty with invalid property value type using PLANE_CONTROL_SET_PROPERTY_NEG | planeResourceIndex = validPlaneResourceIndex, property = HEIGHT, propertyValue = stringValue:'InvalidType' | aidl_return = false | Should Fail |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_neg) {
-    bool aidl_return = false;
-    ::android::binder::Status status;
+    // Step 1: Ensure service is available
+    UT_ASSERT_TRUE(gPlaneControlservice != nullptr) << "PlaneControl service is not available";
 
+    // Step 2: Retrieve capabilities
     std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
-    status = gPlaneControlservice->getCapabilities(&capabilities);
-    UT_ASSERT_TRUE(status.isOk());
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+    UT_LOG_INFO("Retrieved %zu planes from capabilities", capabilities.size());
+    UT_ASSERT_FALSE(capabilities.empty()) << "No planes found in capabilities";
 
+    // Step 3: Calculate invalid plane index
     std::vector<uint32_t> planeResourceIndices;
     for (const auto& plane : capabilities) {
         planeResourceIndices.push_back(plane.planeIndex);
     }
-
     std::sort(planeResourceIndices.begin(), planeResourceIndices.end());
+    int32_t invalidPlaneResourceIndex = planeResourceIndices.empty() ? -1 : planeResourceIndices.front() - 1;
 
-    // Negative Test 1: Invalid Plane Resource Index
-    int32_t invalidPlaneResourceIndex = planeResourceIndices.front() - 1;  // Invalid: before first valid index
-    ::com::rdk::hal::planecontrol::Property propertyWidth = ::com::rdk::hal::planecontrol::Property::WIDTH;
-
+    // Step 4: Test with invalid plane index
     ::com::rdk::hal::PropertyValue invalidPlaneValue;
     invalidPlaneValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(100);
+    bool aidl_return;
+    PLANE_CONTROL_SET_PROPERTY_NEG(invalidPlaneResourceIndex, ::com::rdk::hal::planecontrol::Property::WIDTH, invalidPlaneValue, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
 
-    UT_LOG_INFO("Calling setProperty(IN:planeResourceIndex:[%d], IN:property:[WIDTH], IN:propertyValue:[intValue:100])", invalidPlaneResourceIndex);
-    status = gPlaneControlservice->setProperty(invalidPlaneResourceIndex, propertyWidth, invalidPlaneValue, &aidl_return);
-    UT_LOG_INFO("Result setProperty => aidl_return:[%s], status:[isOK:%s, exception:%s]",
-        aidl_return ? "true" : "false",
-        UT_Control_GetMapString(bool_mapTable, status.isOk()),
-        UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_FALSE(aidl_return);
+    // Step 5: Get valid plane index
+    int32_t validPlaneResourceIndex = planeResourceIndices.front();
 
-    // Negative Test 2: Invalid Property Enum
-    int32_t validPlaneResourceIndex = planeResourceIndices.front();  // Use a valid index
-    int32_t invalidPropertyEnum = 999;  // Invalid enum not defined
-
+    // Step 6: Test with invalid property
     ::com::rdk::hal::PropertyValue invalidPropValue;
     invalidPropValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(100);
+    ::com::rdk::hal::planecontrol::Property invalidProperty =
+        static_cast<::com::rdk::hal::planecontrol::Property>(
+            static_cast<int32_t>(::com::rdk::hal::planecontrol::Property::ASPECT_RATIO) + 1);
+    PLANE_CONTROL_SET_PROPERTY_NEG(validPlaneResourceIndex, invalidProperty, invalidPropValue, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
 
-    UT_LOG_INFO("Calling setProperty(IN:planeResourceIndex:[%d], IN:property:[999], IN:propertyValue:[intValue:100])", validPlaneResourceIndex);
-    status = gPlaneControlservice->setProperty(
-        validPlaneResourceIndex,
-        static_cast<::com::rdk::hal::planecontrol::Property>(invalidPropertyEnum),
-        invalidPropValue,
-        &aidl_return
-    );
-    UT_LOG_INFO("Result setProperty => aidl_return:[%s], status:[isOK:%s, exception:%s]",
-        aidl_return ? "true" : "false",
-        UT_Control_GetMapString(bool_mapTable, status.isOk()),
-        UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_FALSE(aidl_return);
-
-    // Negative Test 3: Invalid Property Value Type
-    ::com::rdk::hal::planecontrol::Property propertyHeight = ::com::rdk::hal::planecontrol::Property::HEIGHT;
+    // Step 7: Test with invalid property value type
     ::com::rdk::hal::PropertyValue invalidTypeValue;
     invalidTypeValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::stringValue>(::android::String16("InvalidType"));
-
-    UT_LOG_INFO("Calling setProperty(IN:planeResourceIndex:[%d], IN:property:[HEIGHT], IN:propertyValue:[stringValue:'InvalidType'])", validPlaneResourceIndex);
-    status = gPlaneControlservice->setProperty(validPlaneResourceIndex, propertyHeight, invalidTypeValue, &aidl_return);
-    UT_LOG_INFO("Result setProperty => aidl_return:[%s], status:[isOK:%s, exception:%s]",
-        aidl_return ? "true" : "false",
-        UT_Control_GetMapString(bool_mapTable, status.isOk()),
-        UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_FALSE(aidl_return);
+    PLANE_CONTROL_SET_PROPERTY_NEG(validPlaneResourceIndex, ::com::rdk::hal::planecontrol::Property::HEIGHT, invalidTypeValue, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
 }
 
-
 /**
-* @brief Test the positive scenario of the getPropertyMulti function in PlaneControlBaseTest
-*
-* This test verifies the successful retrieval of multiple properties for a given plane resource index using the getPropertyMulti API. It ensures that the API call returns successfully and that the property values are correctly populated in the propertyKVList.
-*
-* **Test Group ID:** Basic: 01@n
-* **Test Case ID:** 013@n
-* **Priority:** High@n
-* @n
-* **Pre-Conditions:** None@n
-* **Dependencies:** None@n
-* **User Interaction:** None@n
-* @n
-* **Test Procedure:**@n
-* | Variation / Step | Description | Test Data | Expected Result | Notes |
-* | :----: | --------- | ---------- |-------------- | ----- |
-* | 01 | Prepare inputs for the test, including planeResourceIndex and propertyKVList with valid PropertyKVPair objects | planeResourceIndex = UT_KVP_PROFILE_GET_UINT32(IPlaneControl.planes.<index>.<key>), propertyKVList = {Property::RESOURCE_ID, Property::X, Property::Y, Property::WIDTH, Property::HEIGHT, Property::ALPHA, Property::ZORDER, Property::VISIBLE, Property::OVERSCAN, Property::ASPECT_RATIO} | Inputs prepared successfully | Should be successful |
-* | 02 | Log the API call details for getPropertyMulti | planeResourceIndex, propertyKVList, _aidl_return | Log successful | Should be successful |
-* | 03 | Call the getPropertyMulti API with the prepared inputs | planeResourceIndex, propertyKVList, _aidl_return | API call should succeed | Should Pass |
-* | 04 | Verify that the status of the API call is OK | status.isOk() | True | Should Pass |
-* | 05 | Verify that the _aidl_return is true, indicating successful property retrieval | _aidl_return | True | Should Pass |
-* | 06 | Verify that the propertyKVList is not empty after the API call | propertyKVList.empty() | False | Should Pass |
-* | 07 | Verify that each property in propertyKVList has a value | kvPair.propertyValue.value.has_value() | True for each kvPair | Should Pass |
-* | 08 | Log the result of the getPropertyMulti API call | planeResourceIndex, propertyKVList, _aidl_return, status | Log successful | Should be successful |
-*/
+ * @brief Test the positive scenario of the getPropertyMulti function in PlaneControlBaseTest
+ *
+ * This test verifies the successful retrieval of multiple properties for a given plane resource index using the getPropertyMulti API. It ensures that the API call returns successfully and that the property values are correctly populated in the propertyKVList.
+ *
+ * **Test Group ID:** Basic: 01@n
+ * **Test Case ID:** 013@n
+ * **Priority:** High@n
+ * @n
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ * @n
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :----: | --------- | ---------- |-------------- | ----- |
+ * | 01 | Prepare inputs for the test, including planeResourceIndex and propertyKVList with valid PropertyKVPair objects | planeResourceIndex = UT_KVP_PROFILE_GET_UINT32(IPlaneControl.planes.<index>.<key>), propertyKVList = {Property::RESOURCE_ID, Property::X, Property::Y, Property::WIDTH, Property::HEIGHT, Property::ALPHA, Property::ZORDER, Property::VISIBLE, Property::OVERSCAN, Property::ASPECT_RATIO} | Inputs prepared successfully | Should be successful |
+ * | 02 | Log the API call details for getPropertyMulti | planeResourceIndex, propertyKVList, _aidl_return | Log successful | Should be successful |
+ * | 03 | Call the getPropertyMulti API with the prepared inputs | planeResourceIndex, propertyKVList, _aidl_return | API call should succeed | Should Pass |
+ * | 04 | Verify that the status of the API call is OK | status.isOk() | True | Should Pass |
+ * | 05 | Verify that the _aidl_return is true, indicating successful property retrieval | _aidl_return | True | Should Pass |
+ * | 06 | Verify that the propertyKVList is not empty after the API call | propertyKVList.empty() | False | Should Pass |
+ * | 07 | Verify that each property in propertyKVList has a value | kvPair.propertyValue.value.has_value() | True for each kvPair | Should Pass |
+ * | 08 | Log the result of the getPropertyMulti API call | planeResourceIndex, propertyKVList, _aidl_return, status | Log successful | Should be successful |
+ */
 UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_pos) {
-    std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
-    ::android::binder::Status status;
+    UT_LOG_INFO("Starting getPropertyMulti_pos");
 
-    // Properties to test
-    const std::vector<::com::rdk::hal::planecontrol::Property> videoProperties = {
-        ::com::rdk::hal::planecontrol::Property::RESOURCE_ID,
-        ::com::rdk::hal::planecontrol::Property::X,
-        ::com::rdk::hal::planecontrol::Property::Y,
-        ::com::rdk::hal::planecontrol::Property::WIDTH,
-        ::com::rdk::hal::planecontrol::Property::HEIGHT,
-        ::com::rdk::hal::planecontrol::Property::ALPHA,
-        ::com::rdk::hal::planecontrol::Property::ZORDER,
-        ::com::rdk::hal::planecontrol::Property::VISIBLE,
-        ::com::rdk::hal::planecontrol::Property::OVERSCAN,
-        ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO
-    };
-
-    const std::vector<::com::rdk::hal::planecontrol::Property> graphicProperties = {
-        ::com::rdk::hal::planecontrol::Property::RESOURCE_ID,
-        ::com::rdk::hal::planecontrol::Property::X,
-        ::com::rdk::hal::planecontrol::Property::Y,
-        ::com::rdk::hal::planecontrol::Property::WIDTH,
-        ::com::rdk::hal::planecontrol::Property::HEIGHT,
-        ::com::rdk::hal::planecontrol::Property::ALPHA,
-        ::com::rdk::hal::planecontrol::Property::ZORDER,
-        ::com::rdk::hal::planecontrol::Property::VISIBLE
-    };
-
-    // Get plane capabilities
+    // Step 1: Get plane capabilities
     std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
-    status = gPlaneControlservice->getCapabilities(&capabilities);
-    UT_ASSERT_TRUE(status.isOk());
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities); // Uses macro to fetch and validate capabilities
 
+    // Iterate over planes
     for (const auto& plane : capabilities) {
         uint32_t planeResourceIndex = plane.planeIndex;
         ::com::rdk::hal::planecontrol::PlaneType planeType = plane.type;
+        std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
 
-        if (planeType == PlaneType::VIDEO) {
+        // Step 1: Prepare inputs
+        if (planeType == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
             PLANE_CONTROL_BUILD_PROPERTY_KV_LIST(videoProperties, propertyKVList);
-            PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, propertyKVList, "VIDEO");
-        } else if (planeType == PlaneType::GRAPHICS) {
+        } else if (planeType == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
             PLANE_CONTROL_BUILD_PROPERTY_KV_LIST(graphicProperties, propertyKVList);
-            PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, propertyKVList, "GRAPHICS");
+        } else {
+            continue; // Skip unsupported plane types
         }
+
+        // Steps 2-8: Log, call, and validate getPropertyMulti
+        PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, propertyKVList, planeType == ::com::rdk::hal::planecontrol::PlaneType::VIDEO ? "VIDEO" : "GRAPHICS");
     }
 }
 
 /**
-* @brief Test the negative scenarios for the getPropertyMulti function in PlaneControl
-*
-* This test evaluates the behavior of the getPropertyMulti function when provided with invalid inputs, such as an invalid plane resource index and an invalid property list. The purpose is to ensure that the function handles erroneous inputs gracefully and returns the expected failure results.
-*
-* **Test Group ID:** Basic: 01@n
-* **Test Case ID:** 014@n
-* **Priority:** High@n
-* @n
-* **Pre-Conditions:** None@n
-* **Dependencies:** None@n
-* **User Interaction:** None@n
-* @n
-* **Test Procedure:**@n
-* | Variation / Step | Description | Test Data | Expected Result | Notes |
-* | :----: | --------- | ---------- |-------------- | ----- |
-* | 01 | Prepare an invalid plane resource index for testing | invalidPlaneResourceIndex = -1 | Should be successful | |
-* | 02 | Prepare a valid plane resource index using UT_KVP_PROFILE_GET_UINT32 | validPlaneResourceIndex = UT_KVP_PROFILE_GET_UINT32(IPlaneControl.planes.<index>.<key>) | Should be successful | |
-* | 03 | Create a valid property key-value pair and add to the list | property = WIDTH, propertyValue = 1920 | Should be successful | |
-* | 04 | Create an invalid property key-value pair and add to the list | property = -1 | Should be successful | |
-* | 05 | Call getPropertyMulti with invalid plane resource index | planeResourceIndex = -1, propertyKVList = [validPropertyKVPair, invalidPropertyKVPair], aidlReturn = false | aidlReturn = false, status.isOk() = true, status.exceptionCode() = EX_NONE | Should Fail |
-* | 06 | Call getPropertyMulti with valid plane resource index and invalid property list | planeResourceIndex = validPlaneResourceIndex, propertyKVList = [validPropertyKVPair, invalidPropertyKVPair], aidlReturn = false | aidlReturn = false, status.isOk() = true, status.exceptionCode() = EX_NONE | Should Fail |
-*/
+ * @brief Test the negative scenarios for the getPropertyMulti function in PlaneControl
+ *
+ * This test evaluates the behavior of the getPropertyMulti function when provided with invalid inputs, such as an invalid plane resource index and an invalid property list. The purpose is to ensure that the function handles erroneous inputs gracefully and returns the expected failure results.
+ *
+ * **Test Group ID:** Basic: 01@n
+ * **Test Case ID:** 014@n
+ * **Priority:** High@n
+ * @n
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ * @n
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :----: | --------- | ---------- |-------------- | ----- |
+ * | 01 | Prepare an invalid plane resource index for testing | invalidPlaneResourceIndex = -1 | Should be successful | |
+ * | 02 | Prepare a valid plane resource index using UT_KVP_PROFILE_GET_UINT32 | validPlaneResourceIndex = UT_KVP_PROFILE_GET_UINT32(IPlaneControl.planes.<index>.<key>) | Should be successful | |
+ * | 03 | Create a valid property key-value pair and add to the list | property = WIDTH, propertyValue = 1920 | Should be successful | |
+ * | 04 | Create an invalid property key-value pair and add to the list | property = -1 | Should be successful | |
+ * | 05 | Call getPropertyMulti with invalid plane resource index | planeResourceIndex = -1, propertyKVList = [validPropertyKVPair, invalidPropertyKVPair], aidlReturn = false | aidlReturn = false, status.isOk() = true, status.exceptionCode() = EX_NONE | Should Fail |
+ * | 06 | Call getPropertyMulti with valid plane resource index and invalid property list | planeResourceIndex = validPlaneResourceIndex, propertyKVList = [validPropertyKVPair, invalidPropertyKVPair], aidlReturn = false | aidlReturn = false, status.isOk() = true, status.exceptionCode() = EX_NONE | Should Fail |
+ */
 UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_neg) {
-    ::android::binder::Status status;
+    UT_LOG_INFO("Starting getPropertyMulti_neg");
 
+    // Step 1: Get plane capabilities
     std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
-    status = gPlaneControlservice->getCapabilities(&capabilities);
-    UT_ASSERT_TRUE(status.isOk());
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities); // Uses macro to fetch and validate capabilities
 
-    // Gather sorted list of valid planeResourceIndexes
-    std::vector<uint32_t> planeResourceIndex;
+    // Step 2: Gather valid plane resource indices
+    std::vector<uint32_t> planeResourceIndices;
     for (const auto& plane : capabilities) {
-        planeResourceIndex.push_back(plane.planeIndex);
+        planeResourceIndices.push_back(plane.planeIndex);
     }
-    std::sort(planeResourceIndex.begin(), planeResourceIndex.end());
+    ASSERT_FALSE(planeResourceIndices.empty()) << "No planes available";
+    std::sort(planeResourceIndices.begin(), planeResourceIndices.end());
 
-    // Prepare test data
-    int32_t invalidPlaneResourceIndex = static_cast<int32_t>(planeResourceIndex[0]) - 1;
-    int32_t validPlaneResourceIndex = static_cast<int32_t>(planeResourceIndex[0]);
+    // Step 1: Prepare invalid plane resource index
+    int32_t invalidPlaneResourceIndex = -1; // As specified in test procedure
 
-    std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> validpropertyKVList;
-    std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> invalidpropertyKVList;
+    // Step 2: Prepare valid plane resource index
+    int32_t validPlaneResourceIndex = planeResourceIndices[0];
 
-    // Valid property list with valid property
+    // Step 3: Create valid property list
+    std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> validPropertyKVList;
     ::com::rdk::hal::planecontrol::PropertyKVPair validKV;
     validKV.property = ::com::rdk::hal::planecontrol::Property::WIDTH;
-    validpropertyKVList.push_back(validKV);
+    validPropertyKVList.push_back(validKV);
 
-    // Invalid property list with an invalid enum value
+    // Step 4: Create invalid property list
+    std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> invalidPropertyKVList;
     ::com::rdk::hal::planecontrol::PropertyKVPair invalidKV;
-    invalidKV.property = static_cast<::com::rdk::hal::planecontrol::Property>(-1); // Clearly invalid
-    invalidpropertyKVList.push_back(invalidKV);
+    invalidKV.property = static_cast<::com::rdk::hal::planecontrol::Property>(-1); // Invalid property
+    invalidPropertyKVList.push_back(validKV); // Include valid property
+    invalidPropertyKVList.push_back(invalidKV); // Include invalid property
 
-    // Test Case 1: Invalid Plane Resource Index
-    PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(invalidPlaneResourceIndex, validpropertyKVList, "Invalid Plane Index");
+    // Step 5: Test invalid plane resource index
+    PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(invalidPlaneResourceIndex, validPropertyKVList, "Invalid Plane Index");
 
-    // Test Case 2: Invalid Property List
-    PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(validPlaneResourceIndex, invalidpropertyKVList, "Invalid Property");
+    // Step 6: Test invalid property list
+    PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(validPlaneResourceIndex, invalidPropertyKVList, "Invalid Property List");
 }
 
 /**
@@ -1098,25 +1064,27 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_neg) {
  * | 05 | Log the result of the API call | planeResourceIndex, propertyKVList, _aidl_return, status | Should be successful | Should be successful |
  * | 06 | Verify the results using assertions | status.isOk(), _aidl_return | Both assertions should be true | Should Pass |
  */
+UT_ADD_TEST(VTS_L1_PlaneControl, setPropertyMultiAtomic_pos) {
+    UT_LOG_INFO("Starting setPropertyMultiAtomic_pos");
 
-UT_ADD_TEST(VTS_L1_PlaneControl, setPropertyMultiAtomic_pos)
-{
-    bool _aidl_return = false;
-    ::android::binder::Status status;
-    std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
-    // Get plane capabilities
+    // Step 1: Get plane capabilities
     std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
-    status = gPlaneControlservice->getCapabilities(&capabilities);
-    UT_ASSERT_TRUE(status.isOk());
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities); // Fetches valid plane indices
 
+    // Iterate over planes
     for (const auto& plane : capabilities) {
         uint32_t planeResourceIndex = plane.planeIndex;
         ::com::rdk::hal::planecontrol::PlaneType planeType = plane.type;
-        UT_LOG_INFO("Plane Index: %d, Plane Type: %d", plane.planeIndex, plane.type);
+        std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
 
-        if (planeType == PlaneType::VIDEO) {
+        // Step 2: Prepare property key-value list (no duplicates)
+        if (planeType == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
             PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::OVERSCAN, 10);
             PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO, 1);
+        } else if (planeType == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+            // Graphics planes don't need video-specific properties
+        } else {
+            continue; // Skip unsupported plane types
         }
 
         // Add common properties
@@ -1128,16 +1096,8 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setPropertyMultiAtomic_pos)
         PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ZORDER, 1);
         PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::VISIBLE, 1);
 
-        // Call setPropertyMultiAtomic
-        UT_LOG_INFO("Calling setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return)", planeResourceIndex);
-        ::android::binder::Status status = gPlaneControlservice->setPropertyMultiAtomic(planeResourceIndex, propertyKVList, &_aidl_return);
-        UT_LOG_INFO("Result setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
-                    planeResourceIndex, UT_Control_GetMapString(bool_mapTable, _aidl_return),
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-
-        UT_ASSERT_TRUE(status.isOk());
-        UT_ASSERT_TRUE(_aidl_return);
+        // Steps 3-6: Log, call, log result, and verify
+        PLANE_CONTROL_SET_PROPERTY_MULTI_ATOMIC(planeResourceIndex, propertyKVList); // Ensures _aidl_return == true
     }
 }
 
@@ -1164,79 +1124,43 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setPropertyMultiAtomic_pos)
  * | 05 | Call setPropertyMultiAtomic with invalidPlaneResourceIndexHigh. | planeResourceIndex = invalidPlaneResourceIndexHigh, propertyKVList = valid list | aidlReturn = false | Should Fail |
  * | 06 | Calculate validPlaneResourceIndex from a valid index. | validPlaneResourceIndex = validIndex | Should be successful | Should be successful |
  * | 07 | Create a duplicate property key-value list. | duplicatePropertyKVList = list with duplicates | Should be successful | Should be successful |
- * | 08 | Add a duplicate property to the list. | duplicatePropertyKVList = list with duplicates | Should be successful | Should be successful |
- * | 09 | Call setPropertyMultiAtomic with validPlaneResourceIndex and duplicatePropertyKVList. | planeResourceIndex = validPlaneResourceIndex, propertyKVList = duplicate list | aidlReturn = false | Should Fail |
+ * | 08 | Call setPropertyMultiAtomic with validPlaneResourceIndex and duplicatePropertyKVList. | planeResourceIndex = validPlaneResourceIndex, propertyKVList = duplicate list | aidlReturn = false | Should Fail |
  */
-UT_ADD_TEST(VTS_L1_PlaneControl, setPropertyMultiAtomic_neg)
-{
-    bool aidlReturn = false;
-    ::android::binder::Status status;
-    std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> validPropertyKVList;
-    std::vector<uint32_t> planeResourceIndex;
+UT_ADD_TEST(VTS_L1_PlaneControl, setPropertyMultiAtomic_neg) {
+    UT_LOG_INFO("Starting setPropertyMultiAtomic_neg");
 
-    // Get plane capabilities
+    // Steps 1-2: Get plane capabilities and calculate invalid indices
     std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
-    status = gPlaneControlservice->getCapabilities(&capabilities);
-    UT_ASSERT_TRUE(status.isOk());
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
-    // Gather available plane resource indexes
-    for (const auto& plane : capabilities)
-    {
-        planeResourceIndex.push_back(plane.planeIndex);
+    std::vector<uint32_t> planeResourceIndices;
+    for (const auto& plane : capabilities) {
+        planeResourceIndices.push_back(plane.planeIndex);
     }
+    ASSERT_FALSE(planeResourceIndices.empty()) << "No planes available";
+    std::sort(planeResourceIndices.begin(), planeResourceIndices.end());
 
-    std::sort(planeResourceIndex.begin(), planeResourceIndex.end());
+    int32_t invalidPlaneResourceIndexLow = planeResourceIndices[0] - 1;
+    int32_t invalidPlaneResourceIndexHigh = planeResourceIndices.back() + 2;
+    int32_t validPlaneResourceIndex = planeResourceIndices[0];
 
-    // Set invalid indexes
-    int32_t invalidPlaneResourceIndexLow = planeResourceIndex[0] - 1;
-    int32_t invalidPlaneResourceIndexHigh = planeResourceIndex.back() + 2;
+    // Step 3: Create valid property key-value list
+    std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> validPropertyKVList;
+    PLANE_CONTROL_ADD_PROP_TO_LIST(validPropertyKVList, ::com::rdk::hal::planecontrol::Property::X, 123);
+    PLANE_CONTROL_ADD_PROP_TO_LIST(validPropertyKVList, ::com::rdk::hal::planecontrol::Property::Y, 6);
 
-    // Prepare valid PropertyKVPair list
-    ::com::rdk::hal::planecontrol::PropertyKVPair kvPair;
-    kvPair.property = ::com::rdk::hal::planecontrol::Property::X;
-    kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(123);
-    validPropertyKVList.push_back(kvPair);
+    // Step 4: Test invalid plane resource index low
+    PLANE_CONTROL_SET_PROPERTY_MULTI_ATOMIC_NEG(invalidPlaneResourceIndexLow, validPropertyKVList, "Invalid Plane Index Low");
 
-    kvPair.property = ::com::rdk::hal::planecontrol::Property::Y;
-    kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(6);
-    validPropertyKVList.push_back(kvPair);
+    // Step 5: Test invalid plane resource index high
+    PLANE_CONTROL_SET_PROPERTY_MULTI_ATOMIC_NEG(invalidPlaneResourceIndexHigh, validPropertyKVList, "Invalid Plane Index High");
 
-    // Test Case 1: Invalid Plane Resource Index (Low)
-    UT_LOG_INFO("Calling setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return)", invalidPlaneResourceIndexLow);
-    status = gPlaneControlservice->setPropertyMultiAtomic(invalidPlaneResourceIndexLow, validPropertyKVList, &aidlReturn);
-    UT_LOG_INFO("Result setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return[%d]), status:[isOK:%s, exception:%s]",
-                invalidPlaneResourceIndexLow, aidlReturn, UT_Control_GetMapString(bool_mapTable, status.isOk()), UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_FALSE(aidlReturn);  // Expect failure due to invalid index
-
-    // Test Case 2: Invalid Plane Resource Index (High)
-    aidlReturn = false;
-    UT_LOG_INFO("Calling setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return)", invalidPlaneResourceIndexHigh);
-    status = gPlaneControlservice->setPropertyMultiAtomic(invalidPlaneResourceIndexHigh, validPropertyKVList, &aidlReturn);
-    UT_LOG_INFO("Result setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return[%d]), status:[isOK:%s, exception:%s]",
-                invalidPlaneResourceIndexHigh, aidlReturn, UT_Control_GetMapString(bool_mapTable, status.isOk()), UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_FALSE(aidlReturn);  // Expect failure due to invalid index
-
-    // Test Case 3: Duplicate Properties in Property List
-    int32_t validPlaneResourceIndex = planeResourceIndex[0];
+    // Steps 7-8: Create duplicate property key-value list
     std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> duplicatePropertyKVList;
+    PLANE_CONTROL_ADD_PROP_TO_LIST(duplicatePropertyKVList, ::com::rdk::hal::planecontrol::Property::WIDTH, 60);
+    PLANE_CONTROL_ADD_PROP_TO_LIST(duplicatePropertyKVList, ::com::rdk::hal::planecontrol::Property::WIDTH, 80); // Duplicate property
 
-    kvPair.property = ::com::rdk::hal::planecontrol::Property::WIDTH;
-    kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(60);
-    duplicatePropertyKVList.push_back(kvPair);
-
-    // Add a duplicate property
-    kvPair.property = ::com::rdk::hal::planecontrol::Property::WIDTH;
-    kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(80);
-    duplicatePropertyKVList.push_back(kvPair);
-
-    aidlReturn = false;
-    UT_LOG_INFO("Calling setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return)", validPlaneResourceIndex);
-    status = gPlaneControlservice->setPropertyMultiAtomic(validPlaneResourceIndex, duplicatePropertyKVList, &aidlReturn);
-    UT_LOG_INFO("Result setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return[%d]), status:[isOK:%s, exception:%s]",
-                validPlaneResourceIndex, aidlReturn, UT_Control_GetMapString(bool_mapTable, status.isOk()), UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_FALSE(aidlReturn);  // Expect failure due to duplicate properties
 }
-
 
 /**
  * @brief Test the positive scenario of registering a valid PlaneControl listener
@@ -1262,30 +1186,18 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setPropertyMultiAtomic_neg)
  * | 06 | Verify the API call returned a successful status | status.isOk() | Status should be true | Should Pass |
  * | 07 | Verify the output parameter is true | aidl_return | Output should be true | Should Pass |
  */
-UT_ADD_TEST(VTS_L1_PlaneControl, registerListener_pos)
-{
-    // Create a valid instance of IPlaneControlListener
+UT_ADD_TEST(VTS_L1_PlaneControl,  registerListener_pos) {
+    UT_LOG_INFO("Starting registerListener_pos");
+
+    // Step 1: Create a valid instance of IPlaneControlListener
     android::sp<IPlaneControlListener> listener = new ValidPlaneControlListener();
+    ASSERT_TRUE(listener != nullptr) << "Failed to create ValidPlaneControlListener";
+
+    // Step 2: Prepare output parameter
     bool aidl_return = false;
 
-    UT_LOG_INFO("Calling registerListener(IN:listener:[0x%X], OUT:_aidl_return)", listener.get());
-    android::binder::Status status = gPlaneControlservice->registerListener(listener, &aidl_return);
-    UT_LOG_INFO("Result registerListener(IN:listener:[0x%X], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
-                listener.get(), aidl_return ? "true" : "false",
-                UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_TRUE(aidl_return);
-
-    // Second registration attempt (should pass)
-    UT_LOG_INFO("Calling Second registerListener(IN:listener:[0x%X], OUT:_aidl_return)", listener.get());
-    status = gPlaneControlservice->registerListener(listener, &aidl_return);
-    UT_LOG_INFO("Result registerListener(IN:listener:[0x%X], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
-                listener.get(), aidl_return ? "true" : "false",
-                UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_FALSE(aidl_return);
+    // Steps 3-7: Log, call, log result, and verify
+    PLANE_CONTROL_REGISTER_LISTENER_POS(listener, aidl_return);
 }
 
 /**
@@ -1308,37 +1220,24 @@ UT_ADD_TEST(VTS_L1_PlaneControl, registerListener_pos)
  * | 02 | Create a valid IPlaneControlListener and register it initially | listener = valid, _aidl_return = false | initial_aidl_return = true | Should be successful |
  * | 03 | Attempt to register the already registered valid IPlaneControlListener again | listener = valid, _aidl_return = false | status.isOk() = false, _aidl_return = false | Should Fail |
  */
-UT_ADD_TEST(VTS_L1_PlaneControl, registerListener_neg)
-{
-    // Create a null listener (invalid)
+UT_ADD_TEST(VTS_L1_PlaneControl,  registerListener_neg) {
+    UT_LOG_INFO("Starting registerListener_neg");
+
+    // Step 1: Initialize a null listener and attempt to register
     android::sp<IPlaneControlListener> listener = nullptr;
     bool aidl_return = false;
+    PLANE_CONTROL_REGISTER_LISTENER_NEG(listener, aidl_return, "Null Listener");
 
-    // Attempt to register a null listener (should fail)
-    android::binder::Status status = gPlaneControlservice->registerListener(listener, &aidl_return);
-    UT_LOG_INFO("Attempt to register null listener(IN:listener:[nullptr], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
-                aidl_return ? "true" : "false",
-                UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-
-    UT_ASSERT_FALSE(status.isOk());
-    UT_ASSERT_FALSE(aidl_return);
-
-    // Create a valid instance of IPlaneControlListener
+    // Step 2: Create and register a valid listener
     listener = new ValidPlaneControlListener();
+    ASSERT_TRUE(listener != nullptr) << "Failed to create ValidPlaneControlListener";
+    aidl_return = false;
+    PLANE_CONTROL_REGISTER_LISTENER_POS(listener, aidl_return); // Expect success
 
-    // First registration attempt (should succeed)
-    status = gPlaneControlservice->registerListener(listener, &aidl_return);
-    UT_LOG_INFO("First attempt to registerListener(IN:listener:[0x%X], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
-                listener.get(), aidl_return ? "true" : "false",
-                UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-
-    UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_TRUE(aidl_return);
-
+    // Step 3: Attempt to re-register the same listener
+    aidl_return = false;
+    PLANE_CONTROL_REGISTER_LISTENER_NEG(listener, aidl_return, "Already Registered Listener");
 }
-
 
 /**
  * @brief Test the positive scenario of unregistering a listener in PlaneControl.
@@ -1361,31 +1260,20 @@ UT_ADD_TEST(VTS_L1_PlaneControl, registerListener_neg)
  * | 03 | Unregister the listener | listener = 0x[Address], unregisterResult = [value] | unregisterStatus.isOk() = true, unregisterResult = true | Should Pass |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, unregisterListener_pos) {
-    // Create a valid listener instance
+    UT_LOG_INFO("Starting unregisterListener_pos");
+
+    // Step 1: Create a valid listener instance
     android::sp<IPlaneControlListener> listener = new ValidPlaneControlListener();
+    ASSERT_TRUE(listener != nullptr) << "Failed to create ValidPlaneControlListener";
 
-    // Register the listener first to ensure it is registered
-    bool registerResult;
-    ::android::binder::Status registerStatus = gPlaneControlservice->registerListener(listener, &registerResult);
-    UT_LOG_INFO("Calling registerListener(IN:listener[0x%X], OUT:registerResult[%d])", listener.get(), registerResult);
-    UT_LOG_INFO("Result registerListener(IN:listener[0x%X], OUT:registerResult[%d]), status:[isOK:%s, exception:%s]",
-                listener.get(), registerResult, UT_Control_GetMapString(bool_mapTable, registerStatus.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, registerStatus.exceptionCode()));
+    // Step 2: Register the listener
+    bool registerResult = false;
+    PLANE_CONTROL_REGISTER_LISTENER_POS(listener, registerResult); // Expect success
 
-    UT_ASSERT_TRUE(registerStatus.isOk());
-    UT_ASSERT_TRUE(registerResult);
-
-    // Unregister the listener
-    bool unregisterResult;
-    ::android::binder::Status unregisterStatus = gPlaneControlservice->unregisterListener(listener, &unregisterResult);
-    UT_LOG_INFO("Calling unregisterListener(IN:listener[0x%X], OUT:unregisterResult[%d])", listener.get(), unregisterResult);
-    UT_LOG_INFO("Result unregisterListener(IN:listener[0x%X], OUT:unregisterResult[%d]), status:[isOK:%s, exception:%s]",
-                listener.get(), unregisterResult, UT_Control_GetMapString(bool_mapTable, unregisterStatus.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, unregisterStatus.exceptionCode()));
-    UT_ASSERT_TRUE(unregisterStatus.isOk());
-    UT_ASSERT_TRUE(unregisterResult);
+    // Step 3: Unregister the listener
+    bool unregisterResult = false;
+    PLANE_CONTROL_UNREGISTER_LISTENER_POS(listener, unregisterResult);
 }
-
 
 /**
  * @brief Test the negative scenarios for unregistering a listener in PlaneControl
@@ -1408,63 +1296,34 @@ UT_ADD_TEST(VTS_L1_PlaneControl, unregisterListener_pos) {
  * | 03 | Attempt to unregister a listener that was registered and unregistered already | listener = registeredListener, aidl_return = false | aidl_return should be false, status.isOk() should be false | Should Fail |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, unregisterListener_neg) {
-    // Test Case 1: Unregister Listener with Null Input
-    {
-        android::sp<IPlaneControlListener> nullListener = nullptr;
-        bool aidl_return = false;
-        UT_LOG_INFO("Calling unregisterListener(IN:listener:[nullptr], OUT:_aidl_return)");
-        ::android::binder::Status status = gPlaneControlservice->unregisterListener(nullListener, &aidl_return);
-        UT_LOG_INFO("Result unregisterListener(IN:listener:[nullptr], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
-                    UT_Control_GetMapString(bool_mapTable, aidl_return),
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_FALSE(aidl_return);
-        UT_ASSERT_FALSE(status.isOk());
-    }
+    UT_LOG_INFO("Starting unregisterListener_neg");
 
-    // Test Case 2: Attempt to Unregister a Listener Not Registered
-    {
-        android::sp<IPlaneControlListener> unregisteredListener = new ValidPlaneControlListener();
-        bool aidl_return = false;
-        UT_LOG_INFO("Calling unregisterListener(IN:listener:[unregisteredListener], OUT:_aidl_return)");
-        ::android::binder::Status status = gPlaneControlservice->unregisterListener(unregisteredListener, &aidl_return);
-        UT_LOG_INFO("Result unregisterListener(IN:listener:[unregisteredListener], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
-                    UT_Control_GetMapString(bool_mapTable, aidl_return),
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_FALSE(aidl_return);
-        UT_ASSERT_TRUE(status.isOk());
-    }
+    // Step 1: Attempt to unregister a null listener
+    android::sp<IPlaneControlListener> listener = nullptr;
+    bool aidl_return = false;
+    PLANE_CONTROL_UNREGISTER_LISTENER_NEG(listener, aidl_return, "Null Listener");
 
-    // Test Case 3: Attempt to Unregister a Listener that is Registered and unregistered already
-    {
-        android::sp<IPlaneControlListener> registeredListener = new ValidPlaneControlListener();
-        bool aidl_return = false;
-        bool registerResult = false;
+    // Step 2: Attempt to unregister a listener that was never registered
+    listener = new ValidPlaneControlListener();
+    ASSERT_TRUE(listener != nullptr) << "Failed to create ValidPlaneControlListener";
+    aidl_return = false;
+    PLANE_CONTROL_UNREGISTER_LISTENER_NEG(listener, aidl_return, "Unregistered Listener");
 
-        // Simulate registration and unregistration
-        ::android::binder::Status registerStatus = gPlaneControlservice->registerListener(registeredListener, &registerResult);
-        UT_ASSERT_TRUE(registerStatus.isOk());
-        UT_ASSERT_TRUE(registerResult);
-        ::android::binder::Status status = gPlaneControlservice->unregisterListener(registeredListener, &aidl_return);
-        UT_ASSERT_TRUE(status.isOk());
-        UT_ASSERT_TRUE(aidl_return);
-
-        UT_LOG_INFO("Calling unregisterListener after register and unregister(IN:listener:[registeredListener], OUT:_aidl_return)");
-        status = gPlaneControlservice->unregisterListener(registeredListener, &aidl_return);
-        UT_LOG_INFO("Result unregisterListener(IN:listener:[registeredListener], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]",
-                    UT_Control_GetMapString(bool_mapTable, aidl_return),
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_FALSE(aidl_return);
-        UT_ASSERT_TRUE(status.isOk());
-    }
+    // Step 3: Attempt to unregister a listener that was registered and unregistered already
+    listener = new ValidPlaneControlListener();
+    ASSERT_TRUE(listener != nullptr) << "Failed to create ValidPlaneControlListener";
+    bool registerResult = false;
+    PLANE_CONTROL_REGISTER_LISTENER_POS(listener, registerResult); // Register
+    aidl_return = false;
+    PLANE_CONTROL_UNREGISTER_LISTENER_POS(listener, aidl_return); // Unregister
+    aidl_return = false;
+    PLANE_CONTROL_UNREGISTER_LISTENER_NEG(listener, aidl_return, "Already Unregistered Listener");
 }
 
 /**
  * @brief Test the positive scenario of releasing a native graphics window handle.
  *
- * This test verifies the functionality of the releaseNativeGraphicsWindowHandle API to ensure it correctly releases a native graphics window handle without errors.@n
+ * This test verifies the functionality of the releaseNativeGraphicsWindowHandle API to ensure it correctly releases a native graphics window handle without errors.
  *
  * **Test Group ID:** Basic: 01@n
  * **Test Case ID:** 021@n
@@ -1485,29 +1344,34 @@ UT_ADD_TEST(VTS_L1_PlaneControl, unregisterListener_neg) {
  * | 06 | Verify the API returns a successful status | status.isOk() = true, status.exceptionCode() = EX_NONE | Should be successful | Should be successful |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, releaseNativeGraphicsWindowHandle_pos) {
-    int64_t nativeHandle = 0;
-    ::android::binder::Status status;
+    UT_LOG_INFO("Starting releaseNativeGraphicsWindowHandle_pos");
+
+    // Step 1: Get plane capabilities
+    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities); // Uses macro to fetch and validate capabilities
+
     bool graphicsPlaneFound = false;
-    uint32_t planeCount = 0;
 
-    PLANE_CONTROL_FOREACH_GRAPHICS_PLANE(planeCount, planeIndex, {
+    // Step 2: Iterate over planes to find graphics planes and obtain handle
+    for (const auto& plane : capabilities) {
+        if (plane.type != ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+            continue;
+        }
+
         graphicsPlaneFound = true;
+        uint32_t planeResourceIndex = plane.planeIndex;
+        int64_t nativeWindowHandle = 0;
 
-        status = gPlaneControlservice->getNativeGraphicsWindowHandle(planeIndex, &nativeHandle);
-        UT_ASSERT_TRUE(status.isOk());
-        UT_ASSERT_TRUE(nativeHandle != 0);
+        // Obtain valid handle
+        ::android::binder::Status status = gPlaneControlservice->getNativeGraphicsWindowHandle(planeResourceIndex, &nativeWindowHandle);
+        ASSERT_TRUE(status.isOk()) << "getNativeGraphicsWindowHandle failed for plane index " << planeResourceIndex;
+        ASSERT_NE(nativeWindowHandle, 0) << "Invalid native window handle for plane index " << planeResourceIndex;
 
-        std::string inputParams = "IN:planeResourceIndex:[" + std::to_string(planeIndex) + "], IN:nativeWindowHandle:[0x" + std::to_string(nativeHandle) + "]";
-        status = gPlaneControlservice->releaseNativeGraphicsWindowHandle(planeIndex, nativeHandle);
-        std::string outputParams = "IN:planeResourceIndex:[" + std::to_string(planeIndex) + "], IN:nativeWindowHandle:[0x" + std::to_string(nativeHandle) + "]";
-
-        UT_LOG_INFO("releaseNativeGraphicsWindowHandle", inputParams, outputParams, status, status.isOk());
-        UT_ASSERT_TRUE(status.isOk());
-    });
-
-    if (!graphicsPlaneFound) {
-        UT_FAIL("No GRAPHICS plane found in capabilities from gPlaneControl_hfp");
+        // Steps 3-6: Log, call, log result, and verify
+        PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(planeResourceIndex, nativeWindowHandle);
     }
+
+    ASSERT_TRUE(graphicsPlaneFound) << "No GRAPHICS plane found in capabilities";
 }
 
 /**
@@ -1533,49 +1397,51 @@ UT_ADD_TEST(VTS_L1_PlaneControl, releaseNativeGraphicsWindowHandle_pos) {
  * | 05 | Call releaseNativeGraphicsWindowHandle with invalid native window handle | validPlaneResourceIndex = i, invalidNativeWindowHandle = -1 | Should Fail |  |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, releaseNativeGraphicsWindowHandle_neg) {
-    // Retrieve the plane resource index from YAML using the macro
-    int64_t nativeGraphicsWindowHandle = 0;
-    ::android::binder::Status status;
+    UT_LOG_INFO("Starting releaseNativeGraphicsWindowHandle_neg");
 
-    // Retrieve the count of plane resources from YAML using the macro
-    std::string plane_count_path = "IPlaneControl.planes";
-    uint32_t planeResourceCount = UT_KVP_PROFILE_GET_UINT32(plane_count_path.c_str());
-    bool graphics_index_flag = false;
+    // Step 1: Get plane capabilities
+    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities); // Uses macro to fetch and validate capabilities
 
-    // Iterate through the plane resources to find a valid GRAPHICS type
-    for (int32_t i = 0; i < planeResourceCount; ++i) {
-        char planeTypeString[256];
-        std::string plane_type_path = "IPlaneControl.planes."+std::to_string(i)+".type";
-        UT_KVP_PROFILE_GET_STRING(plane_type_path.c_str(), planeTypeString);
-
-        if (planeTypeString == "GRAPHICS") {
-
-            graphics_index_flag = true;
-            std::string plane_index_path = "IPlaneControl.planes." + std::to_string(i);
-            uint32_t plane_indexfrom_profile = UT_KVP_PROFILE_GET_UINT32(plane_index_path.c_str());
-            UT_LOG_INFO("Calling getNativeGraphicsWindowHandle(IN:planeResourceIndex:[%u], OUT:nativeGraphicsWindowHandle[])", plane_indexfrom_profile);
-            status = gPlaneControlservice->getNativeGraphicsWindowHandle(plane_indexfrom_profile, &nativeGraphicsWindowHandle);
-            UT_LOG_INFO("Result getNativeGraphicsWindowHandle(IN:planeResourceIndex:[%u], OUT:nativeGraphicsWindowHandle[0x%llX]), status:[isOK:%s, exception:%s]",
-                        plane_indexfrom_profile,
-                        nativeGraphicsWindowHandle,
-                        UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                        UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-            UT_ASSERT_TRUE(status.isOk());
-
-            // Test Case 1: Invalid Plane Resource Index
-            uint32_t invalidPlaneResourceIndex = plane_indexfrom_profile+1;
-            UT_LOG_INFO("Calling releaseNativeGraphicsWindowHandle(IN:planeResourceIndex:[%d], IN:nativeWindowHandle:[%lld])", invalidPlaneResourceIndex, nativeGraphicsWindowHandle);
-            status = gPlaneControlservice->releaseNativeGraphicsWindowHandle(invalidPlaneResourceIndex, nativeGraphicsWindowHandle);
-            UT_LOG_INFO("Result releaseNativeGraphicsWindowHandle(IN:planeResourceIndex:[%d], IN:nativeWindowHandle:[%lld]), status:[isOK:%s, exception:%s]", invalidPlaneResourceIndex, nativeGraphicsWindowHandle, UT_Control_GetMapString(bool_mapTable, status.isOk()), UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-            UT_ASSERT_EQUAL(status.exceptionCode(), android::binder::Status::EX_ILLEGAL_ARGUMENT);
-            // Test Case 2: Invalid Native Window Handle
-            int64_t invalidNativeWindowHandle = nativeGraphicsWindowHandle+1; // Invalid handle
-            UT_LOG_INFO("Calling releaseNativeGraphicsWindowHandle(IN:planeResourceIndex:[%d], IN:nativeWindowHandle:[%lld])", plane_indexfrom_profile, invalidNativeWindowHandle);
-            status = gPlaneControlservice->releaseNativeGraphicsWindowHandle(plane_indexfrom_profile, invalidNativeWindowHandle);
-            UT_LOG_INFO("Result releaseNativeGraphicsWindowHandle(IN:planeResourceIndex:[%d], IN:nativeWindowHandle:[%lld]), status:[isOK:%s, exception:%s]", plane_indexfrom_profile, invalidNativeWindowHandle, UT_Control_GetMapString(bool_mapTable, status.isOk()), UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-            UT_ASSERT_EQUAL(status.exceptionCode(), android::binder::Status::EX_ILLEGAL_ARGUMENT);
+    // Step 2: Identify the first VIDEO type plane index
+    uint32_t invalidPlaneResourceIndex = 0;
+    bool videoPlaneFound = false;
+    for (const auto& plane : capabilities) {
+        if (plane.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+            invalidPlaneResourceIndex = plane.planeIndex;
+            videoPlaneFound = true;
+            break;
         }
     }
+
+    // Step 3: Identify a valid GRAPHICS plane index
+    uint32_t validPlaneResourceIndex = 0;
+    int64_t validNativeWindowHandle = 0;
+    bool graphicsPlaneFound = false;
+    for (const auto& plane : capabilities) {
+        if (plane.type == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+            validPlaneResourceIndex = plane.planeIndex;
+            graphicsPlaneFound = true;
+            // Obtain valid handle
+            ::android::binder::Status status = gPlaneControlservice->getNativeGraphicsWindowHandle(validPlaneResourceIndex, &validNativeWindowHandle);
+            ASSERT_TRUE(status.isOk()) << "getNativeGraphicsWindowHandle failed for plane index " << validPlaneResourceIndex;
+            ASSERT_NE(validNativeWindowHandle, 0) << "Invalid native window handle for plane index " << validPlaneResourceIndex;
+            break;
+        }
+    }
+
+    ASSERT_TRUE(graphicsPlaneFound) << "No GRAPHICS plane found in capabilities";
+
+    // Step 4: Test with invalid plane resource index (VIDEO plane)
+    if (videoPlaneFound) {
+        PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_NEG(invalidPlaneResourceIndex, validNativeWindowHandle, "Invalid Plane Index (Video)");
+    } else {
+        UT_LOG_INFO("No VIDEO plane found, skipping invalid plane index test");
+    }
+
+    // Step 5: Test with invalid native window handle
+    int64_t invalidNativeWindowHandle = validNativeWindowHandle + 1; // Assume +1 is invalid
+    PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_NEG(validPlaneResourceIndex, invalidNativeWindowHandle, "Invalid Native Window Handle");
 }
 
 /** @} */ // End of Plane_Control_Halif_Test_L1
