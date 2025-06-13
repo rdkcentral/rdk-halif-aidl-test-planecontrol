@@ -191,48 +191,74 @@ namespace com {
                     printf("[SERVICE] PlaneControl service destroyed\n");
                 }
 
-
-
-                android::binder::Status PlaneControl::getCapabilities(std::vector<::com::rdk::hal::planecontrol::Capabilities>* _aidl_return)
+                android::binder::Status PlaneControl::getCapabilities(
+                    ::std::vector<::com::rdk::hal::planecontrol::Capabilities>* _aidl_return)
                 {
-                    // Plane 0 (VIDEO)
-                    auto cap0 = buildCapabilities(
-                        0,
-                        ::com::rdk::hal::planecontrol::PlaneType::VIDEO,
-                        { ::com::rdk::hal::videodecoder::PixelFormat::NATIVE },
-                        3840, 2160, 3840, 2160,
-                        { ::com::rdk::hal::videodecoder::DynamicRange::SDR,
+                    std::lock_guard<std::mutex> lock(mHandleLock);
+                    _aidl_return->clear();
+
+                    // Set number of video planes
+                    mVideoPlaneCount = 0; // Reset global counter
+
+                    // Plane 0: VIDEO
+                    ::com::rdk::hal::planecontrol::Capabilities cap0;
+                    cap0.planeIndex = 0;
+                    cap0.type = ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
+                    cap0.pixelFormats = {::com::rdk::hal::videodecoder::PixelFormat::NATIVE};
+                    cap0.maxWidth = 3840;
+                    cap0.maxHeight = 2160;
+                    cap0.frameWidth = 3840;
+                    cap0.frameHeight = 2160;
+                    cap0.supportedDynamicRanges = {
+                        ::com::rdk::hal::videodecoder::DynamicRange::SDR,
                         ::com::rdk::hal::videodecoder::DynamicRange::HLG,
                         ::com::rdk::hal::videodecoder::DynamicRange::HDR10,
                         ::com::rdk::hal::videodecoder::DynamicRange::HDR10PLUS,
-                        ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION },
-                        12, 60, true, true, 3
-                    );
+                        ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION
+                    };
+                    cap0.colorDepth = 12;
+                    cap0.maxFrameRate = 60;
+                    cap0.supportsAlpha = true;
+                    cap0.supportsZOrder = true;
+                    cap0.vsyncDisplayLatency = 3;
                     _aidl_return->push_back(cap0);
+                    mVideoPlaneCount++; // Increment for VIDEO plane
 
-                    // Plane 1 (VIDEO)
-                    auto cap1 = buildCapabilities(
-                        1,
-                        ::com::rdk::hal::planecontrol::PlaneType::VIDEO,
-                        { ::com::rdk::hal::videodecoder::PixelFormat::NATIVE },
-                        3840, 2160, 3840, 2160,
-                        { ::com::rdk::hal::videodecoder::DynamicRange::SDR },
-                        10, 60, true, true, 3
-                    );
+                    // Plane 1: VIDEO
+                    ::com::rdk::hal::planecontrol::Capabilities cap1;
+                    cap1.planeIndex = 1;
+                    cap1.type = ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
+                    cap1.pixelFormats = {::com::rdk::hal::videodecoder::PixelFormat::NATIVE};
+                    cap1.maxWidth = 3840;
+                    cap1.maxHeight = 2160;
+                    cap1.frameWidth = 3840;
+                    cap1.frameHeight = 2160;
+                    cap1.supportedDynamicRanges = {::com::rdk::hal::videodecoder::DynamicRange::SDR};
+                    cap1.colorDepth = 10;
+                    cap1.maxFrameRate = 60;
+                    cap1.supportsAlpha = true;
+                    cap1.supportsZOrder = true;
+                    cap1.vsyncDisplayLatency = 3;
                     _aidl_return->push_back(cap1);
+                    mVideoPlaneCount++; // Increment for VIDEO plane
 
-                    // Plane 2 (GRAPHICS)
-                    auto cap2 = buildCapabilities(
-                        2,
-                        ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS,
-                        { ::com::rdk::hal::videodecoder::PixelFormat::RGB },
-                        1920, 1080, 1920, 1080,
-                        { ::com::rdk::hal::videodecoder::DynamicRange::SDR },
-                        8, 60, true, false, 1
-                    );
+                    // Plane 2: GRAPHICS
+                    ::com::rdk::hal::planecontrol::Capabilities cap2;
+                    cap2.planeIndex = 2;
+                    cap2.type = ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS;
+                    cap2.pixelFormats = {::com::rdk::hal::videodecoder::PixelFormat::RGB};
+                    cap2.maxWidth = 1920;
+                    cap2.maxHeight = 1080;
+                    cap2.frameWidth = 1920;
+                    cap2.frameHeight = 1080;
+                    cap2.supportedDynamicRanges = {::com::rdk::hal::videodecoder::DynamicRange::SDR};
+                    cap2.colorDepth = 8;
+                    cap2.maxFrameRate = 60;
+                    cap2.supportsAlpha = true;
+                    cap2.supportsZOrder = false;
+                    cap2.vsyncDisplayLatency = 1;
                     _aidl_return->push_back(cap2);
 
-                    // Return success status
                     return android::binder::Status::ok();
                 }
 
@@ -299,32 +325,38 @@ namespace com {
                     return android::binder::Status::ok();
                 }
 
-                android::binder::Status PlaneControl::flipGraphicsBuffer(int32_t planeResourceIndex, bool* _aidl_return) {
+                android::binder::Status PlaneControl::flipGraphicsBuffer(int32_t planeResourceIndex, bool* _aidl_return)
+                {
                     std::lock_guard<std::mutex> lock(mHandleLock);
 
                     if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
                         *_aidl_return = false;
-                        std::cout << "[SERVICE] invalid planeResourceIndex " << planeResourceIndex << std::endl;
-                        return android::binder::Status::ok();
+                        std::cout << "[SERVICE] Invalid planeResourceIndex " << planeResourceIndex << std::endl;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
                     }
 
                     if (mNativeWindowHandles.find(planeResourceIndex) == mNativeWindowHandles.end()) {
                         *_aidl_return = false;
                         std::cout << "[SERVICE] NativeWindowHandle doesnt exist for the planeResourceIndex " << planeResourceIndex << std::endl;
-                        return android::binder::Status::ok();
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
                     }
 
                     *_aidl_return = true;
+                    std::cout << "[SERVICE] Flipped graphics buffer for planeResourceIndex " << planeResourceIndex << std::endl;
                     return android::binder::Status::ok();
                 }
 
-                android::binder::Status PlaneControl::setVideoSourceDestinationPlaneMapping(const ::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>& listSourcePlaneMapping, bool* _aidl_return) {
+                android::binder::Status PlaneControl::setVideoSourceDestinationPlaneMapping(
+                    const ::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>& listSourcePlaneMapping,
+                    bool* _aidl_return)
+                {
                     std::lock_guard<std::mutex> lock(mHandleLock);
                     std::set<std::pair<SourceType, int>> seenSources;
                     std::set<int> seenPlanes;
 
+                    // Step 1: Validate inputs
                     for (const auto& mapping : listSourcePlaneMapping) {
-                        if (mapping.destinationPlaneIndex >= mVideoPlaneCount) {
+                        if (mapping.destinationPlaneIndex >= mVideoPlaneCount && mapping.destinationPlaneIndex != -1) {
                             *_aidl_return = false;
                             std::cout << "[SERVICE] video plane doesnt exist " << mapping.destinationPlaneIndex << std::endl;
                             return android::binder::Status::ok();
@@ -346,12 +378,14 @@ namespace com {
                         }
                     }
 
+                    // Step 2: Check for already mapped planes
                     for (const auto& mapping : listSourcePlaneMapping) {
                         if (mapping.destinationPlaneIndex != -1) {
                             auto it = mVideoPlaneMappings.find(mapping.destinationPlaneIndex);
                             if (it != mVideoPlaneMappings.end()) {
                                 const auto& currentMapping = it->second;
                                 if (currentMapping.sourceType != SourceType::NONE && currentMapping.sourceIndex != -1) {
+                                    *_aidl_return = false;
                                     std::cout << "[SERVICE] Plane already mapped to another Source " << std::endl;
                                     return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_STATE);
                                 }
@@ -359,41 +393,44 @@ namespace com {
                         }
                     }
 
+                    // Step 3: Apply mappings or unmap
+                    *_aidl_return = true; // Default to true for valid operations
                     for (const auto& mapping : listSourcePlaneMapping) {
                         if (mapping.destinationPlaneIndex == -1) {
                             for (auto it = mVideoPlaneMappings.begin(); it != mVideoPlaneMappings.end();) {
                                 if (it->second.sourceType == mapping.sourceType &&
                                     it->second.sourceIndex == mapping.sourceIndex) {
-                                    std::cout << "[SERVICE] unmapping destinationPlaneIndex " << std::endl;
+                                    std::cout << "[SERVICE] unmapping destinationPlaneIndex " << it->first << std::endl;
                                     it = mVideoPlaneMappings.erase(it);
                                 } else {
                                     ++it;
                                 }
                             }
                         } else {
-                            std::cout << "[SERVICE] Map source to the destination plane " << std::endl;
+                            std::cout << "[SERVICE] Map source to the destination plane " << mapping.destinationPlaneIndex << std::endl;
                             mVideoPlaneMappings[mapping.destinationPlaneIndex] = mapping;
                         }
                     }
-                    *_aidl_return = true;
+
                     return android::binder::Status::ok();
                 }
 
-                android::binder::Status PlaneControl::getVideoSourceDestinationPlaneMapping(::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>* _aidl_return) {
+                android::binder::Status PlaneControl::getVideoSourceDestinationPlaneMapping(
+                    ::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>* _aidl_return)
+                {
                     std::lock_guard<std::mutex> lock(mHandleLock);
                     _aidl_return->clear();
-                    for (int planeIndex = 0; planeIndex < mVideoPlaneCount; ++planeIndex) {
-                        ::com::rdk::hal::planecontrol::SourcePlaneMapping mapping;
 
+                    for (int planeIndex = 0; planeIndex < mVideoPlaneCount; ++planeIndex) {
                         auto it = mVideoPlaneMappings.find(planeIndex);
+                        ::com::rdk::hal::planecontrol::SourcePlaneMapping mapping;
                         if (it != mVideoPlaneMappings.end()) {
                             mapping = it->second;
                         } else {
-                            mapping.sourceType = SourceType::NONE;
-                            mapping.sourceIndex = -1;
+                            mapping.sourceType = ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK;
+                            mapping.sourceIndex = 0;
                             mapping.destinationPlaneIndex = planeIndex;
                         }
-
                         _aidl_return->push_back(mapping);
                     }
 
@@ -410,6 +447,7 @@ namespace com {
 
                     // Validate property
                     switch (property) {
+                        case Property::RESOURCE_ID:
                         case Property::X:
                         case Property::Y:
                         case Property::WIDTH:
@@ -445,6 +483,7 @@ namespace com {
                     }
 
                     switch (property) {
+                        case ::com::rdk::hal::planecontrol::Property::RESOURCE_ID:
                         case ::com::rdk::hal::planecontrol::Property::X:
                         case ::com::rdk::hal::planecontrol::Property::Y:
                         case ::com::rdk::hal::planecontrol::Property::WIDTH:

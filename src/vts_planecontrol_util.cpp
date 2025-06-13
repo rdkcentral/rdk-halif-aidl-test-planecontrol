@@ -159,7 +159,7 @@ bool ValidatePropertyList(uint32_t planeIndex, const std::vector<::com::rdk::hal
     auto status = gPlaneControlservice->getPropertyMulti(planeIndex, &propertyKVList, &aidl_return);
 
     std::string outputParams = "IN:planeResourceIndex:[" + std::to_string(planeIndex) + "], IN/OUT:propertyKVList[], OUT:_aidl_return:[" + (aidl_return ? "true" : "false") + "]";
-    LOG_API_CALL("getPropertyMulti with " + planeType + " plane index", inputParams, outputParams, status, aidl_return);
+    //UT_LOG_INFO("getPropertyMulti with " + planeType + " plane index", inputParams, outputParams, status, aidl_return);
 
     bool success = true;
     if (!status.isOk()) {
@@ -185,10 +185,13 @@ bool ValidatePropertyList(uint32_t planeIndex, const std::vector<::com::rdk::hal
     return success;
 }
 
-
 UT_status_t vts_planecontrol_parsePlaneControlHFP() {
     const std::string planeControlPath = "IPlaneControl.planes";
     int32_t number_of_planes = 0;
+
+    // Reset global counters
+    gNoVideoTypePlanes = 0;
+    gNoGraphicsTypePlanes = 0;
 
     // Verify KVP instance
     ut_kvp_instance_t* kvp_instance = ut_kvp_profile_getInstance();
@@ -224,20 +227,28 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
         if (status != UT_KVP_STATUS_SUCCESS) {
             UT_LOG_WARNING("Failed to read plane type at path: %s, status: %d, skipping plane %d",
                            typePath.c_str(), status, i);
-            //continue;
+            continue;
         }
         result_kvp.resize(std::strlen(result_kvp.c_str()));
         UT_LOG_DEBUG("Reading plane type path: %s, value: %s", typePath.c_str(), result_kvp.c_str());
         if (result_kvp.empty()) {
             UT_LOG_WARNING("Empty plane type at path: %s, skipping plane %d", typePath.c_str(), i);
-            //continue;
+            continue;
         }
+
+        // Update global counters based on plane type
+        if (result_kvp == "VIDEO") {
+            gNoVideoTypePlanes++;
+        } else if (result_kvp == "GRAPHICS") {
+            gNoGraphicsTypePlanes++;
+        }
+
         try {
             cap.type = stringToPlaneType(result_kvp);
         } catch (const std::invalid_argument& e) {
             UT_LOG_WARNING("Invalid plane type at path: %s, value: %s, error: %s",
                            typePath.c_str(), result_kvp.c_str(), e.what());
-            // Optional: continue;
+            continue;
         }
 
         // Read pixel formats
@@ -250,13 +261,13 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
             status = ut_kvp_getStringField(kvp_instance, formatPath.c_str(), result_kvp.data(), UT_KVP_MAX_ELEMENT_SIZE);
             if (status != UT_KVP_STATUS_SUCCESS) {
                 UT_LOG_WARNING("Failed to read pixel format at path: %s, status: %d", formatPath.c_str(), status);
-                //continue;
+                continue;
             }
             result_kvp.resize(std::strlen(result_kvp.c_str()));
             UT_LOG_DEBUG("Reading pixel format path: %s, value: %s", formatPath.c_str(), result_kvp.c_str());
             if (result_kvp.empty()) {
                 UT_LOG_WARNING("Empty pixel format at path: %s", formatPath.c_str());
-                //continue;
+                continue;
             }
             try {
                 cap.pixelFormats.push_back(stringToPixelFormat(result_kvp));
@@ -267,7 +278,7 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
         }
         if (cap.pixelFormats.empty()) {
             UT_LOG_WARNING("Plane %d has no valid pixel formats, skipping", i);
-            //continue;
+            continue;
         }
 
         // Read supported dynamic ranges
@@ -280,13 +291,13 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
             status = ut_kvp_getStringField(kvp_instance, drPath.c_str(), result_kvp.data(), UT_KVP_MAX_ELEMENT_SIZE);
             if (status != UT_KVP_STATUS_SUCCESS) {
                 UT_LOG_WARNING("Failed to read dynamic range at path: %s, status: %d", drPath.c_str(), status);
-                //continue;
+                continue;
             }
             result_kvp.resize(std::strlen(result_kvp.c_str()));
             UT_LOG_DEBUG("Reading dynamic range path: %s, value: %s", drPath.c_str(), result_kvp.c_str());
             if (result_kvp.empty()) {
                 UT_LOG_WARNING("Empty dynamic range at path: %s", drPath.c_str());
-                //continue;
+                continue;
             }
             try {
                 cap.supportedDynamicRanges.push_back(stringToDynamicRange(result_kvp));
@@ -297,7 +308,7 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
         }
         if (cap.supportedDynamicRanges.empty()) {
             UT_LOG_WARNING("Plane %d has no valid dynamic ranges, skipping", i);
-            //continue;
+            continue;
         }
 
         // Read maxWidth, maxHeight, frameWidth, frameHeight
@@ -308,7 +319,7 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
         if (cap.maxWidth <= 0 || cap.maxHeight <= 0) {
             UT_LOG_WARNING("Invalid maxWidth=%d or maxHeight=%d for plane %d, skipping",
                            cap.maxWidth, cap.maxHeight, i);
-            //continue;
+            continue;
         }
 
         // Read other properties
@@ -318,7 +329,7 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
         cap.supportsZOrder = UT_KVP_PROFILE_GET_BOOL((planeBasePath + ".supportsZOrder").c_str());
         cap.vsyncDisplayLatency = UT_KVP_PROFILE_GET_UINT32((planeBasePath + ".vsyncDisplayLatency").c_str());
 
-        UT_LOG_INFO("Plane %d: index=%d, type=%d, %zu pixel formats,  %zu dynamic ranges, colorDepth=%d, maxFrameRate=%d",
+        UT_LOG_INFO("Plane %d: index=%d, type=%d, %zu pixel formats, %zu dynamic ranges, colorDepth=%d, maxFrameRate=%d",
                     i, cap.planeIndex, static_cast<int>(cap.type), cap.pixelFormats.size(),
                     cap.supportedDynamicRanges.size(), cap.colorDepth, cap.maxFrameRate);
 
@@ -326,11 +337,12 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
     }
 
     if (gPlaneControl_hfp.empty()) {
-        UT_LOG_ERROR("No valid planes parsed from HFP ");
+        UT_LOG_ERROR("No valid planes parsed from HFP");
         return UT_STATUS_FAILURE;
     }
 
-    UT_LOG_INFO("Successfully parsed %zu planes", gPlaneControl_hfp.size());
+    UT_LOG_INFO("Successfully parsed %zu planes, VIDEO planes: %u, GRAPHICS planes: %u",
+                gPlaneControl_hfp.size(), gNoVideoTypePlanes, gNoGraphicsTypePlanes);
     return UT_STATUS_OK;
 }
 
