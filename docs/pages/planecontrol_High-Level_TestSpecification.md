@@ -134,19 +134,19 @@ The following table outlines the core features validated in the L3 test phase
 
 |#|Testing Feature|Description|
 |-|---------------|-----------|
-|1|Plane Mapping|Map the source with the available planes for rendering on to the display|
-|2|Plane Swapping|Swap the source provided in planes to check all the planes rendered can be mapped with different sources|
-|3|Aspect Ratio| To set the aspect ratio of the pane to render the video frames in its proper format|
-|4|Z order| Plane Z order in which the planes are rendered in to the display|
-|5|Visibility| To set and verify the Visibility of the plane rendered |
-|6|Over scan| To Set the zoom mode for the plane rendering the video frame.|
-|7|Alpha| To set and verify the transparency (Alpha) value for the planes|
-|8|Plane position|To set and verify the positioning of the planes |
-|9|Plane size|To set and Verify the plane Size |
-|10|Dynamic Range|To set the Supported Dynamic range property for the planes |
-|11|pixel format|To set and verify the pixel resolution supported by the plane to display the video frame properly.|
-|12|graphics Window Handle| To get the Graphics window handle to set graphical element to display|
-|13|vsyncDisplayLatency|To read and verify the vsync Display Latency value |
+|1|Plane Mapping|Map the source with the available planes for rendering on to the display. Vrify the mapping is done properly by calling `getVideoSourceDestinationPlaneMapping` and checking the video playback on the planes.|
+|2|Plane Swapping|Swap the source provided in planes to check all the planes rendered can be mapped with different sources. verify the video playing in the display is swapping |
+|3|Aspect Ratio| To set the aspect ratio of the pane to render the video frames in its proper format . Validate with manual inspection  |
+|4|Z order| Plane Z order in which the planes are rendered in to the display. Validate with manual inspection that the plane display order is changing.|
+|5|Visibility| To set and verify the Visibility of the plane rendered. Manually inspect and verify the visibility of each plane |
+|6|Over scan| To Set the zoom mode for the plane rendering the video frame. set different zoom modes and verify manually|
+|7|Alpha| To set and verify the transparency (Alpha) value for the planes. Set different alpha values and verify manually from display|
+|8|Plane position|To set and verify the positioning of the planes. Set different position for the planes as per `Video Plane Geometry Specification` table and verify it manually  |
+|9|Plane size|To set and Verify the plane Size.Set different position for the planes as per `Video Plane Geometry Specification` table and verify it manually |
+|10|Dynamic Range|To set the Supported Dynamic range property for the planes.Play Different video frames with all the Dynamic rage supported in capabilities and validate the plane renders the frames properly |
+|11|pixel format|To set and verify the pixel resolution supported by the plane to display the video frame properly. Play Different video frames with all the Resolution (Pixel Format) supported in capabilities and validate the plane renders the frames properly|
+|12|graphics Window Handle| To get the Graphics window handle to set graphical element to display. Validate by rendering simple graphics to the plane using any |
+|13|vsyncDisplayLatency|the display latency is measured from the moment a change is made to plane. Play video frames and measure the vsync delay and verify it matches as per the capabilities.|
 
 ### Test Cases
 
