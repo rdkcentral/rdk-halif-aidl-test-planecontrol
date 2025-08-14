@@ -129,7 +129,7 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP();
 UT_status_t getPlaneControlService();
 
 bool ValidatePropertyList(uint32_t planeIndex, const std::vector<::com::rdk::hal::planecontrol::Property>& expectedProperties, const std::string& planeType);
-UT_status_t VTS_PlaneControl_init();
+
 void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::Capabilities& actual,
     const planeControl_Cap& expected);
 
