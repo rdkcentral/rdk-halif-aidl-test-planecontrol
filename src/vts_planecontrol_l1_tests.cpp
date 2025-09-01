@@ -105,6 +105,9 @@ class VTS_L1_PlaneControl : public virtual UTCore
 protected:
     static void SetUpTestSuite()
     {
+        if (gPlaneControlservice == nullptr) {
+                UT_FAIL_FATAL("PlaneControl Service not available");
+        }
 
     }
 
