@@ -81,6 +81,11 @@ protected:
     static std::vector<::com::rdk::hal::planecontrol::SourceType> sAllSourceTypes;
 
     static void SetUpTestSuite() {
+
+        if (gPlaneControlservice == nullptr) {
+                UT_FAIL_FATAL("PlaneControl Service not available");
+        }
+
         UT_LOG_INFO("Setting up VTS_L2_PlaneControl test suite");
 
         // Initialize source types
