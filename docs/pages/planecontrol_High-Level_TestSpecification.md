@@ -51,28 +51,6 @@ Follow the below steps to playback required video using each source
 |Composite|Connect a Composite capable device to the sink port. Play back the supported/capable videos as per the test requirement.|
 |Video Sink| Create a Video pipeline using the AV HAL objects. Play back the streams as specified in the [streams info](https://github.com/rdkcentral/rdk-halif-binder-test-videodecoder/blob/feature/issues4_Create_HLT/doc/pages/VideoDecoder_TestStreamsInfo.md) document as required for the test.|
 
-## Graphics Plane Test Application
-
-To Validate the Graphics plane we need to create an EGL sample app which will provide the graphics plane data to VTS. This could be an application which  draws a simple triangle to the plane.
-
-_TBD: EGL a separate Binary or Within VTS binary so that VTS has control over what it draws ?_
-
-## vsyncDisplayLatency Measurement
-
-_TBD: How to measure the time delay between presenting the frame to displayed_
-
-## Video Plane Geometry Specification
-
-Video Plane can be set to different size and shapes by setting following properties of the planes
-
-<li>X</li><li>Y</li><li>WIDTH</li><li>HEIGHT</li>
-
-|GEOMETRY|Property Values|
-|--------|---------------|
-|Full Scressn| Set `X=0`, `Y=0`, `HEIGHT = frame Height from capabilities`, `WIDTH = frame width from capabilities`|
-|Side By Side| <li>1st Plane `X=0`, `Y=0`, `HEIGHT = frameHeight`, `WIDTH = frameWidth/2`</li><li>2nd Plane `X=frameWidth/2`, `Y=0`, `HEIGHT = frameHeight`, `WIDTH = frameWidth/2`</li>|
-|PIP Window| <li>1st Plane `X=0`, `Y=0`, `HEIGHT = frameHeight`, `WIDTH = frameWidth`</li><li>2nd Plane `X=3*frameWidth/4`, `Y=frameHeight/4`, `HEIGHT = frameHeight/4`, `WIDTH = frameWidth/4`</li>|
-|3X4 plane window|Set `X=frameHeight/8`, `Y=0`, `HEIGHT = frameHeight`, `WIDTH = 3*frameHeight/4`|
 ## L2 Test Specification
 
 |Test|Description|HAL APIs|
@@ -83,18 +61,110 @@ Video Plane can be set to different size and shapes by setting following propert
 
 ## L3 Test Specification
 
-|Test|Description|HAL APIs|
-|----|-----------|--------|
-|Video Source-Plane Mapping verification|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all of the video plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><li>verify the video source and plane mapping using `getVideoSourceDestinationPlaneMapping`</li><li>Play video using the selected Video source</li><li>Verify the Plane is showing the mapped video resource</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping, getVideoSourceDestinationPlaneMapping </li></ul>|
-|Video Source-Plane swapping|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all of the video plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Set a Video source to the Video plane 0 and another to VideoPlane 1 using `setVideoSourceDestinationPlaneMapping`</li><li>verify the video source and plane mapping using `getVideoSourceDestinationPlaneMapping`</li><li>Update each video plane geometry of each plane as per the geometry specification</li><li>PLay video using the selected source</li><li>Verify the Plane is showing the mapped video resources</li><li>Swap the source and plane and verify its reflected in the display </li> <li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping, getVideoSourceDestinationPlaneMapping </li></ul>|
-|Aspect Ratio Changes|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all of the video plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><li>Update the video plane geometry of each plane as per the geometry specification</li><li>Set `ASPECT_RATIO` property using `setProperty` for all supported values </li><li>Verify the Aspect ratio change is affected in the video plane</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping, setProperty </li></ul>|
-|Z order Changes|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all of the plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Set a Video sources  to the Video planes using `setVideoSourceDestinationPlaneMapping`</li><li>Set `ZORDER` property using `setProperty` to supported values in configuration YAML</li><li>Check the Z order position of the Video plane w.r.t to other video plane and graphics plane.</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping, setProperty </li></ul>|
-|Visibility Changes|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all of the plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Set a Video sources  to the Video planes using `setVideoSourceDestinationPlaneMapping`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><li>Update the video plane geometry of each plane as per the geometry specification</li><li>Set `VISIBLE` property using `setProperty` to supported values in configuration YAML</li><li>Check the visibility  of the planes.</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping, setProperty </li></ul>|
-|Over scan Changes|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all of the video plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><li>Update the video plane geometry of each plane as per the geometry specification</li><li>Set `OVERSCAN` property using `setProperty` to supported values in configuration YAML</li><li>Check the overscan % of the planes.</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping, setProperty </li></ul>|
-|Alpha Changes|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all of the plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Set a Video sources  to the Video planes using `setVideoSourceDestinationPlaneMapping`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><li>Set `ALPHA` property using `setProperty` to supported values in configuration YAML</li><li>Check the over scan % of the planes.</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping, setProperty </li></ul>|
-|Plane position changes|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all of the plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Set a Video sources  to the Video planes using `setVideoSourceDestinationPlaneMapping`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><li>Set `x` and `y` property using `setProperty` or `setPropertyMultiAtomic` to supported values in configuration YAML</li><li>Check the position of the plane w.r.t reference frame .</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping, setProperty </li></ul>|
-|Plane size changes|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all of the plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Set a Video sources  to the Video planes using `setVideoSourceDestinationPlaneMapping`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><li>Set `WIDTH` and `HEIGHT` property using `setProperty` or `setPropertyMultiAtomic` to supported values in configuration YAML</li><li>Check the size of the plane w.r.t reference frame .</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping, setProperty </li></ul>|
-|Verify Dynamic Range|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all the video plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><l1>Loop through all the dynamic range values supported</li><li>Playback the Stream specific to each dynamic range and verify the output</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping</li></ul>|
-|Verify Supported pixel format|<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all the video plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><li>Update the video plane geometry of each plane as per the geometry specification</li><l1>Loop through all the pixel format supported</li><li>Playback the Stream specific to each dynamic range and verify the output</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping</li></ul>|
-|Verify graphics Window Handle |<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all the graphics plane indices</li><li> Register event listeners using `registerEventListener`</li><li>get the graphics plan handle for EGL application using `getNativeGraphicsWindowHandle`</li><li>Draw a sample graphics using the handle from HAL</li><li>Force the graphics draw using `flipGraphicsBuffer`</li><li>Verify the graphics plane is updated as intended </li><li>Release the Graphics window handle using `releaseNativeGraphicsWindowHandle`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping</li></ul>|
-|Verify vsyncDisplayLatency |<ul><li>get platform capabilities using `getCapabilities`</li><li>Loop through all the video plane indices</li><li> Register event listeners using `registerEventListener`</li><li>Loop through all the video sources</li><li>Set the Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`</li><li>Update the video plane geometry of each plane as per the geometry specification</li><li>Playback the Stream verify the output</li><li>Measure the time difference between the frame presented to viewed in the display is as per specified in the capability</li><li>Unregister event listeners using `unregisterEventListener`</li></ul>|<ul><li>IPlaneControl - registerEventListener, unregisterEventListener, getCapabilities, setVideoSourceDestinationPlaneMapping</li></ul>|
+### Prerequisites
+
+#### Video Sink
+
+Video frames are supplied to the Plane Control during testing, which necessitates a pre-validated AVBuffer module, Video Decoder and Video Sink. Therefore,AVBuffer, Video Decoder, Video Sink must successfully pass VTS L1, L2, and L3 testing before being used in the Plane Control tests
+
+#### Graphics Plane Test Application
+
+To Validate the Graphics plane we need to create an EGL sample app which will provide the graphics plane data to VTS. This could be an application which  draws a simple triangle to the plane.
+
+_TBD: EGL a separate Binary or Within VTS binary so that VTS has control over what it draws ?_
+
+#### vsyncDisplayLatency Measurement
+
+_TBD: How to measure the time delay between presenting the frame to displayed_
+
+#### Video Plane Geometry Specification
+
+Video Plane can be set to different size and shapes by setting following properties of the planes
+
+<li>X</li><li>Y</li><li>WIDTH</li><li>HEIGHT</li>
+
+|GEOMETRY|Property Values|
+|--------|---------------|
+|Full Screen| Set `X=0`, `Y=0`, `HEIGHT = frame Height from capabilities`, `WIDTH = frame width from capabilities`|
+|Side By Side| <li>1st Plane `X=0`, `Y=0`, `HEIGHT = frameHeight`, `WIDTH = frameWidth/2`</li><li>2nd Plane `X=frameWidth/2`, `Y=0`, `HEIGHT = frameHeight`, `WIDTH = frameWidth/2`</li>|
+|PIP Window| <li>1st Plane `X=0`, `Y=0`, `HEIGHT = frameHeight`, `WIDTH = frameWidth`</li><li>2nd Plane `X=3*frameWidth/4`, `Y=frameHeight/4`, `HEIGHT = frameHeight/4`, `WIDTH = frameWidth/4`</li>|
+|3X4 plane window|Set `X=frameHeight/8`, `Y=0`, `HEIGHT = frameHeight`, `WIDTH = 3*frameHeight/4`|
+#### Graphics Application
+
+Graphics data is supplied by any graphics application which can render basic shape/color to the plane.
+
+### Feature List
+
+VTS L3 validates all the Plane Control features in multiple planes (if the platform supports multiple planes) as represented below.
+
+#### Video Render
+To render the video frames from Video buffer to Display, we use plane control to map the video sink to respective frame.
+
+```mermaid
+block-beta
+columns 1
+    block:1
+        VideoData("Decoded Video Frame") space VideoSink("Video Sink 0") space PlaneControl("Plane 0") space Output("Output")
+        VideoData --> VideoSink
+        VideoSink --> PlaneControl
+        PlaneControl --> Output
+    end
+    space
+    block:2
+        VideoData1("Decoded Video Frame") space VideoSink1("Video Sink 1") space PlaneControl1("Plane 1") space Output1("Output")
+        VideoData1 --> VideoSink1
+        VideoSink1 --> PlaneControl1
+        PlaneControl1 --> Output1
+    end
+```
+
+#### Graphics Render
+To Render graphics object to the display we can use graphics plane available in plane control module. We can get the graphics window handle from the plane control to provide graphics data to the module.
+
+```mermaid
+block-beta
+columns 1
+    block:1
+        GraphicData1("Graphics data") space PlaneControl2("Plane 2") space Output2("Output")
+        GraphicData1 --> PlaneControl2
+        PlaneControl2 --> Output2
+    end
+```
+The following table outlines the core features validated in the L3 test phase
+
+|#|Testing Feature|Description|
+|-|---------------|-----------|
+|1|Plane Mapping|Map the source with the available planes for rendering on to the display. Vrify the mapping is done properly by calling `getVideoSourceDestinationPlaneMapping` and checking the video playback on the planes.|
+|2|Plane Swapping|Swap the source provided in planes to check all the planes rendered can be mapped with different sources. verify the video playing in the display is swapping |
+|3|Aspect Ratio| To set the aspect ratio of the pane to render the video frames in its proper format . Validate with manual inspection  |
+|4|Z order| Plane Z order in which the planes are rendered in to the display. Validate with manual inspection that the plane display order is changing.|
+|5|Visibility| To set and verify the Visibility of the plane rendered. Manually inspect and verify the visibility of each plane |
+|6|Over scan| To Set the zoom mode for the plane rendering the video frame. set different zoom modes and verify manually|
+|7|Alpha| To set and verify the transparency (Alpha) value for the planes. Set different alpha values and verify manually from display|
+|8|Plane position|To set and verify the positioning of the planes. Set different position for the planes as per `Video Plane Geometry Specification` table and verify it manually  |
+|9|Plane size|To set and Verify the plane Size.Set different position for the planes as per `Video Plane Geometry Specification` table and verify it manually |
+|10|Dynamic Range|To set the Supported Dynamic range property for the planes.Play Different video frames with all the Dynamic rage supported in capabilities and validate the plane renders the frames properly |
+|11|pixel format|To set and verify the pixel resolution supported by the plane to display the video frame properly. Play Different video frames with all the Resolution (Pixel Format) supported in capabilities and validate the plane renders the frames properly|
+|12|graphics Window Handle| To get the Graphics window handle to set graphical element to display. Validate by rendering simple graphics to the plane using any |
+|13|vsyncDisplayLatency|the display latency is measured from the moment a change is made to plane. Play video frames and measure the vsync delay and verify it matches as per the capabilities.|
+
+### Test Cases
+
+The table below summarizes the L3 test cases executed using various audio stream formats and configurations. These tests are also executed in a multi-process environment:
+
+|#|Test|Mapping|Swapping|Aspect Ratio|Z Order|Visibility|over scan|Alpha|Plane Position|Plane Size|Dynamic Range|Pixel Format|Graphics Window|vsync Latency|
+|-|----|------|------|-------------|----|-------------|---|-----|----------|-----------|-----|-----|----|----|
+|1| planecontrol_mapping |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
+|2| planecontrol_swapping|✔|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
+|3| planecontrol_aspectratio|✔|✘|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
+|4| planecontrol_zorder|✔|✘|✘|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|
+|5| planecontrol_visibility|✔|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|✘|✘|
+|6| planecontrol_overscan|✔|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|✘|
+|7| planecontrol_Aplpha|✔|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|
+|8| planecontrol_position|✔|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|
+|8| planecontrol_size|✔|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|
+|8| planecontrol_dynamicrage|✔|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|
+|8| planecontrol_resolution|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|
+|8| planecontrol_graphics|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|
+|8| planecontrol_vsync|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|
+
