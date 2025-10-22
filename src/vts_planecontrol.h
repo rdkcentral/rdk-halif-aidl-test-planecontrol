@@ -86,6 +86,7 @@
 
 #include "com/rdk/hal/planecontrol/IPlaneControl.h"
 #include "com/rdk/hal/planecontrol/BnPlaneControlListener.h"
+#include "vts_helper_functions.h"
 
 
 #ifndef ENABLE_UT_INFO_LOGGING
@@ -145,32 +146,6 @@ bool ValidatePropertyList(uint32_t planeIndex, const std::vector<::com::rdk::hal
 
 void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::Capabilities& actual,
     const planeControl_Cap& expected);
-
-/* Status::Exception */
-const static ut_control_keyStringMapping_t statusException_mapTable[] =
-{
-    {(char*)"EX_NONE",                  (int32_t) Status::EX_NONE},
-    {(char*)"EX_SECURITY",              (int32_t) Status::EX_SECURITY},
-    {(char*)"EX_BAD_PARCELABLE",        (int32_t) Status::EX_BAD_PARCELABLE},
-    {(char*)"EX_ILLEGAL_ARGUMENT",      (int32_t) Status::EX_ILLEGAL_ARGUMENT},
-    {(char*)"EX_NULL_POINTER",          (int32_t) Status::EX_NULL_POINTER},
-    {(char*)"EX_ILLEGAL_STATE",         (int32_t) Status::EX_ILLEGAL_STATE},
-    {(char*)"EX_NETWORK_MAIN_THREAD",   (int32_t) Status::EX_NETWORK_MAIN_THREAD},
-    {(char*)"EX_UNSUPPORTED_OPERATION", (int32_t) Status::EX_UNSUPPORTED_OPERATION},
-    {(char*)"EX_SERVICE_SPECIFIC",      (int32_t) Status::EX_SERVICE_SPECIFIC},
-    {(char*)"EX_PARCELABLE",            (int32_t) Status::EX_PARCELABLE},
-    {(char*)"EX_HAS_REPLY_HEADER",      (int32_t) Status::EX_HAS_REPLY_HEADER},
-    {(char*)"EX_TRANSACTION_FAILED",    (int32_t) Status::EX_TRANSACTION_FAILED},
-    {NULL, -1}
-};
-
-/* bool */
-const static ut_control_keyStringMapping_t bool_mapTable[] =
-{
-    {(char*)"false", (int32_t) false},
-    {(char*)"true",  (int32_t) true},
-    {NULL, -1}
-};
 
 // Macro to iterate over all planes and filter by type (VIDEO or GRAPHICS)
 #define PLANE_CONTROL_FOREACH_PLANE_BY_TYPE(planeCount, planeTypeEnum, desiredType, planeIndexVar, body) \
@@ -928,6 +903,12 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(unmap_mappings, aidl_return); \
     } while (0)
 
+class ValidPlaneControlListener : public BnPlaneControlListener {
+public:
+
+    ValidPlaneControlListener() {};
+    virtual ~ValidPlaneControlListener() = default;
+};
 
 #endif //__VTS_PLANECONTROL_H__
 
