@@ -76,6 +76,10 @@ static const char *gVideoDecoderModuleName = "IVideoDecoderManager";
 const char *gTestGroup = "L3";
 IAVBufferHelper* gAVbufferHelper;
 
+static std::vector<int> videoPlaneIndex;
+static std::vector<int> graphicsPlaneIndex;
+static std::vector<com::rdk::hal::planecontrol::SourcePlaneMapping> planeMapping;
+
 extern std::vector<int32_t> gAvailableVideosinks_hfp;
 extern std::vector<int32_t> gAvailableVideodecoders_hfp;
 
@@ -92,29 +96,20 @@ static sp<IAVBuffer> vts_avbuffer_getService()
 class PlaneControlTest
 {
 public:
-    PlaneControlTest();
+    PlaneControlTest(const std::string &testName);
     void run ();
-
 
 
 private:
     IVideoSink::Id mSinkId;
+    std::string mtestName;
 
 };
 
-PlaneControlTest::PlaneControlTest()
+PlaneControlTest::PlaneControlTest(const std::string &testName)
+                        : mtestName(testName)
 {
-}
-
-void PlaneControlTest::run ()
-{
-    std::vector<int> videoPlaneIndex;
-    std::vector<int> graphicsPlaneIndex;
-    std::vector<::com::rdk::hal::planecontrol::SourceType> allSourceTypes = {
-        ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK,
-        ::com::rdk::hal::planecontrol::SourceType::HDMI,
-        ::com::rdk::hal::planecontrol::SourceType::COMPOSITE
-    };
+    mtestName = testName;
     std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
     for (const auto& plane : capabilities) {
@@ -124,13 +119,200 @@ void PlaneControlTest::run ()
             graphicsPlaneIndex.push_back(plane.planeIndex);
     }
 
-    std::vector<com::rdk::hal::planecontrol::SourcePlaneMapping> planeMapping;
-    for(const auto& index: videoPlaneIndex)
-    {
-        PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(planeMapping, ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK, 0, index);
-    }
+}
+
+void setSourceType(::com::rdk::hal::planecontrol::SourceType sourceType)
+{
+        for(const auto& index: videoPlaneIndex)
+        {
+            PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(planeMapping,sourceType, 0, index);
+        }
+}
+
+void PlaneControlTest::run ()
+{
+
     bool aidl_return = false;
-    PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(planeMapping, aidl_return);
+    std::vector<SourcePlaneMapping> retrievedMappings;
+    //Set plane mapping
+    std::vector<::com::rdk::hal::planecontrol::SourceType> allSourceTypes = {
+        ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK,
+        ::com::rdk::hal::planecontrol::SourceType::HDMI,
+        ::com::rdk::hal::planecontrol::SourceType::COMPOSITE
+    };
+    for(const auto& sourceType : allSourceTypes){
+        setSourceType(sourceType);
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(planeMapping, aidl_return);
+    }
+    planeMapping.clear();
+    if (mtestName == "Planecontrol_Swapping")
+    {
+        // Swap planes
+
+        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
+        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
+        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])",
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()),
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+        UT_ASSERT_TRUE(status.isOk());
+        aidl_return = false;
+        for (int i = 0; i < retrievedMappings.size(); i++)
+        {
+            SourcePlaneMapping temp = retrievedMappings[i];
+            if ((i + 1) < retrievedMappings.size())
+            {
+                PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(planeMapping, temp.sourceType, temp.sourceIndex, retrievedMappings[i + 1].destinationPlaneIndex);
+            }
+            else
+            {
+                PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(planeMapping, temp.sourceType, temp.sourceIndex, retrievedMappings[0].destinationPlaneIndex);
+            }
+        }
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(planeMapping, aidl_return);
+        planeMapping.clear();
+        retrievedMappings.clear();
+    }
+    //Adjust ASpect Ratio
+    if (mtestName == "Planecontrol_Aspectratio")
+    {
+        std::vector<::com::rdk::hal::planecontrol::AspectRatio> aspectRatios = {
+            ::com::rdk::hal::planecontrol::AspectRatio::FULL_WITH_ASPECT,
+            ::com::rdk::hal::planecontrol::AspectRatio::FULL_STRETCH,
+            ::com::rdk::hal::planecontrol::AspectRatio::ZOOM_WITH_ASPECT
+        };
+        aidl_return = false;
+        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
+        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
+        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])", \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+        UT_ASSERT_TRUE(status.isOk());
+        for (const auto& map: retrievedMappings){
+            for(const auto& aspectRatio : aspectRatios)
+            {
+                ::com::rdk::hal::PropertyValue propertyValue;
+                propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(static_cast<uint32_t>(aspectRatio));
+                PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ASPECT_RATIO,propertyValue,aidl_return);
+            }
+        }
+    }
+    //Change Z Order
+    if (mtestName == "Planecontrol_Zorder")
+    {
+        aidl_return = false;
+        retrievedMappings.clear();
+        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
+        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
+        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])", \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+        UT_ASSERT_TRUE(status.isOk());
+        for (const auto& map: retrievedMappings){
+            ::com::rdk::hal::PropertyValue propertyValue;
+            for(uint32_t zorder = 0; zorder < retrievedMappings.size();zorder++)
+            {
+                propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(zorder);
+                PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ZORDER,propertyValue,aidl_return);
+            }
+            propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
+            PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ZORDER,propertyValue,aidl_return);
+        }
+    }
+    if (mtestName == "Planecontrol_Visibility")
+    {
+        //Visibility of the planes
+        aidl_return = false;
+        retrievedMappings.clear();
+        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
+        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
+        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])", \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+        UT_ASSERT_TRUE(status.isOk());
+        for (const auto& map: retrievedMappings){
+            ::com::rdk::hal::PropertyValue propertyValue;
+            for(uint32_t visibility = 0; visibility < 2;visibility++)
+            {
+                propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(visibility);
+                PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::VISIBLE,propertyValue,aidl_return);
+            }
+            propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
+            PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::VISIBLE,propertyValue,aidl_return);
+        }
+    }
+    //Overscan
+    if (mtestName == "Planecontrol_Overscan")
+    {
+        aidl_return = false;
+        retrievedMappings.clear();
+        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
+        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
+        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])", \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+        UT_ASSERT_TRUE(status.isOk());
+        for (const auto& map: retrievedMappings){
+            ::com::rdk::hal::PropertyValue propertyValue;
+            for(uint32_t overscan = 0; overscan < 100;overscan+=10)
+            {
+                propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(overscan);
+                PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::OVERSCAN,propertyValue,aidl_return);
+            }
+            propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
+            PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::OVERSCAN,propertyValue,aidl_return);
+        }
+    }
+    //Alpha
+    if (mtestName == "Planecontrol_Alpha")
+    {
+        aidl_return = false;
+        retrievedMappings.clear();
+        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
+        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
+        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])", \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+        UT_ASSERT_TRUE(status.isOk());
+        for (const auto& map: retrievedMappings){
+            ::com::rdk::hal::PropertyValue propertyValue;
+            for(uint32_t alpha = 1; alpha < 256;alpha<<1)
+            {
+                propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>((alpha-1));
+                PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ALPHA,propertyValue,aidl_return);
+            }
+            propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(255);
+            PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ALPHA,propertyValue,aidl_return);
+        }
+    }
+
+    if (mtestName == "Planecontrol_Dynamicrange")
+    {
+    //Dynamic Range
+    // play different stream swith dynamic range in test config.
+    }
+    if (mtestName == "Planecontrol_Pixelformat")
+    {
+    //Resolution - pixel format
+    // play different stream with different resilution in test config.
+    }
+    if (mtestName == "Planecontrol_Position")
+    {
+    }
+    //Geometry - positions
+
+    if (mtestName == "Planecontrol_Size")
+    {
+    //Geomerty - Plane size
+    }
+    if (mtestName == "Planecontrol_Graphicsplane")
+    {
+    //Graphics - graphics window Hanlde
+    }
+
+    if (mtestName == "Planecontrol_Vsync")
+    {
+    //Vsync
+    }
 }
 
 class VTS_L3_PlaneControl : public UTCore
@@ -301,7 +483,7 @@ public:
 
                 std::thread sinkThread(&SinkTest::run,&sinkTest,true);
 
-                PlaneControlTest *planeControlTest = new PlaneControlTest();
+                PlaneControlTest *planeControlTest = new PlaneControlTest(sinkConfig.testName);
 
                 planeControlTest->run();
 
@@ -329,9 +511,11 @@ public:
         vector<videoDecoderTestConfiguration_t> decoderConfigs;
         vector<videoTestConfiguration_t> sinkConfigs;
 
-        vts_videodecoder_parse_testconfig(gVideoSinkTestConfiguration, VIDEODECODERMGR, gTestGroup, testName, decoderConfigs);
+        vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, VIDEODECODERMGR, gTestGroup, testName, decoderConfigs);
 
-        vts_videosink_parse_testconfig(gVideoSinkTestConfiguration, VIDEODECODERMGR, gTestGroup, testName, sinkConfigs);
+        vts_videosink_parse_testconfig(gPlaneControlTestConfiguration, VIDEODECODERMGR, gTestGroup, testName, sinkConfigs);
+
+        //s_planecontrol_parse_testconfig(gPlaneControlTestConfiguration, VIDEODECODERMGR, gTestGroup, testName, sinkConfigs);
 
         for (size_t i = 0; i < decoderConfigs.size(); ++i)
         {
@@ -368,11 +552,179 @@ public:
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_PlaneMapping)
 {
-    const char *testName = "Sink_QueueDepth";
+    const char *testName = "Planecontrol_mapping";
 
     runSingleProcessTest(testName);
 }
 
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Swapping)
+{
+    const char *testName = "Planecontrol_Swapping";
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Aspectratio)
+{
+    const char *testName = "Planecontrol_Aspectratio";
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Zorder)
+{
+    const char *testName = "Planecontrol_Zorder";
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Visibility)
+{
+    const char *testName = "Planecontrol_Visibility";
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Overscan)
+{
+    const char *testName = "Planecontrol_Overscan";
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Alpha)
+{
+    const char *testName = "Planecontrol_Alpha";
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Position)
+{
+    const char *testName = "Planecontrol_Position";
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Size)
+{
+    const char *testName = "Planecontrol_Size";
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Dynamicrange)
+{
+    const char *testName = "Planecontrol_Dynamicrange";
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Pixelmarket)
+{
+    const char *testName = "Planecontrol_Pixelformat";
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Graphicsplane)
+{
+    const char *testName = "Planecontrol_Graphicsplane";
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the sink's ability to report correct queue depth
+ *        Type: Sequential
+ *        Modes: Non-Tunnel, Non-Secure
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 001@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Vsync)
+{
+    const char *testName = "Planecontrol_Vsync";
+
+    runSingleProcessTest(testName);
+}
 /** @} */ // End of VIDEO_SINK_HALTEST L3 File
 /** @} */ // End of VIDEO_SINK_HALTEST
 /** @} */ // End of VIDEO_SINK Module

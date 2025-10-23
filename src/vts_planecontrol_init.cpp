@@ -50,8 +50,10 @@
  *
  */
 #include "vts_planecontrol.h"
+#include "vts_planecontrol_parse_testconfig.h"
 
 sp<IPlaneControl> gPlaneControlservice;
+void *gPlaneControlTestConfiguration;
 
 UT_status_t VTS_PlaneControl_init()
 {
@@ -65,6 +67,7 @@ UT_status_t VTS_PlaneControl_init()
         UT_LOG_ERROR("Failed to process the HFP file");
         return UT_STATUS_FAILURE;
     }
+    gPlaneControlTestConfiguration = vts_kvp_create_instance(PLANE_CONTROL_TEST_CONFIG_PATH);
 
     return UT_STATUS_OK;
 }

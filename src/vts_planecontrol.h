@@ -85,6 +85,7 @@
 #include <unistd.h>
 
 #include "com/rdk/hal/planecontrol/IPlaneControl.h"
+#include "com/rdk/hal/planecontrol/AspectRatio.h"
 #include "com/rdk/hal/planecontrol/BnPlaneControlListener.h"
 #include "vts_helper_functions.h"
 
@@ -137,6 +138,7 @@ static uint32_t gNoGraphicsTypePlanes = 0;
 
 extern std::vector<planeControl_Cap> gPlaneControl_hfp;
 extern sp<IPlaneControl> gPlaneControlservice;
+extern void *gPlaneControlTestConfiguration;
 
 // Function to parse the PlaneControl HFP profile
 UT_status_t vts_planecontrol_parsePlaneControlHFP();

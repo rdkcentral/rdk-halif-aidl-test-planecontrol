@@ -1,0 +1,3 @@
+include_0: planecontrol_stream_configuration/vts_l3_H264_HD_30_YUV420.yaml
+include_1: planecontrol_stream_configuration/vts_l3_H264_UHD_60_YUV420.yaml
+include_2: planecontrol_test_configuration/vts_l3_PlaneControl_PlaneMapping.yaml

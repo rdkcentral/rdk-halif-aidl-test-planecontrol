@@ -1,0 +1,28 @@
+IPlaneControlManager:
+  stream_download_path: "" #`URL` path to download the video test streams
+  input_streams_path: "assets/streams/input" #Target path where input streams are stored
+  reference_streams_path: "assets/streams/reference/" #Target path for reference decoded streams
+  L3:
+    Plane_Mapping:
+      Controls:
+        delay_between_decode_calls: 0 # Insert delay in msec between each `decodeBuffer()` call
+      Inputs:
+        Streams:
+          - Codec: H264
+            Name: H264_HD_30_YUV420
+            rms_diff_threshold: 0.5
+            decode_time_threshold: 10000000
+            sink_discardFramesUntilPts: -1
+            sink_underflow_pts: -1
+            sink_resumeTriggerPts: -1
+            sink_repeatPerFrame: 1
+            sink_flush_pts: 299997000
+            sink_flush_reset_pts: -1
+            sink_eos_pts: -1
+            sink_interFrameDelayMs: -1
+            sink_discontinuityPTS: -1
+        mapping:
+          - index: 0
+            source: VIDEO_SINK
+            souce_index: 0
+
