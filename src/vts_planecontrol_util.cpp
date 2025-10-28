@@ -134,6 +134,14 @@ std::string dynamicRangeToString(::com::rdk::hal::videodecoder::DynamicRange ran
     throw std::invalid_argument("Unknown dynamic range: " + drStr);
 }
 
+::com::rdk::hal::planecontrol::SourceType stringToSourceType(const std::string& str) {
+    if (str == "NONE") return ::com::rdk::hal::planecontrol::SourceType::NONE;
+    if (str == "VIDEO_SINK") return ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK;
+    if (str == "HDMI") return ::com::rdk::hal::planecontrol::SourceType::HDMI;
+    if (str == "COMPOSITE") return ::com::rdk::hal::planecontrol::SourceType::COMPOSITE;
+    throw std::invalid_argument("Invalid source type: " + str);
+}
+
 UT_status_t getPlaneControlService() {
     gPlaneControlservice = android::interface_cast<IPlaneControl>(
             defaultServiceManager()->getService(String16(IPlaneControl::serviceName().c_str())));
@@ -281,6 +289,37 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
             continue;
         }
 
+        // Read source types
+        std::string sourceTypesPath = planeBasePath + ".sourceTypes";
+        int32_t source_type_count = UT_KVP_PROFILE_GET_LIST_COUNT(sourceTypesPath.c_str());
+        UT_LOG_INFO("Plane %d: source type count=%d", i, source_type_count);
+        cap.sourceTypes.clear();
+        for (int32_t j = 0; j < source_type_count; ++j) {
+            std::string srcTypePath = sourceTypesPath + "." + std::to_string(j);
+            result_kvp.resize(UT_KVP_MAX_ELEMENT_SIZE);
+            status = ut_kvp_getStringField(kvp_instance, srcTypePath.c_str(), result_kvp.data(), UT_KVP_MAX_ELEMENT_SIZE);
+            if (status != UT_KVP_STATUS_SUCCESS) {
+                UT_LOG_WARNING("Failed to read source type at path: %s, status: %d", srcTypePath.c_str(), status);
+                continue;
+            }
+            result_kvp.resize(std::strlen(result_kvp.c_str()));
+            UT_LOG_DEBUG("Reading source type path: %s, value: %s", srcTypePath.c_str(), result_kvp.c_str());
+            if (result_kvp.empty()) {
+                UT_LOG_WARNING("Empty source type at path: %s", srcTypePath.c_str());
+                continue;
+            }
+            try {
+                cap.sourceTypes.push_back(stringToSourceType(result_kvp));
+            } catch (const std::invalid_argument& e) {
+                UT_LOG_WARNING("Invalid source type at path: %s, value: %s, error: %s",
+                               srcTypePath.c_str(), result_kvp.c_str(), e.what());
+            }
+        }
+        if (cap.sourceTypes.empty()) {
+            UT_LOG_WARNING("Plane %d has no valid source types, skipping", i);
+            continue;
+        }
+
         // Read supported dynamic ranges
         int32_t dynamic_range_count = UT_KVP_PROFILE_GET_LIST_COUNT(dynamicRangesPath.c_str());
         UT_LOG_INFO("Plane %d: dynamic range count=%d", i, dynamic_range_count);
@@ -329,9 +368,9 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
         cap.supportsZOrder = UT_KVP_PROFILE_GET_BOOL((planeBasePath + ".supportsZOrder").c_str());
         cap.vsyncDisplayLatency = UT_KVP_PROFILE_GET_UINT32((planeBasePath + ".vsyncDisplayLatency").c_str());
 
-        UT_LOG_INFO("Plane %d: index=%d, type=%d, %zu pixel formats, %zu dynamic ranges, colorDepth=%d, maxFrameRate=%d",
+        UT_LOG_INFO("Plane %d: index=%d, type=%d, %zu pixel formats, %zu source types, %zu dynamic ranges, colorDepth=%d, maxFrameRate=%d",
                     i, cap.planeIndex, static_cast<int>(cap.type), cap.pixelFormats.size(),
-                    cap.supportedDynamicRanges.size(), cap.colorDepth, cap.maxFrameRate);
+                    cap.sourceTypes.size(), cap.supportedDynamicRanges.size(), cap.colorDepth, cap.maxFrameRate);
 
         gPlaneControl_hfp.push_back(cap);
     }
@@ -370,6 +409,22 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::Capabilities& 
     UT_FAIL("Pixel formats mismatch for plane " << actual.planeIndex
                             << ", expected: [" << expected_str << "]"
                             << ", got: [" << actual_str << "]");
+    }
+
+    // Verify sourceTypes
+    auto expected_source_types = expected.sourceTypes;
+    auto actual_source_types = actual.sourceTypes;
+    std::sort(expected_source_types.begin(), expected_source_types.end());
+    std::sort(actual_source_types.begin(), actual_source_types.end());
+    UT_ASSERT_EQUAL(expected_source_types.size(), actual_source_types.size()) << "Source type count mismatch";
+    bool source_types_match = std::equal(expected_source_types.begin(), expected_source_types.end(), actual_source_types.begin());
+    if (!source_types_match) {
+        std::string expected_str, actual_str;
+        for (const auto& st : expected_source_types) expected_str += sourceTypeToString(st) + ",";
+        for (const auto& st : actual_source_types) actual_str += sourceTypeToString(st) + ",";
+        UT_FAIL("Source types mismatch for plane " << actual.planeIndex
+                                << ", expected: [" << expected_str << "]"
+                                << ", got: [" << actual_str << "]");
     }
 
     // Verify supportedDynamicRanges
