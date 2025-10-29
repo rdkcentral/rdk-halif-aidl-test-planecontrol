@@ -66,14 +66,22 @@
 
 #include <ut.h>
 #include <ut_log.h>
+#include <vector>
 #include "ut_kvp_profile.h"
 #include "vts_videosink_helper_functions.h"
 #include "vts_videosink_parse_hfp.h"
+#include "vts_planecontrol.h"
 
 #define PLANE_CONTROL_TEST_CONFIG_PATH "./planecontrol_test_configuration/vts_l3_PlaneControl_test_config.yaml"
 
+struct planeControlTestConfig_t{
+    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> planeMappings;
+    std::vector<uint32_t> decoderIds;
+    std::string testName;
+};
+
 void* vts_kvp_create_instance(char *fileName);
-UT_status_t vts_planecontorl_parse_testconfig(void* pTestInstance, const char *module, const char *testGroup, const char *testName);
+UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *module, const char *testGroup, const char *testName,std::vector<planeControlTestConfig_t>& testConfigs);
 void vts_kvp_destroy_instance(void *instance);
 
 #endif //__VTS_VIDEOSINK_PARSE_TESTCONFIG_H__

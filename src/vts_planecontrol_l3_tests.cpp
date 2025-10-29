@@ -59,6 +59,7 @@
 #include "vts_videosink_helper_functions.h"
 #include "vts_videosink_parse_hfp.h"
 #include "vts_videosink_parse_testconfig.h"
+#include "vts_planecontrol_parse_testconfig.h"
 #include "vts_videosink.h"
 #include "vts_videodecoder.h"
 #include "vts_planecontrol.h"
@@ -96,20 +97,19 @@ static sp<IAVBuffer> vts_avbuffer_getService()
 class PlaneControlTest
 {
 public:
-    PlaneControlTest(const std::string &testName);
+    PlaneControlTest(planeControlTestConfig_t planeConfig);
     void run ();
 
 
 private:
     IVideoSink::Id mSinkId;
-    std::string mtestName;
+    planeControlTestConfig_t mPlaneConfig;
 
 };
 
-PlaneControlTest::PlaneControlTest(const std::string &testName)
-                        : mtestName(testName)
+PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
+                        :mPlaneConfig(planeConfig)
 {
-    mtestName = testName;
     std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
     for (const auto& plane : capabilities) {
@@ -121,59 +121,41 @@ PlaneControlTest::PlaneControlTest(const std::string &testName)
 
 }
 
-void setSourceType(::com::rdk::hal::planecontrol::SourceType sourceType)
+static void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> planeMapping)
 {
-        for(const auto& index: videoPlaneIndex)
-        {
-            PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(planeMapping,sourceType, 0, index);
-        }
+    std::vector<SourcePlaneMapping> retrievedMappings;
+    UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
+    auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
+    UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])",
+                UT_Control_GetMapString(bool_mapTable, status.isOk()),
+                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
+    UT_ASSERT_TRUE(status.isOk());
+    //ASSERT TO check the set and get mappings
 }
+
 
 void PlaneControlTest::run ()
 {
 
     bool aidl_return = false;
-    std::vector<SourcePlaneMapping> retrievedMappings;
-    //Set plane mapping
-    std::vector<::com::rdk::hal::planecontrol::SourceType> allSourceTypes = {
-        ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK,
-        ::com::rdk::hal::planecontrol::SourceType::HDMI,
-        ::com::rdk::hal::planecontrol::SourceType::COMPOSITE
-    };
-    for(const auto& sourceType : allSourceTypes){
-        setSourceType(sourceType);
-        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(planeMapping, aidl_return);
-    }
-    planeMapping.clear();
-    if (mtestName == "Planecontrol_Swapping")
+    PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
+    checkPlaneMappings(mPlaneConfig.planeMappings);
+    if (mPlaneConfig.testName == "Planecontrol_Swapping")
     {
         // Swap planes
-
-        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
-        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
-        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])",
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_TRUE(status.isOk());
         aidl_return = false;
-        for (int i = 0; i < retrievedMappings.size(); i++)
+        
+        for (int i = 0; i < mPlaneConfig.planeMappings.size()-1; i++)
         {
-            SourcePlaneMapping temp = retrievedMappings[i];
-            if ((i + 1) < retrievedMappings.size())
-            {
-                PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(planeMapping, temp.sourceType, temp.sourceIndex, retrievedMappings[i + 1].destinationPlaneIndex);
-            }
-            else
-            {
-                PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(planeMapping, temp.sourceType, temp.sourceIndex, retrievedMappings[0].destinationPlaneIndex);
-            }
+            SourcePlaneMapping temp = mPlaneConfig.planeMappings[i];
+            mPlaneConfig.planeMappings[i] = mPlaneConfig.planeMappings[i+1];
+            mPlaneConfig.planeMappings[i+1] = temp;
         }
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(planeMapping, aidl_return);
-        planeMapping.clear();
-        retrievedMappings.clear();
+        checkPlaneMappings(mPlaneConfig.planeMappings);
     }
     //Adjust ASpect Ratio
-    if (mtestName == "Planecontrol_Aspectratio")
+    if (mPlaneConfig.testName == "Planecontrol_Aspectratio")
     {
         std::vector<::com::rdk::hal::planecontrol::AspectRatio> aspectRatios = {
             ::com::rdk::hal::planecontrol::AspectRatio::FULL_WITH_ASPECT,
@@ -181,13 +163,7 @@ void PlaneControlTest::run ()
             ::com::rdk::hal::planecontrol::AspectRatio::ZOOM_WITH_ASPECT
         };
         aidl_return = false;
-        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
-        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
-        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])", \
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_TRUE(status.isOk());
-        for (const auto& map: retrievedMappings){
+        for (const auto& map: mPlaneConfig.planeMappings){
             for(const auto& aspectRatio : aspectRatios)
             {
                 ::com::rdk::hal::PropertyValue propertyValue;
@@ -197,19 +173,12 @@ void PlaneControlTest::run ()
         }
     }
     //Change Z Order
-    if (mtestName == "Planecontrol_Zorder")
+    if (mPlaneConfig.testName == "Planecontrol_Zorder")
     {
         aidl_return = false;
-        retrievedMappings.clear();
-        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
-        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
-        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])", \
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_TRUE(status.isOk());
-        for (const auto& map: retrievedMappings){
+        for (const auto& map: mPlaneConfig.planeMappings){
             ::com::rdk::hal::PropertyValue propertyValue;
-            for(uint32_t zorder = 0; zorder < retrievedMappings.size();zorder++)
+            for(uint32_t zorder = 0; zorder < mPlaneConfig.planeMappings.size();zorder++)
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(zorder);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ZORDER,propertyValue,aidl_return);
@@ -218,18 +187,11 @@ void PlaneControlTest::run ()
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ZORDER,propertyValue,aidl_return);
         }
     }
-    if (mtestName == "Planecontrol_Visibility")
+    if (mPlaneConfig.testName == "Planecontrol_Visibility")
     {
         //Visibility of the planes
         aidl_return = false;
-        retrievedMappings.clear();
-        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
-        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
-        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])", \
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_TRUE(status.isOk());
-        for (const auto& map: retrievedMappings){
+        for (const auto& map: mPlaneConfig.planeMappings){
             ::com::rdk::hal::PropertyValue propertyValue;
             for(uint32_t visibility = 0; visibility < 2;visibility++)
             {
@@ -241,17 +203,10 @@ void PlaneControlTest::run ()
         }
     }
     //Overscan
-    if (mtestName == "Planecontrol_Overscan")
+    if (mPlaneConfig.testName == "Planecontrol_Overscan")
     {
         aidl_return = false;
-        retrievedMappings.clear();
-        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
-        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
-        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])", \
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_TRUE(status.isOk());
-        for (const auto& map: retrievedMappings){
+        for (const auto& map: mPlaneConfig.planeMappings){
             ::com::rdk::hal::PropertyValue propertyValue;
             for(uint32_t overscan = 0; overscan < 100;overscan+=10)
             {
@@ -263,17 +218,10 @@ void PlaneControlTest::run ()
         }
     }
     //Alpha
-    if (mtestName == "Planecontrol_Alpha")
+    if (mPlaneConfig.testName == "Planecontrol_Alpha")
     {
         aidl_return = false;
-        retrievedMappings.clear();
-        UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
-        auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
-        UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])", \
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_TRUE(status.isOk());
-        for (const auto& map: retrievedMappings){
+        for (const auto& map: mPlaneConfig.planeMappings){
             ::com::rdk::hal::PropertyValue propertyValue;
             for(uint32_t alpha = 1; alpha < 256;alpha<<1)
             {
@@ -285,31 +233,31 @@ void PlaneControlTest::run ()
         }
     }
 
-    if (mtestName == "Planecontrol_Dynamicrange")
+    if (mPlaneConfig.testName == "Planecontrol_Dynamicrange")
     {
     //Dynamic Range
     // play different stream swith dynamic range in test config.
     }
-    if (mtestName == "Planecontrol_Pixelformat")
+    if (mPlaneConfig.testName == "Planecontrol_Pixelformat")
     {
     //Resolution - pixel format
     // play different stream with different resilution in test config.
     }
-    if (mtestName == "Planecontrol_Position")
+    if (mPlaneConfig.testName == "Planecontrol_Position")
     {
     }
     //Geometry - positions
 
-    if (mtestName == "Planecontrol_Size")
+    if (mPlaneConfig.testName == "Planecontrol_Size")
     {
     //Geomerty - Plane size
     }
-    if (mtestName == "Planecontrol_Graphicsplane")
+    if (mPlaneConfig.testName == "Planecontrol_Graphicsplane")
     {
     //Graphics - graphics window Hanlde
     }
 
-    if (mtestName == "Planecontrol_Vsync")
+    if (mPlaneConfig.testName == "Planecontrol_Vsync")
     {
     //Vsync
     }
@@ -434,73 +382,106 @@ public:
                             decoderId.value) != gAvailableVideodecoders_hfp.end();
     }
 
-    void runPlaneControlTest(videoDecoderTestConfiguration_t testConfig, videoTestConfiguration_t sinkConfig)
+    void runPlaneControlTest(videoDecoderTestConfiguration_t testConfig, videoTestConfiguration_t sinkConfig,planeControlTestConfig_t planeConfig)
     {
-        try {
-            for (const auto& [_sinkId, sinkHandle, controlListener, eventListener] : mVideoSinkList)
+        try
+        {
+            for (int i = 0; i< planeConfig.planeMappings.size();i++)
             {
-                if (!isVideoSinkUsable(_sinkId))
-                {
-                    UT_LOG_INFO("[SinkID: %d] is not usable, skipping.", _sinkId.value);
-                    continue;
-                }
-
-                // Find a usable decoder
+                IVideoSink::Id sinkId;
+                sp<IVideoSink> sinkHandle;
+                sp<VideoSinkControllerListener> sinkControlListener;
+                sp<VideoSinkEventListener> sinkEventListener;
                 IVideoDecoder::Id decoderId;
                 sp<IVideoDecoder> decoderHandle;
                 sp<VideoDecoderControllerListener> decoderControlListener;
                 sp<VideoDecoderEventListener> decoderEventListener;
                 bool foundDecoder = false;
-
-                for (const auto& [_decoderId, _decoderHandle, _controlListener, _eventListener, _capabilities] : mVideoDecoderList)
+                bool foundSink = false;
+                if (planeConfig.planeMappings[i].sourceType == ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK)
                 {
-                    if (isVideoDecoderUsable(_decoderId))
+                    for (const auto &[_sinkId, _sinkHandle, _controlListener, _eventListener] : mVideoSinkList)
                     {
-                        decoderId = _decoderId;
-                        decoderHandle = _decoderHandle;
-                        decoderControlListener = _controlListener;
-                        decoderEventListener = _eventListener;
-                        foundDecoder = true;
-                        break;
+                        if (planeConfig.planeMappings[i].sourceIndex != _sinkId.value)
+                        {
+                            UT_LOG_INFO("[SinkID: %d] is not as per configuration, skipping.", _sinkId.value);
+                            continue;
+                        }
+                        if (isVideoSinkUsable(_sinkId))
+                        {
+                            sinkId = _sinkId;
+                            sinkHandle = sinkHandle;
+                            sinkControlListener = _controlListener;
+                            sinkEventListener = _eventListener;
+                            foundSink = true;
+                            UT_LOG_INFO("[SinkID: %d] is not usable, skipping.", _sinkId.value);
+                            break;
+                        }
+                    }
+                    if (!foundSink)
+                    {
+                        UT_LOG_WARNING("No usable Sink found");
+                        continue;
+                    }
+                    // Find a usable decoder
+
+                    for (const auto &[_decoderId, _decoderHandle, _controlListener, _eventListener, _capabilities] : mVideoDecoderList)
+                    {
+                        if (planeConfig.decoderIds[i] != _decoderId.value)
+                        {
+                            UT_LOG_INFO("[DecoderID: %d] is not as per configuration, skipping.", _decoderId.value);
+                            continue;
+                        }
+                        if (isVideoDecoderUsable(_decoderId))
+                        {
+                            decoderId = _decoderId;
+                            decoderHandle = _decoderHandle;
+                            decoderControlListener = _controlListener;
+                            decoderEventListener = _eventListener;
+                            foundDecoder = true;
+                            break;
+                        }
+                    }
+
+                    if (!foundDecoder)
+                    {
+                        UT_LOG_WARNING("No usable decoder found");
+                        continue;
+                    }
+
+
+                    SinkTest sinkTest(sinkId, sinkHandle, sinkControlListener, sinkEventListener,
+                                      decoderControlListener, testConfig, sinkConfig);
+
+                    std::thread sinkThread(&SinkTest::run, &sinkTest, true);
+                    videoDecoderTest decodeTest(decoderId, decoderHandle, decoderControlListener,
+                                                decoderEventListener, mAVBufferManager, false, false, testConfig, mAVbufferHelper);
+                    std::thread decodeThread(&videoDecoderTest::run, &decodeTest, true);
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+                    PlaneControlTest *planeControlTest = new PlaneControlTest(planeConfig);
+                    planeControlTest->run();
+
+                    if (sinkThread.joinable())
+                    {
+                        sinkThread.join();
+                    }
+
+                    if (decodeThread.joinable())
+                    {
+                        decodeThread.join();
                     }
                 }
-
-                if (!foundDecoder)
-                {
-                    UT_LOG_WARNING("No usable decoder found for Sink ID %d, skipping.", _sinkId.value);
-                    continue;
-                }
-
-                videoDecoderTest decodeTest(decoderId, decoderHandle, decoderControlListener,
-                                        decoderEventListener, mAVBufferManager, false, false, testConfig, mAVbufferHelper);
-
-                std::thread decodeThread(&videoDecoderTest::run, &decodeTest, true);
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-                SinkTest sinkTest(_sinkId, sinkHandle, controlListener, eventListener,
-                                                decoderControlListener, testConfig, sinkConfig);
-
-                std::thread sinkThread(&SinkTest::run,&sinkTest,true);
-
-                PlaneControlTest *planeControlTest = new PlaneControlTest(sinkConfig.testName);
-
-                planeControlTest->run();
-
-                if (sinkThread.joinable())
-                {
-                    sinkThread.join();
-                }
-
-                if (decodeThread.joinable())
-                {
-                    decodeThread.join();
-                }
             }
-        } catch (const std::exception& ex) {
+        }
+        catch (const std::exception &ex)
+        {
             UT_LOG_ERROR("Exception in runSequentialSink: %s", ex.what());
             UT_ASSERT_TRUE(false);
-        } catch (...) {
+        }
+        catch (...)
+        {
             UT_LOG_ERROR("Unknown exception in runSequentialSink");
             UT_ASSERT_TRUE(false);
         }
@@ -510,19 +491,22 @@ public:
     {
         vector<videoDecoderTestConfiguration_t> decoderConfigs;
         vector<videoTestConfiguration_t> sinkConfigs;
+        vector<planeControlTestConfig_t> planeConfigs;
 
-        vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, VIDEODECODERMGR, gTestGroup, testName, decoderConfigs);
+        vts_planecontrol_parse_testconfig(gPlaneControlTestConfiguration, PLANE_CONTROL_MGR, gTestGroup, testName, planeConfigs);
 
-        vts_videosink_parse_testconfig(gPlaneControlTestConfiguration, VIDEODECODERMGR, gTestGroup, testName, sinkConfigs);
+        vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, PLANE_CONTROL_MGR, gTestGroup, testName, decoderConfigs);
 
-        //s_planecontrol_parse_testconfig(gPlaneControlTestConfiguration, VIDEODECODERMGR, gTestGroup, testName, sinkConfigs);
+        vts_videosink_parse_testconfig(gPlaneControlTestConfiguration, VIDEODECODERMGR, gTestGroup, "Sink_QueueDepth", sinkConfigs);
+
 
         for (size_t i = 0; i < decoderConfigs.size(); ++i)
         {
             auto& decoderConfig = decoderConfigs[i];
-            auto& sinkConfig = sinkConfigs[i];
+            auto& sinkConfig = sinkConfigs[0];
+            auto& planeConfig = planeConfigs[i];
 
-            runPlaneControlTest(decoderConfig, sinkConfig);
+            runPlaneControlTest(decoderConfig, sinkConfig,planeConfig);
         }
     }
 
