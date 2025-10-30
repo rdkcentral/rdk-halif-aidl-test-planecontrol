@@ -13,22 +13,22 @@ IPlaneControlManager:
           - test:
             - plane_index: 0
               source: VIDEO_SINK
-              souce_index: 0
+              source_index: 0
               decoderId: 0
               visiblility: true
             - plane_index: 1
               source: VIDEO_SINK
-              souce_index: 1
+              source_index: 1
               decoderId: 1
               visiblility: true
           - test:
             - plane_index: 0
               source: VIDEO_SINK
-              souce_index: 1
+              source_index: 1
               decoderId: 0
               visiblility: true
             - plane_index: 1
               source: VIDEO_SINK
-              souce_index: 0
+              source_index: 0
               decodeId: 1
               visiblility: true

@@ -58,7 +58,7 @@
  */
 
 /**
- * @file vts_videosink_parse_testconfig.cpp
+ * @file vts_planecontrol_parse_testconfig.cpp
  *
  */
 
@@ -72,7 +72,7 @@ static ::com::rdk::hal::planecontrol::SourceType stringToSourceType(const std::s
     if (typeStr == "VIDEO_SINK") return ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK;
     if (typeStr == "HDMI") return ::com::rdk::hal::planecontrol::SourceType::HDMI;
     if (typeStr == "COMPOSITE") return ::com::rdk::hal::planecontrol::SourceType::COMPOSITE;
-    throw std::invalid_argument("Unknown plane type: " + typeStr);
+    throw std::invalid_argument("Unknown source type: " + typeStr);
 }
 UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *module, const char *testGroup, const char *testName,std::vector<planeControlTestConfig_t>& testConfig)
 {
@@ -95,17 +95,17 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
 
         planeControlTestConfig_t testDetails = {};
         string configList = mapList + "." + to_string(i) + "test";
-        int32_t configCount = 0;
+        int32_t configCount = ut_kvp_getListCount(kvpTestInstance, configList.c_str());
         // === Only parse Control Parameters ===
         testDetails.testName = std::string(testName ? testName : "");
         for(int32_t j=0;j<configCount;j++)
         {
             ::com::rdk::hal::planecontrol::SourcePlaneMapping map;
             char tempBuffer[UT_KVP_MAX_ELEMENT_SIZE] = {0};
-            string planeIndex = configList + "." + to_string(j) + "plane_index";
-            string sourceType = configList + "." + to_string(j) + "source";
-            string sourceIndex = configList + "." + to_string(j) + "souce_index";
-            string decoderId = configList + "." + to_string(j) + "decoderId";
+            string planeIndex = configList + "." + to_string(j) + "." + "plane_index";
+            string sourceType = configList + "." + to_string(j) + "." + "source";
+            string sourceIndex = configList + "." + to_string(j) + "." + "source_index";
+            string decoderId = configList + "." + to_string(j) + "." + "decoderId";
             map.destinationPlaneIndex = ut_kvp_getUInt64Field(kvpTestInstance, planeIndex.c_str());
             status = ut_kvp_getStringField(kvpTestInstance, sourceType.c_str(), tempBuffer, UT_KVP_MAX_ELEMENT_SIZE);
             if (status == UT_KVP_STATUS_SUCCESS)

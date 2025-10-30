@@ -115,14 +115,6 @@ std::string dynamicRangeToString(::com::rdk::hal::videodecoder::DynamicRange ran
     throw std::invalid_argument("Unknown plane type: " + typeStr);
 }
 
-::com::rdk::hal::planecontrol::SourceType stringToSourceType(const std::string& typeStr) {
-    if (typeStr == "NONE") return ::com::rdk::hal::planecontrol::SourceType::NONE;
-    if (typeStr == "VIDEO_SINK") return ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK;
-    if (typeStr == "HDMI") return ::com::rdk::hal::planecontrol::SourceType::HDMI;
-    if (typeStr == "COMPOSITE") return ::com::rdk::hal::planecontrol::SourceType::COMPOSITE;
-    throw std::invalid_argument("Unknown plane type: " + typeStr);
-}
-
 ::com::rdk::hal::videodecoder::PixelFormat stringToPixelFormat(const std::string& str) {
     if (str == "YCBCR422") return ::com::rdk::hal::videodecoder::PixelFormat::YCBCR422;
     if (str == "YCBCR444") return ::com::rdk::hal::videodecoder::PixelFormat::YCBCR444;

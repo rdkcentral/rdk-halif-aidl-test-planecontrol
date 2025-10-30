@@ -53,7 +53,7 @@
  */
 
 /**
- * @file vts_planecontrol_l3_tests.c
+ * @file vts_planecontrol_l3_tests.cpp
  *
  */
 #include "vts_videosink_helper_functions.h"
@@ -144,17 +144,17 @@ void PlaneControlTest::run ()
     {
         // Swap planes
         aidl_return = false;
-        
+
         for (int i = 0; i < mPlaneConfig.planeMappings.size()-1; i++)
         {
             SourcePlaneMapping temp = mPlaneConfig.planeMappings[i];
             mPlaneConfig.planeMappings[i] = mPlaneConfig.planeMappings[i+1];
             mPlaneConfig.planeMappings[i+1] = temp;
         }
-        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(planeMapping, aidl_return);
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
     }
-    //Adjust ASpect Ratio
+    //Adjust Aspect Ratio
     if (mPlaneConfig.testName == "Planecontrol_Aspectratio")
     {
         std::vector<::com::rdk::hal::planecontrol::AspectRatio> aspectRatios = {
@@ -223,7 +223,7 @@ void PlaneControlTest::run ()
         aidl_return = false;
         for (const auto& map: mPlaneConfig.planeMappings){
             ::com::rdk::hal::PropertyValue propertyValue;
-            for(uint32_t alpha = 1; alpha < 256;alpha<<1)
+            for(uint32_t alpha = 1; alpha < 256; alpha<<=1)
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>((alpha-1));
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ALPHA,propertyValue,aidl_return);
@@ -236,12 +236,12 @@ void PlaneControlTest::run ()
     if (mPlaneConfig.testName == "Planecontrol_Dynamicrange")
     {
     //Dynamic Range
-    // play different stream swith dynamic range in test config.
+    // play different stream with dynamic range in test config.
     }
     if (mPlaneConfig.testName == "Planecontrol_Pixelformat")
     {
     //Resolution - pixel format
-    // play different stream with different resilution in test config.
+    // play different stream with different resolution in test config.
     }
     if (mPlaneConfig.testName == "Planecontrol_Position")
     {
@@ -254,7 +254,7 @@ void PlaneControlTest::run ()
     }
     if (mPlaneConfig.testName == "Planecontrol_Graphicsplane")
     {
-    //Graphics - graphics window Hanlde
+    //Graphics - graphics window Handle
     }
 
     if (mPlaneConfig.testName == "Planecontrol_Vsync")
@@ -410,11 +410,11 @@ public:
                         if (isVideoSinkUsable(_sinkId))
                         {
                             sinkId = _sinkId;
-                            sinkHandle = sinkHandle;
+                            sinkHandle = _sinkHandle;
                             sinkControlListener = _controlListener;
                             sinkEventListener = _eventListener;
                             foundSink = true;
-                            UT_LOG_INFO("[SinkID: %d] is not usable, skipping.", _sinkId.value);
+                            UT_LOG_INFO("[SinkID: %d] is available", _sinkId.value);
                             break;
                         }
                     }
