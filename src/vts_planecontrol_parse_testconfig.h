@@ -79,7 +79,7 @@ struct planeControlTestConfig_t{
     std::vector<uint32_t> decoderIds;
     std::vector<std::pair<uint32_t,uint32_t>> positions;
     std::vector<std::pair<uint32_t,uint32_t>> Size;
-    int graphcsPalneInex;
+    int graphcsPalneIndex;
     std::string testName;
 };
 

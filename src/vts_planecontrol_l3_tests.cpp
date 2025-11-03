@@ -24,19 +24,19 @@
  */
 
 /**
- * @addtogroup PLANE_CONTROL Video Sink Module
+ * @addtogroup PLANE_CONTROL Plane Control Module
  * @{
  *
  */
 
 /**
- * @defgroup PLANE_CONTROL_HALTEST Video Sink HAL Tests
+ * @defgroup PLANE_CONTROL_HALTEST Plane Control HAL Tests
  * @{
  *
  */
 
 /**
- * @defgroup PLANE_CONTROL_HALTEST_L3 Video Sink HAL Tests L3 File
+ * @defgroup PLANE_CONTROL_HALTEST_L3 Plane Control HAL Tests L3 File
  * @{
  * @parblock
  *
@@ -277,13 +277,13 @@ void PlaneControlTest::run ()
     {
         //Graphics - graphics window Handle
         int64_t native_handle;
-        PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(mPlaneConfig.graphcsPalneInex,native_handle);
+        PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(mPlaneConfig.graphcsPalneIndex,native_handle);
         PlaneControlGraphicsController controller;
         controller.setWindowHandle((void*) native_handle);
         controller.startRender();
         //sleep
         controller.stopRender();
-        PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(mPlaneConfig.graphcsPalneInex,native_handle);
+        PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(mPlaneConfig.graphcsPalneIndex,native_handle);
     }
 
     if (mPlaneConfig.testName == "Planecontrol_Vsync")
@@ -557,9 +557,7 @@ public:
 };
 
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the plane's ability to map video sources
  *
  * **Test Group ID:** 003@n
  * **Test Case ID:** 001@n
@@ -572,12 +570,10 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_PlaneMapping)
 }
 
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the plane's ability to swap video sources to plane
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 002@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Swapping)
 {
@@ -586,12 +582,10 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Swapping)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the plane's ability to set correct Aspect Ratio
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 003@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Aspectratio)
 {
@@ -600,12 +594,10 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Aspectratio)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the plane's ability to set Z Order
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 004@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Zorder)
 {
@@ -614,12 +606,10 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Zorder)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the plane's ability to se visibility of the plane
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 005@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Visibility)
 {
@@ -628,12 +618,10 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Visibility)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the plane's ability to set overscan
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 006@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Overscan)
 {
@@ -643,11 +631,9 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Overscan)
 }
 /**
  * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 007@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Alpha)
 {
@@ -656,12 +642,10 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Alpha)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the controller's ability to set plane position
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 008@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Position)
 {
@@ -670,12 +654,10 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Position)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the controller's ability to set plane size
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 009@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Size)
 {
@@ -684,12 +666,10 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Size)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the controller's ability to set the Dynamic Range
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 010@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Dynamicrange)
 {
@@ -698,12 +678,10 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Dynamicrange)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the Controllers's ability to set Pixelformat
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 011@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Pixelformat)
 {
@@ -712,12 +690,10 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Pixelformat)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the controller's ability to render graphics plane
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 012@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Graphicsplane)
 {
@@ -726,12 +702,10 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Graphicsplane)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the sink's ability to report correct queue depth
- *        Type: Sequential
- *        Modes: Non-Tunnel, Non-Secure
+ * @brief Test the controller's ability to report vsync delay
  *
  * **Test Group ID:** 003@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 013@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Vsync)
 {
@@ -739,7 +713,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Vsync)
 
     runSingleProcessTest(testName);
 }
-/** @} */ // End of VIDEO_SINK_HALTEST L3 File
-/** @} */ // End of VIDEO_SINK_HALTEST
-/** @} */ // End of VIDEO_SINK Module
+/** @} */ // End of PLANE_CONTROL_HALTEST L3 File
+/** @} */ // End of PLANE_CONTROL_HALTEST
+/** @} */ // End of PLANE_CONTROL Module
 /** @} */ // End of HPK

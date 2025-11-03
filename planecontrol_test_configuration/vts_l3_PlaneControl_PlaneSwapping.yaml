@@ -30,5 +30,5 @@ IPlaneControlManager:
             - plane_index: 1
               source: VIDEO_SINK
               source_index: 0
-              decodeId: 1
+              decoderId: 1
               visibility: true
