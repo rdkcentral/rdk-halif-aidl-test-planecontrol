@@ -3,14 +3,15 @@ IPlaneControlManager:
   input_streams_path: "assets/streams/input" #Target path where input streams are stored
   reference_streams_path: "assets/streams/reference/" #Target path for reference decoded streams
   L3:
-    Plane_Swapping:
-      Controls:
-        delay_between_mapping_calls: 0 # Insert delay in msec between each `decodeBuffer()` call
+    Planecontrol_Swapping:
       Inputs:
         streams:
-              Stream: H264_HD_30_YUV420
+          - Codec: H264
+            Name: H264_HD_30_YUV420
+            rms_diff_threshold: 0.5
+            decode_time_threshold: 10000000
         mapping:
-          - test:
+          - step:
             - plane_index: 0
               source: VIDEO_SINK
               source_index: 0
@@ -21,7 +22,7 @@ IPlaneControlManager:
               source_index: 1
               decoderId: 1
               visibility: true
-          - test:
+          - step:
             - plane_index: 0
               source: VIDEO_SINK
               source_index: 1

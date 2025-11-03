@@ -80,7 +80,9 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
     ut_kvp_instance_t* kvpTestInstance = (ut_kvp_instance_t*)pTestInstance;
     string testList = string(module) + "." + string(testGroup) + "." + string(testName);
     string mapList = testList + "." + "Inputs" + "." + "Mapping";
+    string stepDelay = testList+ "." + "Controls"+ "." + "delay_between_steps"
     int32_t mapCount = 0;
+    uint32_t _stepDelay = ut_kvp_getUInt64Field(kvpTestInstance, positionX.c_str());
 
     mapCount = ut_kvp_getListCount(kvpTestInstance, mapList.c_str());
     if (mapCount <= 0)
@@ -94,18 +96,23 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
     {
 
         planeControlTestConfig_t testDetails = {};
-        string configList = mapList + "." + to_string(i) + "test";
-        int32_t configCount = ut_kvp_getListCount(kvpTestInstance, configList.c_str());
+        string stepList = mapList + "." + to_string(i) + "step";
+        int32_t stepCount = ut_kvp_getListCount(kvpTestInstance, stepList.c_str());
         // === Only parse Control Parameters ===
         testDetails.testName = std::string(testName ? testName : "");
-        for(int32_t j=0;j<configCount;j++)
+        testDetails.stepDelay = _stepDelay;
+        for(int32_t j=0;j<stepCount;j++)
         {
             ::com::rdk::hal::planecontrol::SourcePlaneMapping map;
             char tempBuffer[UT_KVP_MAX_ELEMENT_SIZE] = {0};
-            string planeIndex = configList + "." + to_string(j) + "." + "plane_index";
-            string sourceType = configList + "." + to_string(j) + "." + "source";
-            string sourceIndex = configList + "." + to_string(j) + "." + "source_index";
-            string decoderId = configList + "." + to_string(j) + "." + "decoderId";
+            string planeIndex = stepList + "." + to_string(j) + "." + "plane_index";
+            string sourceType = stepList + "." + to_string(j) + "." + "source";
+            string sourceIndex = stepList + "." + to_string(j) + "." + "source_index";
+            string decoderId = stepList + "." + to_string(j) + "." + "decoderId";
+            string positionX = stepList + "." + to_string(j) + "." + "X";
+            string positionY = stepList + "." + to_string(j) + "." + "Y";
+            string height = stepList + "." + to_string(j) + "." + "height";
+            string width = stepList + "." + to_string(j) + "." + "width";
             map.destinationPlaneIndex = ut_kvp_getUInt64Field(kvpTestInstance, planeIndex.c_str());
             status = ut_kvp_getStringField(kvpTestInstance, sourceType.c_str(), tempBuffer, UT_KVP_MAX_ELEMENT_SIZE);
             if (status == UT_KVP_STATUS_SUCCESS)
@@ -113,9 +120,14 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
                 map.sourceType = stringToSourceType(string(tempBuffer));
             }
             map.sourceIndex = ut_kvp_getUInt64Field(kvpTestInstance, sourceIndex.c_str());
-            uint32_t _decoderId = ut_kvp_getUInt64Field(kvpTestInstance, decoderId.c_str());
-            testDetails.decoderIds.push_back(_decoderId);
+            testDetails.decoderIds.push_back(ut_kvp_getUInt64Field(kvpTestInstance, decoderId.c_str()));
             testDetails.planeMappings.push_back(map);
+            uint32_t _x = ut_kvp_getUInt64Field(kvpTestInstance, positionX.c_str());
+            uint32_t _y = ut_kvp_getUInt64Field(kvpTestInstance, positionY.c_str());
+            uint32_t _height = ut_kvp_getUInt64Field(kvpTestInstance, height.c_str());
+            uint32_t _width = ut_kvp_getUInt64Field(kvpTestInstance, width.c_str());
+            testDetials.positions.push_back(std::make_pair(_x,_y ));
+            testDetails.size.push_back(std::make_pair(_height,_width));
         }
         testConfig.push_back(testDetails);
 

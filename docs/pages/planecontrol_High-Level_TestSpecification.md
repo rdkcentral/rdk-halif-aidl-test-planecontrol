@@ -154,17 +154,17 @@ The table below summarizes the L3 test cases executed using various audio stream
 
 |#|Test|Mapping|Swapping|Aspect Ratio|Z Order|Visibility|over scan|Alpha|Plane Position|Plane Size|Dynamic Range|Pixel Format|Graphics Window|vsync Latency|
 |-|----|------|------|-------------|----|-------------|---|-----|----------|-----------|-----|-----|----|----|
-|1| planecontrol_mapping |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
-|2| planecontrol_swapping|✔|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
-|3| planecontrol_aspectratio|✔|✘|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
-|4| planecontrol_zorder|✔|✘|✘|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|
-|5| planecontrol_visibility|✔|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|✘|✘|
-|6| planecontrol_overscan|✔|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|✘|
-|7| planecontrol_Aplpha|✔|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|
-|8| planecontrol_position|✔|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|
-|8| planecontrol_size|✔|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|
-|8| planecontrol_dynamicrage|✔|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|
-|8| planecontrol_resolution|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|
-|8| planecontrol_graphics|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|
-|8| planecontrol_vsync|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|
+|1| Planecontrol_Mapping |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
+|2| Planecontrol_Swapping |✔|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
+|3| Planecontrol_Aspectratio|✔|✘|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
+|4| Planecontrol_Zorder |✔|✘|✘|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|
+|5| Planecontrol_Visibility |✔|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|✘|✘|
+|6| Planecontrol_Overscan|✔|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|✘|
+|7| Planecontrol_Alpha |✔|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|
+|8| Planecontrol_Position |✔|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|
+|8| Planecontrol_Size |✔|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|
+|8| Planecontrol_Dynamicrange |✔|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|
+|8| Planecontrol_Pixelformat |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|
+|8| Planecontrol_Graphicsplane |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|
+|8| Planecontrol_Vsync |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|
 

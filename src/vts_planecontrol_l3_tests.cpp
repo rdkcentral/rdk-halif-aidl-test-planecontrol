@@ -141,6 +141,7 @@ void PlaneControlTest::run ()
     bool aidl_return = false;
     PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
     checkPlaneMappings(mPlaneConfig.planeMappings);
+    std::thread::sleep_for(std::thread::millisecond(mPlaneConfif.stepDelay));
     if (mPlaneConfig.testName == "Planecontrol_Swapping")
     {
         // Swap planes
@@ -154,6 +155,7 @@ void PlaneControlTest::run ()
         }
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
+        std::thread::sleep_for(std::thread::millisecond(mPlaneConfif.stepDelay));
     }
     //Adjust Aspect Ratio
     if (mPlaneConfig.testName == "Planecontrol_Aspectratio")
@@ -170,6 +172,7 @@ void PlaneControlTest::run ()
                 ::com::rdk::hal::PropertyValue propertyValue;
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(static_cast<uint32_t>(aspectRatio));
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ASPECT_RATIO,propertyValue,aidl_return);
+                std::thread::sleep_for(std::thread::millisecond(mPlaneConfif.stepDelay));
             }
         }
     }
@@ -183,6 +186,7 @@ void PlaneControlTest::run ()
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(zorder);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ZORDER,propertyValue,aidl_return);
+                std::thread::sleep_for(std::thread::millisecond(mPlaneConfif.stepDelay));
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ZORDER,propertyValue,aidl_return);
@@ -198,6 +202,7 @@ void PlaneControlTest::run ()
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(visibility);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::VISIBLE,propertyValue,aidl_return);
+                std::thread::sleep_for(std::thread::millisecond(mPlaneConfif.stepDelay));
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::VISIBLE,propertyValue,aidl_return);
@@ -213,6 +218,7 @@ void PlaneControlTest::run ()
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(overscan);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::OVERSCAN,propertyValue,aidl_return);
+                std::thread::sleep_for(std::thread::millisecond(mPlaneConfif.stepDelay));
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::OVERSCAN,propertyValue,aidl_return);
@@ -228,6 +234,7 @@ void PlaneControlTest::run ()
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>((alpha-1));
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ALPHA,propertyValue,aidl_return);
+                std::thread::sleep_for(std::thread::millisecond(mPlaneConfif.stepDelay));
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(255);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ALPHA,propertyValue,aidl_return);
@@ -281,7 +288,7 @@ void PlaneControlTest::run ()
         PlaneControlGraphicsController controller;
         controller.setWindowHandle((void*) native_handle);
         controller.startRender();
-        //sleep
+        std::thread::sleep_for(std::thread::millisecond(mPlaneConfif.stepDelay));
         controller.stopRender();
         PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(mPlaneConfig.graphcsPalneIndex,native_handle);
     }
@@ -562,9 +569,9 @@ public:
  * **Test Group ID:** 003@n
  * **Test Case ID:** 001@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_PlaneMapping)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Mapping)
 {
-    const char *testName = "Planecontrol_mapping";
+    const char *testName = "Planecontrol_Mapping";
 
     runSingleProcessTest(testName);
 }
@@ -575,7 +582,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_PlaneMapping)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 002@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Swapping)
+UT_ADD_TEST(VTS_L3_PlaneControl,Planecontrol_Swapping)
 {
     const char *testName = "Planecontrol_Swapping";
 
@@ -587,7 +594,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Swapping)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 003@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Aspectratio)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Aspectratio)
 {
     const char *testName = "Planecontrol_Aspectratio";
 
@@ -599,7 +606,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Aspectratio)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 004@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Zorder)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Zorder)
 {
     const char *testName = "Planecontrol_Zorder";
 
@@ -611,7 +618,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Zorder)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 005@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Visibility)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Visibility)
 {
     const char *testName = "Planecontrol_Visibility";
 
@@ -623,7 +630,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Visibility)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 006@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Overscan)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Overscan)
 {
     const char *testName = "Planecontrol_Overscan";
 
@@ -635,7 +642,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Overscan)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 007@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Alpha)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Alpha)
 {
     const char *testName = "Planecontrol_Alpha";
 
@@ -647,7 +654,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Alpha)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 008@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Position)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Position)
 {
     const char *testName = "Planecontrol_Position";
 
@@ -659,7 +666,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Position)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 009@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Size)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Size)
 {
     const char *testName = "Planecontrol_Size";
 
@@ -671,7 +678,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Size)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 010@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Dynamicrange)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Dynamicrange)
 {
     const char *testName = "Planecontrol_Dynamicrange";
 
@@ -683,7 +690,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Dynamicrange)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 011@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Pixelformat)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Pixelformat)
 {
     const char *testName = "Planecontrol_Pixelformat";
 
@@ -695,7 +702,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Pixelformat)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 012@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Graphicsplane)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Graphicsplane)
 {
     const char *testName = "Planecontrol_Graphicsplane";
 
@@ -707,7 +714,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Graphicsplane)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 013@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Vsync)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Vsync)
 {
     const char *testName = "Planecontrol_Vsync";
 

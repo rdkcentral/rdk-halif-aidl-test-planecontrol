@@ -78,9 +78,10 @@ struct planeControlTestConfig_t{
     std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> planeMappings;
     std::vector<uint32_t> decoderIds;
     std::vector<std::pair<uint32_t,uint32_t>> positions;
-    std::vector<std::pair<uint32_t,uint32_t>> Size;
-    int graphcsPalneIndex;
+    std::vector<std::pair<uint32_t,uint32_t>> size;
+    uint32_t graphcsPalneIndex;
     std::string testName;
+    uint32_t stepDelay;
 };
 
 void* vts_kvp_create_instance(char *fileName);
