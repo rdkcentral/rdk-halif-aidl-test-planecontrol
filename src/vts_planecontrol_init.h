@@ -60,6 +60,7 @@
 
 UT_status_t VTS_PlaneControl_init();
 
+void VTS_PlaneControl_destroy();
 
 #endif //__VTS_PLANECONTROL_INIT_H__
 

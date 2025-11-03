@@ -32,21 +32,21 @@
  */
 
 /**
- * @addtogroup VIDEO_SINK Video Sink Module
+ * @addtogroup PLANECONTROL Planecontrol Module
  * @{
  */
 
 /**
- * @addtogroup VIDEO_SINK_HALTEST Video Sink HAL Tests
+ * @addtogroup PLANECONTROL_HALTEST Planecontrol HAL Tests
  * @{
  */
 
 /**
- * @defgroup VIDEO_SINK_HALTEST_PARSE_TESTCONFIG_HEADER Video Sink HAL Tests parse test configuration Header File
+ * @defgroup PLANECONTROL_HALTEST_PARSE_TESTCONFIG_HEADER Planecontrol HAL Tests parse test configuration Header File
  * @{
  * @parblock
  *
- * ### Parse test configuration functions for Video Sink :
+ * ### Parse test configuration functions for Plane Control :
  *
  * Parse test configuration functions required for the module across all vendors.
  *
@@ -58,7 +58,7 @@
  */
 
 /**
- * @file vts_videosink_parse_testconfig.h
+ * @file vts_planecontrol_parse_testconfig.h
  *
  */
 #ifndef __VTS_PLANECONTROL_PARSE_TESTCONFIG_H__
@@ -77,6 +77,9 @@
 struct planeControlTestConfig_t{
     std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> planeMappings;
     std::vector<uint32_t> decoderIds;
+    std::vector<std::pair<uint32_t,uint32_t>> positions;
+    std::vector<std::pair<uint32_t,uint32_t>> Size;
+    int graphcsPalneInex;
     std::string testName;
 };
 
@@ -84,10 +87,10 @@ void* vts_kvp_create_instance(char *fileName);
 UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *module, const char *testGroup, const char *testName,std::vector<planeControlTestConfig_t>& testConfigs);
 void vts_kvp_destroy_instance(void *instance);
 
-#endif //__VTS_VIDEOSINK_PARSE_TESTCONFIG_H__
+#endif //__VTS_PLANECONTROL_PARSE_TESTCONFIG_H__
 
 
-/** @} */ // End of VIDEO_SINK_HALTEST_PARSE_TESTCONFIG_HEADER
-/** @} */ // End of VIDEO_SINK_HALTEST
-/** @} */ // End of VIDEO_SINK
+/** @} */ // End of PLANECONTROL_HALTEST_PARSE_TESTCONFIG_HEADER
+/** @} */ // End of PLANECONTROL_HALTEST
+/** @} */ // End of PLANECONTROL
 /** @} */ // End of HPK

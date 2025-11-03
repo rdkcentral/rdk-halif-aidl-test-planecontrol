@@ -72,6 +72,10 @@ UT_status_t VTS_PlaneControl_init()
     return UT_STATUS_OK;
 }
 
+void VTS_PlaneControl_destroy()
+{
+    vts_kvp_destroy_instance(gPlaneControlTestConfiguration);
+}
  /** @} */ // End of Plane_Control_Halif_Test_Init
  /** @} */ // End of Plane_Control_Halif_Test
  /** @} */ // End of Plane_Control

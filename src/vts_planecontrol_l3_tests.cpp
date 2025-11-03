@@ -60,6 +60,7 @@
 #include "vts_videosink_parse_hfp.h"
 #include "vts_videosink_parse_testconfig.h"
 #include "vts_planecontrol_parse_testconfig.h"
+#include "vts_planecontrol_graphicscontroller.h"
 #include "vts_videosink.h"
 #include "vts_videodecoder.h"
 #include "vts_planecontrol.h"
@@ -245,16 +246,44 @@ void PlaneControlTest::run ()
     }
     if (mPlaneConfig.testName == "Planecontrol_Position")
     {
+        aidl_return = false;
+        for (int i=0;i< mPlaneConfig.planeMappings.size();i++){
+            ::com::rdk::hal::planecontrol::SourcePlaneMapping map = mPlaneConfig.planeMappings[i];
+            std::pair position = mPlaneConfig.positions[i];
+            ::com::rdk::hal::PropertyValue propertyValue;
+            propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(position.first);
+            PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::X,propertyValue,aidl_return);
+            propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(position.second);
+            PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::Y,propertyValue,aidl_return);
+        }
     }
     //Geometry - positions
 
     if (mPlaneConfig.testName == "Planecontrol_Size")
     {
+        aidl_return = false;
+        for (int i=0;i< mPlaneConfig.planeMappings.size();i++){
+            ::com::rdk::hal::planecontrol::SourcePlaneMapping map = mPlaneConfig.planeMappings[i];
+            std::pair size = mPlaneConfig.Size[i];
+            ::com::rdk::hal::PropertyValue propertyValue;
+            propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(size.first);
+            PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::HEIGHT,propertyValue,aidl_return);
+            propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(size.second);
+            PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::WIDTH,propertyValue,aidl_return);
+        }
     //Geomerty - Plane size
     }
     if (mPlaneConfig.testName == "Planecontrol_Graphicsplane")
     {
-    //Graphics - graphics window Handle
+        //Graphics - graphics window Handle
+        int64_t native_handle;
+        PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(mPlaneConfig.graphcsPalneInex,native_handle);
+        PlaneControlGraphicsController controller;
+        controller.setWindowHandle((void*) native_handle);
+        controller.startRender();
+        //sleep
+        controller.stopRender();
+        PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(mPlaneConfig.graphcsPalneInex,native_handle);
     }
 
     if (mPlaneConfig.testName == "Planecontrol_Vsync")
@@ -396,6 +425,8 @@ public:
                 sp<IVideoDecoder> decoderHandle;
                 sp<VideoDecoderControllerListener> decoderControlListener;
                 sp<VideoDecoderEventListener> decoderEventListener;
+                std::unique_ptr<std::thread> sinkThread = nullptr;
+                std::unique_ptr<std::thread> decoderThread = nullptr;
                 bool foundDecoder = false;
                 bool foundSink = false;
                 if (planeConfig.planeMappings[i].sourceType == ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK)
@@ -453,25 +484,24 @@ public:
                     SinkTest sinkTest(sinkId, sinkHandle, sinkControlListener, sinkEventListener,
                                       decoderControlListener, testConfig, sinkConfig);
 
-                    std::thread sinkThread(&SinkTest::run, &sinkTest, true);
+                    sinkThread = std::make_unique<std::thread>(&SinkTest::run, &sinkTest, true);
                     videoDecoderTest decodeTest(decoderId, decoderHandle, decoderControlListener,
                                                 decoderEventListener, mAVBufferManager, false, false, testConfig, mAVbufferHelper);
-                    std::thread decodeThread(&videoDecoderTest::run, &decodeTest, true);
+                    decoderThread= std::make_unique<std::thread>(&videoDecoderTest::run, &decodeTest, true);
 
                     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-                    PlaneControlTest *planeControlTest = new PlaneControlTest(planeConfig);
-                    planeControlTest->run();
+                }
+                PlaneControlTest *planeControlTest = new PlaneControlTest(planeConfig);
+                planeControlTest->run();
+                if ((sinkThread != nullptr) && sinkThread->joinable())
+                {
+                    sinkThread->join();
+                }
 
-                    if (sinkThread.joinable())
-                    {
-                        sinkThread.join();
-                    }
-
-                    if (decodeThread.joinable())
-                    {
-                        decodeThread.join();
-                    }
+                if ((decoderThread != nullptr) && decoderThread->joinable())
+                {
+                    decoderThread->join();
                 }
             }
         }
@@ -675,7 +705,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Dynamicrange)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 001@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Pixelmarket)
+UT_ADD_TEST(VTS_L3_PlaneControl, PlaneControl_Pixelformat)
 {
     const char *testName = "Planecontrol_Pixelformat";
 
