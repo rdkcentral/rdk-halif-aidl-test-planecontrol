@@ -80,9 +80,9 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
     ut_kvp_instance_t* kvpTestInstance = (ut_kvp_instance_t*)pTestInstance;
     string testList = string(module) + "." + string(testGroup) + "." + string(testName);
     string mapList = testList + "." + "Inputs" + "." + "Mapping";
-    string stepDelay = testList+ "." + "Controls"+ "." + "delay_between_steps"
+    string stepDelay = testList+ "." + "Controls"+ "." + "delay_between_steps";
     int32_t mapCount = 0;
-    uint32_t _stepDelay = ut_kvp_getUInt64Field(kvpTestInstance, positionX.c_str());
+    uint32_t _stepDelay = ut_kvp_getUInt64Field(kvpTestInstance, stepDelay.c_str());
 
     mapCount = ut_kvp_getListCount(kvpTestInstance, mapList.c_str());
     if (mapCount <= 0)
@@ -126,7 +126,7 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
             uint32_t _y = ut_kvp_getUInt64Field(kvpTestInstance, positionY.c_str());
             uint32_t _height = ut_kvp_getUInt64Field(kvpTestInstance, height.c_str());
             uint32_t _width = ut_kvp_getUInt64Field(kvpTestInstance, width.c_str());
-            testDetials.positions.push_back(std::make_pair(_x,_y ));
+            testDetails.positions.push_back(std::make_pair(_x,_y ));
             testDetails.size.push_back(std::make_pair(_height,_width));
         }
         testConfig.push_back(testDetails);

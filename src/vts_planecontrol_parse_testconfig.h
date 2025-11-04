@@ -79,7 +79,7 @@ struct planeControlTestConfig_t{
     std::vector<uint32_t> decoderIds;
     std::vector<std::pair<uint32_t,uint32_t>> positions;
     std::vector<std::pair<uint32_t,uint32_t>> size;
-    uint32_t graphcsPalneIndex;
+    uint32_t graphicsPlaneIndex;
     std::string testName;
     uint32_t stepDelay;
 };
