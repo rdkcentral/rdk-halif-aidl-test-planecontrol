@@ -5,7 +5,7 @@ IPlaneControlManager:
   L3:
     Planecontrol_Aspectratio:
       Controls:
-        delay_between_mapping_calls: 0 # Insert delay in msec between each `decodeBuffer()` call
+        delay_between_mapping_calls: 0 # Insert delay in msec between each step
       Inputs:
         streams:
           - Codec: H264

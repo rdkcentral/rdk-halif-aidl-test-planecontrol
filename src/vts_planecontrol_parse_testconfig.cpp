@@ -32,17 +32,17 @@
  */
 
 /**
- * @addtogroup VIDEO_SINK Video Sink Module
+ * @addtogroup PLANE_CONTROL Plane Control Module
  * @{
  */
 
 /**
- * @addtogroup VIDEO_SINK_HALTEST Video Sink HAL Tests
+ * @addtogroup PLANE_CONTROL_HALTEST Plane Control HAL Tests
  * @{
  */
 
 /**
- * @defgroup VIDEO_SINK_HALTEST_PARSE_TESTCONFIG Video Sink HAL Tests parse test configuration file
+ * @defgroup PLANE_CONTROL_HALTEST_PARSE_TESTCONFIG Video Sink HAL Tests parse test configuration file
  * @{
  * @parblock
  *
@@ -96,7 +96,7 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
     {
 
         planeControlTestConfig_t testDetails = {};
-        string stepList = mapList + "." + to_string(i) + "step";
+        string stepList = mapList + "." + to_string(i) + "." + "step";
         int32_t stepCount = ut_kvp_getListCount(kvpTestInstance, stepList.c_str());
         // === Only parse Control Parameters ===
         testDetails.testName = std::string(testName ? testName : "");
@@ -139,7 +139,7 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
 
 
 
-/** @} */ // End of VIDEO_SINK_HALTEST_PARSE_TESTCONFIG
-/** @} */ // End of VIDEO_SINK_HALTEST
-/** @} */ // End of VIDEO_SINK
+/** @} */ // End of PLANE_CONTROL_HALTEST_PARSE_TESTCONFIG
+/** @} */ // End of PLANE_CONTROL_HALTEST
+/** @} */ // End of PLANE_CONTROL
 /** @} */ // End of HPK

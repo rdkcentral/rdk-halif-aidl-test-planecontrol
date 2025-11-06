@@ -75,8 +75,8 @@ UT_ADD_TEST_TO_GROUP(VTS_L3_PlaneControl, UT_TESTS_L3)
 
 static const char *gModuleName = "IVideoSinkManager";
 static const char *gVideoDecoderModuleName = "IVideoDecoderManager";
-const char *gTestGroup = "L3";
-IAVBufferHelper* gAVbufferHelper;
+static const char *gTestGroup = "L3";
+static IAVBufferHelper* gAVbufferHelper;
 
 static std::vector<int> videoPlaneIndex;
 static std::vector<int> graphicsPlaneIndex;
@@ -141,7 +141,7 @@ void PlaneControlTest::run ()
     bool aidl_return = false;
     PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
     checkPlaneMappings(mPlaneConfig.planeMappings);
-    std::thread::sleep_for(std::thread::millisecond(mPlaneConfig.stepDelay));
+    std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
     if (mPlaneConfig.testName == "Planecontrol_Swapping")
     {
         // Swap planes
@@ -155,7 +155,7 @@ void PlaneControlTest::run ()
         }
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
-        std::thread::sleep_for(std::thread::millisecond(mPlaneConfig.stepDelay));
+        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
     }
     //Adjust Aspect Ratio
     if (mPlaneConfig.testName == "Planecontrol_Aspectratio")
@@ -172,7 +172,7 @@ void PlaneControlTest::run ()
                 ::com::rdk::hal::PropertyValue propertyValue;
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(static_cast<uint32_t>(aspectRatio));
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ASPECT_RATIO,propertyValue,aidl_return);
-                std::thread::sleep_for(std::thread::millisecond(mPlaneConfig.stepDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
             }
         }
     }
@@ -186,7 +186,7 @@ void PlaneControlTest::run ()
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(zorder);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ZORDER,propertyValue,aidl_return);
-                std::thread::sleep_for(std::thread::millisecond(mPlaneConfig.stepDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ZORDER,propertyValue,aidl_return);
@@ -202,7 +202,7 @@ void PlaneControlTest::run ()
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(visibility);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::VISIBLE,propertyValue,aidl_return);
-                std::thread::sleep_for(std::thread::millisecond(mPlaneConfig.stepDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::VISIBLE,propertyValue,aidl_return);
@@ -218,7 +218,7 @@ void PlaneControlTest::run ()
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(overscan);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::OVERSCAN,propertyValue,aidl_return);
-                std::thread::sleep_for(std::thread::millisecond(mPlaneConfig.stepDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::OVERSCAN,propertyValue,aidl_return);
@@ -234,7 +234,7 @@ void PlaneControlTest::run ()
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>((alpha-1));
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ALPHA,propertyValue,aidl_return);
-                std::thread::sleep_for(std::thread::millisecond(mPlaneConfig.stepDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(255);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ALPHA,propertyValue,aidl_return);
@@ -271,14 +271,14 @@ void PlaneControlTest::run ()
         aidl_return = false;
         for (int i=0;i< mPlaneConfig.planeMappings.size();i++){
             ::com::rdk::hal::planecontrol::SourcePlaneMapping map = mPlaneConfig.planeMappings[i];
-            std::pair size = mPlaneConfig.Size[i];
+            std::pair size = mPlaneConfig.size[i];
             ::com::rdk::hal::PropertyValue propertyValue;
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(size.first);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::HEIGHT,propertyValue,aidl_return);
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(size.second);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::WIDTH,propertyValue,aidl_return);
         }
-    //Geomerty - Plane size
+    //Geometry - Plane size
     }
     if (mPlaneConfig.testName == "Planecontrol_Graphicsplane")
     {
@@ -288,7 +288,7 @@ void PlaneControlTest::run ()
         PlaneControlGraphicsController controller;
         controller.setWindowHandle((void*) native_handle);
         controller.startRender();
-        std::thread::sleep_for(std::thread::millisecond(mPlaneConfig.stepDelay));
+        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
         controller.stopRender();
         PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(mPlaneConfig.graphicsPlaneIndex,native_handle);
     }
@@ -541,9 +541,11 @@ public:
         {
             auto& decoderConfig = decoderConfigs[i];
             auto& sinkConfig = sinkConfigs[0];
-            auto& planeConfig = planeConfigs[i];
-
-            runPlaneControlTest(decoderConfig, sinkConfig,planeConfig);
+            for (size_t j = 0; j < planeConfigs.size(); ++j)
+            {
+                auto& planeConfig = planeConfigs[j];
+                runPlaneControlTest(decoderConfig, sinkConfig,planeConfig);
+            }
         }
     }
 

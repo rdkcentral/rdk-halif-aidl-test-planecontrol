@@ -5,7 +5,7 @@ IPlaneControlManager:
   L3:
     Planecontrol_Mapping:
       Controls:
-        delay_between_mapping_calls: 0 # Insert delay in msec between each `decodeBuffer()` call
+        delay_between_mapping_calls: 0 # Insert delay in msec between each step
       Inputs:
         streams:
           - Codec: H264
@@ -35,5 +35,17 @@ IPlaneControlManager:
             - plane_index: 1
               source: VIDEO_SINK
               source_index: 1
+              visibility: true
+              decoderId: 0
+          - step:
+            - plane_index: 0
+              source: HDMI
+              source_index: 0
+              visibility: true
+              decoderId: 0
+          - step:
+            - plane_index: 1
+              source: COMPOSITE
+              source_index: 0
               visibility: true
               decoderId: 0

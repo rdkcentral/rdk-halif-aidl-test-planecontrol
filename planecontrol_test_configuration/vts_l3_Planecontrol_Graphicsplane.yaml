@@ -3,9 +3,9 @@ IPlaneControlManager:
   input_streams_path: "assets/streams/input" #Target path where input streams are stored
   reference_streams_path: "assets/streams/reference/" #Target path for reference decoded streams
   L3:
-    Plane_Swapping:
+    Planecontrol_Graphicsplane:
       Controls:
-        delay_between_mapping_calls: 0 # Insert delay in msec between each `decodeBuffer()` call
+        delay_between_steps: 10000 # Insert delay in msec between each step
       Inputs:
         streams:
         mapping:
