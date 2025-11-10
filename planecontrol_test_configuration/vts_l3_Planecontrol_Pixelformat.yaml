@@ -12,7 +12,6 @@ IPlaneControlManager:
             Name: H264_HD_30_YUV420
             rms_diff_threshold: 0.5
             decode_time_threshold: 10000000
-              Stream: H264_HD_30_YUV420
         mapping:
           - step:
             - plane_index: 0

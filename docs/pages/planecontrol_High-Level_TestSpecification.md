@@ -162,9 +162,9 @@ The table below summarizes the L3 test cases executed using various audio stream
 |6| Planecontrol_Overscan|✔|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|✘|
 |7| Planecontrol_Alpha |✔|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|
 |8| Planecontrol_Position |✔|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|
-|8| Planecontrol_Size |✔|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|
-|8| Planecontrol_Dynamicrange |✔|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|
-|8| Planecontrol_Pixelformat |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|
-|8| Planecontrol_Graphicsplane |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|
-|8| Planecontrol_Vsync |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|
+|9| Planecontrol_Size |✔|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|
+|10| Planecontrol_Dynamicrange |✔|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|
+|11| Planecontrol_Pixelformat |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|
+|12| Planecontrol_Graphicsplane |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|
+|13| Planecontrol_Vsync |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|
 

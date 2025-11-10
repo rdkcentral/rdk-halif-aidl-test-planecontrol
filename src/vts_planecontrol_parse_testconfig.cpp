@@ -42,11 +42,11 @@
  */
 
 /**
- * @defgroup PLANE_CONTROL_HALTEST_PARSE_TESTCONFIG Video Sink HAL Tests parse test configuration file
+ * @defgroup PLANE_CONTROL_HALTEST_PARSE_TESTCONFIG Plane Control HAL Tests parse test configuration file
  * @{
  * @parblock
  *
- * ### Parse test configuration functions for Video Sink :
+ * ### Parse test configuration functions for Plane Control :
  *
  * Parse configuration functions required for the module across all vendors.
 
@@ -79,7 +79,7 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
     ut_kvp_status_t status;
     ut_kvp_instance_t* kvpTestInstance = (ut_kvp_instance_t*)pTestInstance;
     string testList = string(module) + "." + string(testGroup) + "." + string(testName);
-    string mapList = testList + "." + "Inputs" + "." + "Mapping";
+    string mapList = testList + "." + "Inputs" + "." + "mapping";
     string stepDelay = testList+ "." + "Controls"+ "." + "delay_between_steps";
     int32_t mapCount = 0;
     uint32_t _stepDelay = ut_kvp_getUInt64Field(kvpTestInstance, stepDelay.c_str());
@@ -90,7 +90,7 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
         UT_LOG_ERROR("No mapping found in %s", mapList.c_str());
         return UT_STATUS_FAILURE;
     }
-    UT_LOG_INFO("Found %d streams", mapCount);
+    UT_LOG_INFO("Found %d mapping configurations", mapCount);
 
     for (int32_t i = 0; i < mapCount; i++)
     {

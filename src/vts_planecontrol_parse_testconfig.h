@@ -84,7 +84,7 @@ struct planeControlTestConfig_t{
     uint32_t stepDelay;
 };
 
-void* vts_kvp_create_instance(char *fileName);
+void* vts_kvp_create_instance(const char *fileName);
 UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *module, const char *testGroup, const char *testName,std::vector<planeControlTestConfig_t>& testConfigs);
 void vts_kvp_destroy_instance(void *instance);
 

@@ -146,12 +146,14 @@ void PlaneControlTest::run ()
     {
         // Swap planes
         aidl_return = false;
-
-        for (int i = 0; i < mPlaneConfig.planeMappings.size()-1; i++)
+        if (mPlaneConfig.planeMappings.size() >= 2)
         {
-            SourcePlaneMapping temp = mPlaneConfig.planeMappings[i];
-            mPlaneConfig.planeMappings[i] = mPlaneConfig.planeMappings[i+1];
-            mPlaneConfig.planeMappings[i+1] = temp;
+            for (int i = 0; i < mPlaneConfig.planeMappings.size()-1; i++)
+            {
+                SourcePlaneMapping temp = mPlaneConfig.planeMappings[i];
+                mPlaneConfig.planeMappings[i] = mPlaneConfig.planeMappings[i+1];
+                mPlaneConfig.planeMappings[i+1] = temp;
+            }
         }
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
@@ -256,6 +258,10 @@ void PlaneControlTest::run ()
         aidl_return = false;
         for (int i=0;i< mPlaneConfig.planeMappings.size();i++){
             ::com::rdk::hal::planecontrol::SourcePlaneMapping map = mPlaneConfig.planeMappings[i];
+            if(i >= mPlaneConfig.positions.size())
+            {
+                continue;
+            }
             std::pair position = mPlaneConfig.positions[i];
             ::com::rdk::hal::PropertyValue propertyValue;
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(position.first);
@@ -271,6 +277,10 @@ void PlaneControlTest::run ()
         aidl_return = false;
         for (int i=0;i< mPlaneConfig.planeMappings.size();i++){
             ::com::rdk::hal::planecontrol::SourcePlaneMapping map = mPlaneConfig.planeMappings[i];
+            if(i>= mPlaneConfig.size.size())
+            {
+                continue;
+            }
             std::pair size = mPlaneConfig.size[i];
             ::com::rdk::hal::PropertyValue propertyValue;
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(size.first);
@@ -514,12 +524,12 @@ public:
         }
         catch (const std::exception &ex)
         {
-            UT_LOG_ERROR("Exception in runSequentialSink: %s", ex.what());
+            UT_LOG_ERROR("Exception in runPlaneControlTest: %s", ex.what());
             UT_ASSERT_TRUE(false);
         }
         catch (...)
         {
-            UT_LOG_ERROR("Unknown exception in runSequentialSink");
+            UT_LOG_ERROR("Unknown exception in runPlaneControlTest");
             UT_ASSERT_TRUE(false);
         }
     }
@@ -540,6 +550,11 @@ public:
         for (size_t i = 0; i < decoderConfigs.size(); ++i)
         {
             auto& decoderConfig = decoderConfigs[i];
+            if(sinkConfigs.size() == 0)
+            {
+                UT_LOG_INFO("No Sink Configurations defined in the test configurations");
+                break;
+            }
             auto& sinkConfig = sinkConfigs[0];
             for (size_t j = 0; j < planeConfigs.size(); ++j)
             {
@@ -639,7 +654,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Overscan)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the sink's ability to report correct queue depth
+ * @brief Test the plane's ability to set Alpha transparency
  *
  * **Test Group ID:** 003@n
  * **Test Case ID:** 007@n
@@ -687,7 +702,7 @@ UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Dynamicrange)
     runSingleProcessTest(testName);
 }
 /**
- * @brief Test the Controllers's ability to set Pixelformat
+ * @brief Test the Controller's ability to set Pixelformat
  *
  * **Test Group ID:** 003@n
  * **Test Case ID:** 011@n
