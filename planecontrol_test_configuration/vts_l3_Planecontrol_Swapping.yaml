@@ -18,20 +18,16 @@ IPlaneControl:
               source: VIDEO_SINK
               source_index: 0
               decoderId: 0
-              visibility: true
             - plane_index: 1
               source: VIDEO_SINK
               source_index: 1
               decoderId: 1
-              visibility: true
           - step:
             - plane_index: 0
               source: VIDEO_SINK
               source_index: 1
               decoderId: 0
-              visibility: true
             - plane_index: 1
               source: VIDEO_SINK
               source_index: 0
               decoderId: 1
-              visibility: true

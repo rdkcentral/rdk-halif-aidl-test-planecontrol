@@ -148,7 +148,7 @@ void PlaneControlTest::run ()
         aidl_return = false;
         if (mPlaneConfig.planeMappings.size() >= 2)
         {
-            for (int i = 0; i < mPlaneConfig.planeMappings.size()-1; i++)
+            for (size_t i = 0; i < mPlaneConfig.planeMappings.size()-1; i++)
             {
                 SourcePlaneMapping temp = mPlaneConfig.planeMappings[i];
                 mPlaneConfig.planeMappings[i] = mPlaneConfig.planeMappings[i+1];
@@ -256,7 +256,7 @@ void PlaneControlTest::run ()
     if (mPlaneConfig.testName == "Planecontrol_Position")
     {
         aidl_return = false;
-        for (int i=0;i< mPlaneConfig.planeMappings.size();i++){
+        for (size_t i=0;i< mPlaneConfig.planeMappings.size();i++){
             ::com::rdk::hal::planecontrol::SourcePlaneMapping map = mPlaneConfig.planeMappings[i];
             if(i >= mPlaneConfig.positions.size())
             {
@@ -275,7 +275,7 @@ void PlaneControlTest::run ()
     if (mPlaneConfig.testName == "Planecontrol_Size")
     {
         aidl_return = false;
-        for (int i=0;i< mPlaneConfig.planeMappings.size();i++){
+        for (size_t i=0;i< mPlaneConfig.planeMappings.size();i++){
             ::com::rdk::hal::planecontrol::SourcePlaneMapping map = mPlaneConfig.planeMappings[i];
             if(i>= mPlaneConfig.size.size())
             {
@@ -294,13 +294,15 @@ void PlaneControlTest::run ()
     {
         //Graphics - graphics window Handle
         int64_t native_handle;
-        PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(mPlaneConfig.graphicsPlaneIndex,native_handle);
-        PlaneControlGraphicsController controller;
-        controller.setWindowHandle((void*) native_handle);
-        controller.startRender();
-        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
-        controller.stopRender();
-        PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(mPlaneConfig.graphicsPlaneIndex,native_handle);
+        for(const auto& index: graphicsPlaneIndex){
+            PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(index,native_handle);
+            PlaneControlGraphicsController controller;
+            controller.setWindowHandle((void*) native_handle);
+            controller.startRender();
+            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+            controller.stopRender();
+            PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(index,native_handle);
+        }
     }
 
     if (mPlaneConfig.testName == "Planecontrol_Vsync")
@@ -432,7 +434,7 @@ public:
     {
         try
         {
-            for (int i = 0; i< planeConfig.planeMappings.size();i++)
+            for (size_t i = 0; i< planeConfig.planeMappings.size();i++)
             {
                 IVideoSink::Id sinkId;
                 sp<IVideoSink> sinkHandle;

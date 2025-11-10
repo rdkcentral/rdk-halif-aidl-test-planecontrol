@@ -17,35 +17,29 @@ IPlaneControl:
             - plane_index: 0
               source: VIDEO_SINK
               source_index: 0
-              visibility: true
               decoderId: 0
           - step:
             - plane_index: 0
               source: VIDEO_SINK
               source_index: 1
-              visibility: true
               decoderId: 0
           - step:
             - plane_index: 1
               source: VIDEO_SINK
               source_index: 0
-              visibility: true
               decoderId: 0
           - step:
             - plane_index: 1
               source: VIDEO_SINK
               source_index: 1
-              visibility: true
               decoderId: 0
           - step:
             - plane_index: 0
               source: HDMI
               source_index: 0
-              visibility: true
               decoderId: 0
           - step:
             - plane_index: 1
               source: COMPOSITE
               source_index: 0
-              visibility: true
               decoderId: 0

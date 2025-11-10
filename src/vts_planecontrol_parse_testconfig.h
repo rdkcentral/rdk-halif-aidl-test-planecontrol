@@ -79,12 +79,11 @@ struct planeControlTestConfig_t{
     std::vector<uint32_t> decoderIds;
     std::vector<std::pair<uint32_t,uint32_t>> positions;
     std::vector<std::pair<uint32_t,uint32_t>> size;
-    uint32_t graphicsPlaneIndex;
     std::string testName;
     uint32_t stepDelay;
 };
 
-void* vts_kvp_create_instance(const char *fileName);
+void* vts_kvp_create_instance(char *fileName);
 UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *module, const char *testGroup, const char *testName,std::vector<planeControlTestConfig_t>& testConfigs);
 void vts_kvp_destroy_instance(void *instance);
 
