@@ -105,11 +105,12 @@ typedef struct Capabilities {
     int32_t planeIndex;
     PlaneType type;
     std::vector<PixelFormat> pixelFormats;
-    std::vector<DynamicRange> supportedDynamicRanges;
+    std::vector<SourceType> sourceTypes;
     uint32_t maxWidth;
     uint32_t maxHeight;
     uint32_t frameWidth;
     uint32_t frameHeight;
+    std::vector<DynamicRange> supportedDynamicRanges;
     uint32_t colorDepth;
     uint32_t maxFrameRate;
     bool supportsAlpha;
