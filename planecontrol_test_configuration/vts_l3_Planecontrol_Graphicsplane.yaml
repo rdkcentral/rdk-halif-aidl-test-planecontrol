@@ -10,3 +10,11 @@ IPlaneControl:
         streams:
         mapping:
           - step:
+            - plane_index: 0
+              source: NONE
+              source_index: 0
+              decoderId: 0
+              X: 0
+              Y: 0
+              height: 1080
+              width: 1920

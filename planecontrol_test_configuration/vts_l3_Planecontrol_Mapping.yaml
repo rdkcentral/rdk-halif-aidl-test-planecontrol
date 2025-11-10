@@ -5,9 +5,9 @@ IPlaneControl:
   L3:
     Planecontrol_Mapping:
       Controls:
-        delay_between_mapping_calls: 0 # Insert delay in msec between each step
+        delay_between_steps: 10000 # Insert delay in msec between each step
       Inputs:
-        streams:
+        Streams:
           - Codec: H264
             Name: H264_HD_30_YUV420
             rms_diff_threshold: 0.5
@@ -18,28 +18,52 @@ IPlaneControl:
               source: VIDEO_SINK
               source_index: 0
               decoderId: 0
+              X: 0
+              Y: 0
+              height: 1080
+              width: 1920
           - step:
             - plane_index: 0
               source: VIDEO_SINK
               source_index: 1
               decoderId: 0
+              X: 0
+              Y: 0
+              height: 1080
+              width: 1920
           - step:
             - plane_index: 1
               source: VIDEO_SINK
               source_index: 0
               decoderId: 0
+              X: 0
+              Y: 0
+              height: 1080
+              width: 1920
           - step:
             - plane_index: 1
               source: VIDEO_SINK
               source_index: 1
               decoderId: 0
+              X: 0
+              Y: 0
+              height: 1080
+              width: 1920
           - step:
             - plane_index: 0
               source: HDMI
               source_index: 0
               decoderId: 0
+              X: 0
+              Y: 0
+              height: 1080
+              width: 1920
           - step:
             - plane_index: 1
               source: COMPOSITE
               source_index: 0
               decoderId: 0
+              X: 0
+              Y: 0
+              height: 1080
+              width: 1920
