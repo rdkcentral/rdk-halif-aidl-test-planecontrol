@@ -131,7 +131,13 @@ static void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlane
                 UT_Control_GetMapString(bool_mapTable, status.isOk()),
                 UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
     UT_ASSERT_TRUE(status.isOk());
-    //ASSERT TO check the set and get mappings
+    UT_ASSERT_EQ(retrievedMappings.size(), planeMapping.size());
+    for (size_t i = 0; i < planeMapping.size(); ++i) {
+        const auto& expected = planeMapping[i];
+        const auto& actual = retrievedMappings[i];
+        UT_ASSERT_EQ(expected.sourceIndex, actual.sourceIndex);
+        UT_ASSERT_EQ(expected.destinationPlaneIndex, actual.destinationPlaneIndex);
+    }
 }
 
 
@@ -513,6 +519,7 @@ public:
                 }
                 PlaneControlTest *planeControlTest = new PlaneControlTest(planeConfig);
                 planeControlTest->run();
+                delete planeControlTest;
                 if ((sinkThread != nullptr) && sinkThread->joinable())
                 {
                     sinkThread->join();

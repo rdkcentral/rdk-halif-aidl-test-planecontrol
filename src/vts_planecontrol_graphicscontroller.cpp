@@ -135,6 +135,8 @@ bool PlaneControlGraphicsController::initializeGLES() {
     glAttachShader(prog, vs);
     glAttachShader(prog, fs);
     glLinkProgram(prog);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
     glUseProgram(prog);
 
     return true;

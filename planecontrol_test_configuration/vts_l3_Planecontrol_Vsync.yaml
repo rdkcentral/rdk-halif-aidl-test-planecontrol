@@ -7,7 +7,6 @@ IPlaneControl:
       Controls:
         delay_between_steps: 10000 # Insert delay in msec between each step
       Inputs:
-        step_delay: 10000 #in ms
         Streams:
           - Codec: H264
             Name: H264_HD_30_YUV420

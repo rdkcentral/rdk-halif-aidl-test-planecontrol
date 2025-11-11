@@ -138,6 +138,14 @@ static uint32_t gNoGraphicsTypePlanes = 0;
 
 extern std::vector<planeControl_Cap> gPlaneControl_hfp;
 extern sp<IPlaneControl> gPlaneControlservice;
+
+/**
+ * @brief Global test configuration pointer for Plane Control tests.
+ *
+ * This variable is initialized in VTS_PlaneControl_init() and must not be accessed
+ * before initialization. Ensure VTS_PlaneControl_init() is called before any usage.
+ * The variable should be cleaned up appropriately during shutdown.
+ */
 extern void *gPlaneControlTestConfiguration;
 
 // Function to parse the PlaneControl HFP profile

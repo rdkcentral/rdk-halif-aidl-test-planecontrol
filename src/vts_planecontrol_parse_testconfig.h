@@ -32,17 +32,17 @@
  */
 
 /**
- * @addtogroup PLANECONTROL Planecontrol Module
+ * @addtogroup PLANE_CONTROL Planecontrol Module
  * @{
  */
 
 /**
- * @addtogroup PLANECONTROL_HALTEST Planecontrol HAL Tests
+ * @addtogroup PLANE_CONTROL_HALTEST Planecontrol HAL Tests
  * @{
  */
 
 /**
- * @defgroup PLANECONTROL_HALTEST_PARSE_TESTCONFIG_HEADER Planecontrol HAL Tests parse test configuration Header File
+ * @defgroup PLANE_CONTROL_HALTEST_PARSE_TESTCONFIG_HEADER Planecontrol HAL Tests parse test configuration Header File
  * @{
  * @parblock
  *
@@ -74,6 +74,7 @@
 
 #define PLANE_CONTROL_TEST_CONFIG_PATH "./planecontrol_test_configuration/vts_l3_PlaneControl_test_config.yaml"
 
+
 struct planeControlTestConfig_t{
     std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> planeMappings;
     std::vector<uint32_t> decoderIds;
@@ -83,8 +84,39 @@ struct planeControlTestConfig_t{
     uint32_t stepDelay;
 };
 
+/**
+ * @brief Creates a KVP (Key-Value Pair) test instance from the specified configuration file.
+ *
+ * @param[in] fileName Path to the configuration file to be loaded.
+ * @return Pointer to the created test instance, or NULL on failure.
+ *
+ * @note The returned instance should be destroyed using vts_kvp_destroy_instance().
+ */
 void* vts_kvp_create_instance(char *fileName);
+
+
+/**
+ * @brief Parses the test configuration for the PlaneControl module.
+ *
+ * @param[in] pTestInstance Pointer to the test instance created by vts_kvp_create_instance().
+ * @param[in] module Name of the module to parse configuration for.
+ * @param[in] testGroup Name of the test group.
+ * @param[in] testName Name of the specific test.
+ * @param[out] testConfigs Vector to be populated with parsed test configuration data.
+ * @return UT_status_t Status of the parsing operation (e.g., UT_SUCCESS on success, error code otherwise).
+ *
+ * @note The function populates the testConfigs vector with the parsed configuration.
+ */
 UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *module, const char *testGroup, const char *testName,std::vector<planeControlTestConfig_t>& testConfigs);
+
+/**
+ * @brief Destroys a previously created KVP test instance and releases associated resources.
+ *
+ * @param[in] instance Pointer to the test instance to be destroyed.
+ * @return void
+ *
+ * @note After calling this function, the instance pointer must not be used.
+ */
 void vts_kvp_destroy_instance(void *instance);
 
 #endif //__VTS_PLANECONTROL_PARSE_TESTCONFIG_H__
