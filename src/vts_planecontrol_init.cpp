@@ -69,7 +69,7 @@ UT_status_t VTS_PlaneControl_init()
     }
     gPlaneControlTestConfiguration = vts_kvp_create_instance(PLANE_CONTROL_TEST_CONFIG_PATH);
 
-    if (gPlaneControlTestConfiguration == NULL) {
+    if (gPlaneControlTestConfiguration == nullptr) {
         UT_LOG_ERROR("Failed to create Plane Control Test Configuration instance (file missing or parse error)");
         return UT_STATUS_FAILURE;
     }

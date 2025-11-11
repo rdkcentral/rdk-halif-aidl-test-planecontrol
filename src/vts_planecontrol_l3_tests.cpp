@@ -85,6 +85,39 @@ static std::vector<com::rdk::hal::planecontrol::SourcePlaneMapping> planeMapping
 extern std::vector<int32_t> gAvailableVideosinks_hfp;
 extern std::vector<int32_t> gAvailableVideodecoders_hfp;
 
+
+
+static bool askUserYesNo(const std::string& question)
+{
+    while (true)
+    {
+        UT_LOG_INFO("%s (yes/no): ", question.c_str());
+
+        std::string input;
+        std::getline(std::cin, input);
+
+        // Trim whitespace at both ends
+        input.erase(0, input.find_first_not_of(" \t\n\r"));
+        input.erase(input.find_last_not_of(" \t\n\r") + 1);
+
+        // Convert to lowercase
+        std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+
+        if (input == "yes" || input == "y")
+        {
+            UT_LOG_INFO("User selected YES");
+            return true;
+        }
+        if (input == "no" || input == "n")
+        {
+            UT_LOG_INFO("User selected NO");
+            return false;
+        }
+
+        UT_LOG_INFO("Invalid input. Please type \"yes\" or \"no\".");
+    }
+}
+
 static sp<IAVBuffer> vts_avbuffer_getService()
 {
     return
@@ -131,12 +164,12 @@ static void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlane
                 UT_Control_GetMapString(bool_mapTable, status.isOk()),
                 UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
     UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_EQ(retrievedMappings.size(), planeMapping.size());
+    UT_ASSERT_EQUAL(retrievedMappings.size(), planeMapping.size());
     for (size_t i = 0; i < planeMapping.size(); ++i) {
         const auto& expected = planeMapping[i];
         const auto& actual = retrievedMappings[i];
-        UT_ASSERT_EQ(expected.sourceIndex, actual.sourceIndex);
-        UT_ASSERT_EQ(expected.destinationPlaneIndex, actual.destinationPlaneIndex);
+        UT_ASSERT_EQUAL(expected.sourceIndex, actual.sourceIndex);
+        UT_ASSERT_EQUAL(expected.destinationPlaneIndex, actual.destinationPlaneIndex);
     }
 }
 
@@ -164,6 +197,12 @@ void PlaneControlTest::run ()
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
         std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+        char prompt[256];
+        snprintf(prompt, sizeof(prompt),
+                "Validate %s: Did the planes get swapped ?",
+                    mPlaneConfig.testName.c_str());
+        bool result = askUserYesNo(prompt);
+        UT_ASSERT_TRUE(result);
     }
     //Adjust Aspect Ratio
     if (mPlaneConfig.testName == "Planecontrol_Aspectratio")
@@ -181,6 +220,12 @@ void PlaneControlTest::run ()
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(static_cast<uint32_t>(aspectRatio));
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ASPECT_RATIO,propertyValue,aidl_return);
                 std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                char prompt[256];
+                snprintf(prompt, sizeof(prompt),
+                            "Validate %s: did AspectRatio changed ?",
+                            mPlaneConfig.testName.c_str(), static_cast<uint32_t>(aspectRatio));
+                bool result = askUserYesNo(prompt);
+                UT_ASSERT_TRUE(result);
             }
         }
     }
@@ -195,6 +240,12 @@ void PlaneControlTest::run ()
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(zorder);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ZORDER,propertyValue,aidl_return);
                 std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                char prompt[256];
+                snprintf(prompt, sizeof(prompt),
+                            "Validate %s: did Zorder of the plane changed?",
+                            mPlaneConfig.testName.c_str(), zorder);
+                bool result = askUserYesNo(prompt);
+                UT_ASSERT_TRUE(result);
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ZORDER,propertyValue,aidl_return);
@@ -211,6 +262,12 @@ void PlaneControlTest::run ()
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(visibility);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::VISIBLE,propertyValue,aidl_return);
                 std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                char prompt[256];
+                snprintf(prompt, sizeof(prompt),
+                            "Validate %s: did plane visibility changed?",
+                            mPlaneConfig.testName.c_str(), visibility);
+                bool result = askUserYesNo(prompt);
+                UT_ASSERT_EQUAL(result,(bool)visibility);
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::VISIBLE,propertyValue,aidl_return);
@@ -222,11 +279,17 @@ void PlaneControlTest::run ()
         aidl_return = false;
         for (const auto& map: mPlaneConfig.planeMappings){
             ::com::rdk::hal::PropertyValue propertyValue;
-            for(uint32_t overscan = 0; overscan < 100;overscan+=10)
+            for(uint32_t overscan = 0; overscan <=100;overscan+=10)
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(overscan);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::OVERSCAN,propertyValue,aidl_return);
                 std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                char prompt[256];
+                snprintf(prompt, sizeof(prompt),
+                            "Validate %s: did plane overscan changed ?",
+                            mPlaneConfig.testName.c_str(), overscan);
+                bool result = askUserYesNo(prompt);
+                UT_ASSERT_TRUE(result);
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::OVERSCAN,propertyValue,aidl_return);
@@ -238,11 +301,17 @@ void PlaneControlTest::run ()
         aidl_return = false;
         for (const auto& map: mPlaneConfig.planeMappings){
             ::com::rdk::hal::PropertyValue propertyValue;
-            for(uint32_t alpha = 1; alpha < 256; alpha<<=1)
+            for(uint32_t alpha = 1; alpha <=256; alpha<<=1)
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>((alpha-1));
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ALPHA,propertyValue,aidl_return);
                 std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                char prompt[256];
+                snprintf(prompt, sizeof(prompt),
+                            "Validate %s: did plane alpha changed ?",
+                            mPlaneConfig.testName.c_str(), (alpha-1));
+                bool result = askUserYesNo(prompt);
+                UT_ASSERT_TRUE(result);
             }
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(255);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::ALPHA,propertyValue,aidl_return);
@@ -252,11 +321,23 @@ void PlaneControlTest::run ()
     if (mPlaneConfig.testName == "Planecontrol_Dynamicrange")
     {
     //Dynamic Range
+        char prompt[256];
+        snprintf(prompt, sizeof(prompt),
+                    "Validate %s: is plane displaying video properly ?",
+                     mPlaneConfig.testName.c_str());
+        bool result = askUserYesNo(prompt);
+        UT_ASSERT_TRUE(result);
     // play different stream with dynamic range in test config.
     }
     if (mPlaneConfig.testName == "Planecontrol_Pixelformat")
     {
     //Resolution - pixel format
+        char prompt[256];
+        snprintf(prompt, sizeof(prompt),
+                    "Validate %s: is plane displaying video properly ?",
+                     mPlaneConfig.testName.c_str());
+        bool result = askUserYesNo(prompt);
+        UT_ASSERT_TRUE(result);
     // play different stream with different resolution in test config.
     }
     if (mPlaneConfig.testName == "Planecontrol_Position")
@@ -274,6 +355,13 @@ void PlaneControlTest::run ()
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::X,propertyValue,aidl_return);
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(position.second);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::Y,propertyValue,aidl_return);
+            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+            char prompt[256];
+            snprintf(prompt, sizeof(prompt),
+                        "Validate %s: did plane position change ?",
+                        mPlaneConfig.testName.c_str(),position.first,position.second );
+            bool result = askUserYesNo(prompt);
+            UT_ASSERT_TRUE(result);
         }
     }
     //Geometry - positions
@@ -293,6 +381,13 @@ void PlaneControlTest::run ()
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::HEIGHT,propertyValue,aidl_return);
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(size.second);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,::com::rdk::hal::planecontrol::Property::WIDTH,propertyValue,aidl_return);
+            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+            char prompt[256];
+            snprintf(prompt, sizeof(prompt),
+                        "Validate %s: did plane Size change ?",
+                        mPlaneConfig.testName.c_str(),size.first,size.second );
+            bool result = askUserYesNo(prompt);
+            UT_ASSERT_TRUE(result);
         }
     //Geometry - Plane size
     }
@@ -306,6 +401,12 @@ void PlaneControlTest::run ()
             controller.setWindowHandle((void*) native_handle);
             controller.startRender();
             std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+            char prompt[256];
+            snprintf(prompt, sizeof(prompt),
+                        "Validate %s: is graphics rendered on the plane ?",
+                        mPlaneConfig.testName.c_str());
+            bool result = askUserYesNo(prompt);
+            UT_ASSERT_TRUE(result);
             controller.stopRender();
             PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(index,native_handle);
         }
@@ -313,7 +414,7 @@ void PlaneControlTest::run ()
 
     if (mPlaneConfig.testName == "Planecontrol_Vsync")
     {
-    //Vsync
+    //Vsync ToDo
     }
 }
 
@@ -580,9 +681,13 @@ public:
             /* Un-register the events */
             VIDEOSINK_UNREGISTER_EVENT_SUCCESS(sink, videoSinkEventListener);
         }
+        for (const auto& [_videoDecoderId, videoDecoder, videoDecoderControlListener, videoDecoderEventListener, videoDecoderCapabilities] : mVideoDecoderList)
+        {
+            VIDEODECODER_UNREGISTER_EVENT_SUCCESS(videoDecoder,videoDecoderEventListener);
+        }
         PLANE_CONTROL_UNREGISTER_LISTENER_POS(mPlaneControlListener,aidlReturn);
         mVideoSinkList.clear();
-
+        mVideoDecoderList.clear();
         //TODO: check right place to call joinThreadPool
         //android::IPCThreadState::self()->joinThreadPool();
 

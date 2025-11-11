@@ -67,3 +67,12 @@ IPlaneControl:
               Y: 0
               height: 1080
               width: 1920
+          - step:
+            - plane_index: 2 # graphics Plane
+              source: NONE
+              source_index: 0
+              decoderId: 0
+              X: 0
+              Y: 0
+              height: 1080
+              width: 1920
