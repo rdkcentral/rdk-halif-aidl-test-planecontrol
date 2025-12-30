@@ -223,7 +223,7 @@ void PlaneControlTest::run ()
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
                             "Validate %s: did AspectRatio changed ?",
-                            mPlaneConfig.testName.c_str(), static_cast<uint32_t>(aspectRatio));
+                            mPlaneConfig.testName.c_str());
                 bool result = askUserYesNo(prompt);
                 UT_ASSERT_TRUE(result);
             }
@@ -243,7 +243,7 @@ void PlaneControlTest::run ()
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
                             "Validate %s: did Zorder of the plane changed?",
-                            mPlaneConfig.testName.c_str(), zorder);
+                            mPlaneConfig.testName.c_str());
                 bool result = askUserYesNo(prompt);
                 UT_ASSERT_TRUE(result);
             }
@@ -265,7 +265,7 @@ void PlaneControlTest::run ()
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
                             "Validate %s: did plane visibility changed?",
-                            mPlaneConfig.testName.c_str(), visibility);
+                            mPlaneConfig.testName.c_str());
                 bool result = askUserYesNo(prompt);
                 UT_ASSERT_EQUAL(result,(bool)visibility);
             }
@@ -287,7 +287,7 @@ void PlaneControlTest::run ()
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
                             "Validate %s: did plane overscan changed ?",
-                            mPlaneConfig.testName.c_str(), overscan);
+                            mPlaneConfig.testName.c_str());
                 bool result = askUserYesNo(prompt);
                 UT_ASSERT_TRUE(result);
             }
@@ -309,7 +309,7 @@ void PlaneControlTest::run ()
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
                             "Validate %s: did plane alpha changed ?",
-                            mPlaneConfig.testName.c_str(), (alpha-1));
+                            mPlaneConfig.testName.c_str());
                 bool result = askUserYesNo(prompt);
                 UT_ASSERT_TRUE(result);
             }
@@ -359,7 +359,7 @@ void PlaneControlTest::run ()
             char prompt[256];
             snprintf(prompt, sizeof(prompt),
                         "Validate %s: did plane position change ?",
-                        mPlaneConfig.testName.c_str(),position.first,position.second );
+                        mPlaneConfig.testName.c_str());
             bool result = askUserYesNo(prompt);
             UT_ASSERT_TRUE(result);
         }
@@ -385,7 +385,7 @@ void PlaneControlTest::run ()
             char prompt[256];
             snprintf(prompt, sizeof(prompt),
                         "Validate %s: did plane Size change ?",
-                        mPlaneConfig.testName.c_str(),size.first,size.second );
+                        mPlaneConfig.testName.c_str());
             bool result = askUserYesNo(prompt);
             UT_ASSERT_TRUE(result);
         }
