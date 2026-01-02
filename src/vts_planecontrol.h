@@ -338,7 +338,6 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
     } while (0)
 
 // Macro to call and validate registerListener API (negative case with expected failure)
-// Macro to call and validate registerListener API (negative case with expected failure)
 #define PLANE_CONTROL_REGISTER_LISTENER_NEG(listener, aidl_return, label) \
     do { \
         UT_LOG_INFO("Calling registerListener [%s] (IN:listener:[0x%X], OUT:_aidl_return)", label, listener.get()); \
@@ -436,8 +435,8 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
         UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(), status:[isOK:%s, exception:%s]", \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
-        UT_ASSERT_FALSE(status.isOk()) << "Expected exception " << expected_exception; \
-        UT_ASSERT_EQ(status.exceptionCode(), expected_exception) << "Expected exception " << expected_exception; \
+        UT_ASSERT_FALSE(status.isOk()) << "Expected exception but call succeeded"; \
+        UT_ASSERT_EQ(status.exceptionCode(), expected_exception) << "Expected exception code " << expected_exception << " but got " << status.exceptionCode(); \
     } while (0)
 
 // Macro to call and validate getVideoSourceDestinationPlaneMapping API
@@ -874,8 +873,8 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
         UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:mappings), status:[isOK:%s, exception:%s]", \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
-        UT_ASSERT_FALSE(status.isOk()) << "Expected exception"; \
-        UT_ASSERT_EQUAL(status.exceptionCode(), expected_exception) << "Expected exception " << #expected_exception; \
+        UT_ASSERT_FALSE(status.isOk()) << "Expected exception but call succeeded"; \
+        UT_ASSERT_EQUAL(status.exceptionCode(), expected_exception) << "Expected exception code " << expected_exception << " but got " << status.exceptionCode(); \
     } while (0)
 
 // Macro to verify a specific source plane mapping
