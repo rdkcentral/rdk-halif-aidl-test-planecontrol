@@ -156,17 +156,12 @@ UT_status_t getPlaneControlService() {
 // Helper function to validate property lists for VIDEO or GRAPHICS planes
 bool ValidatePropertyList(uint32_t planeIndex, const std::vector<::com::rdk::hal::planecontrol::Property>& expectedProperties, const std::string& planeType) {
     std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
-    for (const auto& property : expectedProperties) {
-        ::com::rdk::hal::planecontrol::PropertyKVPair kvPair;
-        kvPair.property = property;
-        propertyKVList.push_back(kvPair);
-    }
 
     bool aidl_return = false;
-    std::string inputParams = "IN:planeResourceIndex:[" + std::to_string(planeIndex) + "], IN/OUT:propertyKVList[], OUT:_aidl_return";
-    auto status = gPlaneControlservice->getPropertyMulti(planeIndex, &propertyKVList, &aidl_return);
+    std::string inputParams = "IN:planeResourceIndex:[" + std::to_string(planeIndex) + "], IN:properties.size:[" + std::to_string(expectedProperties.size()) + "], OUT:propertyKVList[], OUT:_aidl_return";
+    auto status = gPlaneControlservice->getPropertyMulti(planeIndex, expectedProperties, &propertyKVList, &aidl_return);
 
-    std::string outputParams = "IN:planeResourceIndex:[" + std::to_string(planeIndex) + "], IN/OUT:propertyKVList[], OUT:_aidl_return:[" + (aidl_return ? "true" : "false") + "]";
+    std::string outputParams = "IN:planeResourceIndex:[" + std::to_string(planeIndex) + "], OUT:propertyKVList.size:[" + std::to_string(propertyKVList.size()) + "], OUT:_aidl_return:[" + (aidl_return ? "true" : "false") + "]";
     //UT_LOG_INFO("getPropertyMulti with " + planeType + " plane index", inputParams, outputParams, status, aidl_return);
 
     bool success = true;
@@ -182,6 +177,10 @@ bool ValidatePropertyList(uint32_t planeIndex, const std::vector<::com::rdk::hal
         success = false;
         EXPECT_FALSE(propertyKVList.empty()) << "propertyKVList is empty";
     }
+    if (propertyKVList.size() != expectedProperties.size()) {
+        success = false;
+        EXPECT_EQ(propertyKVList.size(), expectedProperties.size()) << "propertyKVList size mismatch";
+    }
 
     for (const auto& kvPair : propertyKVList) {
         if (!kvPair.propertyValue.value.has_value()) {
@@ -194,7 +193,7 @@ bool ValidatePropertyList(uint32_t planeIndex, const std::vector<::com::rdk::hal
 }
 
 UT_status_t vts_planecontrol_parsePlaneControlHFP() {
-    const std::string planeControlPath = "IPlaneControl.planes";
+    const std::string planeControlPath = PLANE_CONTROL_MGR_PLANES;
     int32_t number_of_planes = 0;
 
     // Reset global counters
@@ -221,7 +220,9 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
     gPlaneControl_hfp.clear();
     for (int32_t i = 0; i < number_of_planes; ++i) {
         std::string index = std::to_string(i);
-        std::string planeBasePath = planeControlPath + "." + index + "." + index; // Updated path with nested index
+        // YAML structure: planes is a list, each item is a dict with numeric key
+        // Path: planecontrol.planes.0.0 (list index 0, dict key "0")
+        std::string planeBasePath = planeControlPath + "." + index + "." + index;
         std::string typePath = planeBasePath + ".type";
         std::string pixelFormatsPath = planeBasePath + ".pixelFormats";
         std::string dynamicRangesPath = planeBasePath + ".supportedDynamicRanges";
@@ -289,35 +290,35 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
             continue;
         }
 
-        // Read source types
+        // Read source types (optional field)
         std::string sourceTypesPath = planeBasePath + ".sourceTypes";
         int32_t source_type_count = UT_KVP_PROFILE_GET_LIST_COUNT(sourceTypesPath.c_str());
         UT_LOG_INFO("Plane %d: source type count=%d", i, source_type_count);
         cap.sourceTypes.clear();
-        for (int32_t j = 0; j < source_type_count; ++j) {
-            std::string srcTypePath = sourceTypesPath + "." + std::to_string(j);
-            result_kvp.resize(UT_KVP_MAX_ELEMENT_SIZE);
-            status = ut_kvp_getStringField(kvp_instance, srcTypePath.c_str(), result_kvp.data(), UT_KVP_MAX_ELEMENT_SIZE);
-            if (status != UT_KVP_STATUS_SUCCESS) {
-                UT_LOG_WARNING("Failed to read source type at path: %s, status: %d", srcTypePath.c_str(), status);
-                continue;
+        if (source_type_count > 0) {
+            for (int32_t j = 0; j < source_type_count; ++j) {
+                std::string srcTypePath = sourceTypesPath + "." + std::to_string(j);
+                result_kvp.resize(UT_KVP_MAX_ELEMENT_SIZE);
+                status = ut_kvp_getStringField(kvp_instance, srcTypePath.c_str(), result_kvp.data(), UT_KVP_MAX_ELEMENT_SIZE);
+                if (status != UT_KVP_STATUS_SUCCESS) {
+                    UT_LOG_WARNING("Failed to read source type at path: %s, status: %d", srcTypePath.c_str(), status);
+                    continue;
+                }
+                result_kvp.resize(std::strlen(result_kvp.c_str()));
+                UT_LOG_DEBUG("Reading source type path: %s, value: %s", srcTypePath.c_str(), result_kvp.c_str());
+                if (result_kvp.empty()) {
+                    UT_LOG_WARNING("Empty source type at path: %s", srcTypePath.c_str());
+                    continue;
+                }
+                try {
+                    cap.sourceTypes.push_back(stringToSourceType(result_kvp));
+                } catch (const std::invalid_argument& e) {
+                    UT_LOG_WARNING("Invalid source type at path: %s, value: %s, error: %s",
+                                   srcTypePath.c_str(), result_kvp.c_str(), e.what());
+                }
             }
-            result_kvp.resize(std::strlen(result_kvp.c_str()));
-            UT_LOG_DEBUG("Reading source type path: %s, value: %s", srcTypePath.c_str(), result_kvp.c_str());
-            if (result_kvp.empty()) {
-                UT_LOG_WARNING("Empty source type at path: %s", srcTypePath.c_str());
-                continue;
-            }
-            try {
-                cap.sourceTypes.push_back(stringToSourceType(result_kvp));
-            } catch (const std::invalid_argument& e) {
-                UT_LOG_WARNING("Invalid source type at path: %s, value: %s, error: %s",
-                               srcTypePath.c_str(), result_kvp.c_str(), e.what());
-            }
-        }
-        if (cap.sourceTypes.empty()) {
-            UT_LOG_WARNING("Plane %d has no valid source types, skipping", i);
-            continue;
+        } else {
+            UT_LOG_INFO("Plane %d: No sourceTypes defined in profile (optional field)", i);
         }
 
         // Read supported dynamic ranges
@@ -355,6 +356,8 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
         cap.maxHeight = UT_KVP_PROFILE_GET_UINT32((planeBasePath + ".maxHeight").c_str());
         cap.frameWidth = UT_KVP_PROFILE_GET_UINT32((planeBasePath + ".frameWidth").c_str());
         cap.frameHeight = UT_KVP_PROFILE_GET_UINT32((planeBasePath + ".frameHeight").c_str());
+        UT_LOG_DEBUG("Plane %d: maxWidth=%d, maxHeight=%d, frameWidth=%d, frameHeight=%d",
+                     i, cap.maxWidth, cap.maxHeight, cap.frameWidth, cap.frameHeight);
         if (cap.maxWidth <= 0 || cap.maxHeight <= 0) {
             UT_LOG_WARNING("Invalid maxWidth=%d or maxHeight=%d for plane %d, skipping",
                            cap.maxWidth, cap.maxHeight, i);
@@ -367,6 +370,11 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
         cap.supportsAlpha = UT_KVP_PROFILE_GET_BOOL((planeBasePath + ".supportsAlpha").c_str());
         cap.supportsZOrder = UT_KVP_PROFILE_GET_BOOL((planeBasePath + ".supportsZOrder").c_str());
         cap.vsyncDisplayLatency = UT_KVP_PROFILE_GET_UINT32((planeBasePath + ".vsyncDisplayLatency").c_str());
+        UT_LOG_DEBUG("Plane %d: colorDepth=%d, maxFrameRate=%d, supportsAlpha=%s, supportsZOrder=%s, vsyncDisplayLatency=%d",
+                     i, cap.colorDepth, cap.maxFrameRate,
+                     cap.supportsAlpha ? "true" : "false",
+                     cap.supportsZOrder ? "true" : "false",
+                     cap.vsyncDisplayLatency);
 
         UT_LOG_INFO("Plane %d: index=%d, type=%d, %zu pixel formats, %zu source types, %zu dynamic ranges, colorDepth=%d, maxFrameRate=%d",
                     i, cap.planeIndex, static_cast<int>(cap.type), cap.pixelFormats.size(),

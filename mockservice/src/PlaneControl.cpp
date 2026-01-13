@@ -510,29 +510,44 @@ namespace com {
 
                 android::binder::Status PlaneControl::getPropertyMulti(
                     int32_t planeResourceIndex,
+                    const std::vector<Property>& properties,
                     std::vector<PropertyKVPair>* propertyKVList,
                     bool* _aidl_return) {
 
-                    if (propertyKVList == nullptr || _aidl_return == nullptr ||
-                        planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
+                    if (propertyKVList == nullptr || _aidl_return == nullptr) {
                         *_aidl_return = false;
-                        std::cout << "[SERVICE] Invalid planeResourceIndex " << planeResourceIndex
-                                  << " or null propertyKVList/_aidl_return" << std::endl;
+                        std::cout << "[SERVICE] Null propertyKVList or _aidl_return" << std::endl;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_NULL_POINTER);
+                    }
+
+                    if (properties.empty()) {
+                        *_aidl_return = false;
+                        std::cout << "[SERVICE] Empty properties list" << std::endl;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+
+                    if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
+                        *_aidl_return = false;
+                        std::cout << "[SERVICE] Invalid planeResourceIndex " << planeResourceIndex << std::endl;
                         return android::binder::Status::ok();
                     }
 
                     const auto& propertyMap = mPlaneProperties[planeResourceIndex];
                     bool allValid = true;
 
-                    for (auto& kv : *propertyKVList) {
-                        Property property = kv.property;
+                    propertyKVList->clear();
 
+                    for (const auto& property : properties) {
                         // Validate that the enum value is within the known range
                         if (property < Property::RESOURCE_ID || property > Property::ASPECT_RATIO) {
                             std::cout << "[SERVICE] Invalid property enum: " << static_cast<int>(property) << std::endl;
                             allValid = false;
-                            continue;
+                            propertyKVList->clear();
+                            break;
                         }
+
+                        PropertyKVPair kv;
+                        kv.property = property;
 
                         auto propIt = propertyMap.find(property);
                         if (propIt != propertyMap.end()) {
@@ -542,6 +557,8 @@ namespace com {
                             invalidValue.value = std::nullopt;
                             kv.propertyValue = invalidValue;
                         }
+
+                        propertyKVList->push_back(kv);
                     }
 
                     *_aidl_return = allValid;

@@ -168,12 +168,12 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetProperty) {
     for (const auto& capability : sCapabilities) {
         int32_t planeIndex = capability.planeIndex;
 
-        std::string propPath_width = "IPlaneControl.planes." + std::to_string(planeIndex) + ".frameWidth";
+        std::string propPath_width = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".frameWidth";
         uint32_t value_width = UT_KVP_PROFILE_GET_UINT32(propPath_width.c_str());
         PLANE_CONTROL_SET_CONFIG_UINT32_PROPERTY(planeIndex, WIDTH, WIDTH, frameWidth);
         PLANE_CONTROL_GET_CONFIG_UINT32_PROPERTY(planeIndex, WIDTH, WIDTH, value_width);
 
-        std::string propPath_height = "IPlaneControl.planes." + std::to_string(planeIndex) + ".frameHeight";
+        std::string propPath_height = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".frameHeight";
         uint32_t value_height = UT_KVP_PROFILE_GET_UINT32(propPath_height.c_str());
         PLANE_CONTROL_SET_CONFIG_UINT32_PROPERTY(planeIndex, HEIGHT, HEIGHT, frameHeight);
         PLANE_CONTROL_GET_CONFIG_UINT32_PROPERTY(planeIndex, HEIGHT, HEIGHT, value_height);
@@ -194,7 +194,7 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetProperty) {
         PLANE_CONTROL_GET_INT_ONE_PROPERTY(planeIndex, VISIBLE, VISIBLE);
 
 
-        std::string planeTypePath = "IPlaneControl.planes." + std::to_string(planeIndex) + ".type";
+        std::string planeTypePath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".type";
         char planeTypeString[256];
         UT_KVP_PROFILE_GET_STRING(planeTypePath.c_str(), planeTypeString);
         if (std::string(planeTypeString) == "VIDEO") {
@@ -223,13 +223,13 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         PropertyKVPair kvPair;
 
         kvPair.property = Property::WIDTH;
-        std::string frameWidthPath = "IPlaneControl.planes." + std::to_string(planeIndex) + ".frameWidth";
+        std::string frameWidthPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".frameWidth";
         uint32_t frame_width = UT_KVP_PROFILE_GET_UINT32(frameWidthPath.c_str());
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(frame_width);
         propertyKVList.push_back(kvPair);
 
         kvPair.property = Property::HEIGHT;
-        std::string frameHeightPath = "IPlaneControl.planes." + std::to_string(planeIndex) + ".frameHeight";
+        std::string frameHeightPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".frameHeight";
         uint32_t frame_height = UT_KVP_PROFILE_GET_UINT32(frameHeightPath.c_str());
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(frame_height);
         propertyKVList.push_back(kvPair);
@@ -242,7 +242,7 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
         propertyKVList.push_back(kvPair);
 
-        std::string supportsAlphaPath = "IPlaneControl.planes." + std::to_string(planeIndex) + ".supportsAlpha";
+        std::string supportsAlphaPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".supportsAlpha";
         bool supportsAlpha = UT_KVP_PROFILE_GET_BOOL(supportsAlphaPath.c_str());
         if (supportsAlpha) {
             kvPair.property = Property::ALPHA;
@@ -250,7 +250,7 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
             propertyKVList.push_back(kvPair);
         }
 
-        std::string supportsZOrderPath = "IPlaneControl.planes." + std::to_string(planeIndex) + ".supportsZOrder";
+        std::string supportsZOrderPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".supportsZOrder";
         bool supportsZOrder = UT_KVP_PROFILE_GET_BOOL(supportsZOrderPath.c_str());
         if (supportsZOrder) {
             kvPair.property = Property::ZORDER;
@@ -262,7 +262,7 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
         propertyKVList.push_back(kvPair);
 
-        std::string planeTypePath = "IPlaneControl.planes." + std::to_string(planeIndex) + ".type";
+        std::string planeTypePath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".type";
         char planeTypeString[256];
         UT_KVP_PROFILE_GET_STRING(planeTypePath.c_str(), planeTypeString);
         if (std::string(planeTypeString) == "VIDEO") {
@@ -287,18 +287,17 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         UT_ASSERT_TRUE(setResult);
 
         // Get the property value using getPropertyMulti
-        std::vector<PropertyKVPair> getPropertyKVList;
+        std::vector<Property> getProperties;
         for (const auto& kv : propertyKVList) {
-            PropertyKVPair kvGet;
-            kvGet.property = kv.property;
-            getPropertyKVList.push_back(kvGet);
+            getProperties.push_back(kv.property);
         }
 
+        std::vector<PropertyKVPair> getPropertyKVList;
         bool getResult;
-        UT_LOG_INFO("Calling getPropertyMulti(IN:planeIndex:[%d], INOUT:propertyKVList[])", planeIndex);
-        status = gPlaneControlservice->getPropertyMulti(planeIndex, &getPropertyKVList, &getResult);
-        UT_LOG_INFO("Result getPropertyMulti(IN:planeIndex:[%d], INOUT:propertyKVList[], OUT:getResult:[%d], status:[isOK:%s, exception:%s])",
-                    planeIndex, getResult,
+        UT_LOG_INFO("Calling getPropertyMulti(IN:planeIndex:[%d], IN:properties.size:[%zu], OUT:propertyKVList[], OUT:getResult)", planeIndex, getProperties.size());
+        status = gPlaneControlservice->getPropertyMulti(planeIndex, getProperties, &getPropertyKVList, &getResult);
+        UT_LOG_INFO("Result getPropertyMulti(IN:planeIndex:[%d], OUT:propertyKVList.size:[%zu], OUT:getResult:[%d], status:[isOK:%s, exception:%s])",
+                    planeIndex, getPropertyKVList.size(), getResult,
                     UT_Control_GetMapString(bool_mapTable, status.isOk()),
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
         UT_ASSERT_TRUE(status.isOk());
