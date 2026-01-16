@@ -87,6 +87,18 @@
 #include "com/rdk/hal/planecontrol/IPlaneControl.h"
 #include "com/rdk/hal/planecontrol/BnPlaneControlListener.h"
 
+
+#ifndef ENABLE_UT_INFO_LOGGING
+#ifdef UT_LOG_DEBUG
+#undef UT_LOG_DEBUG
+#define UT_LOG_DEBUG(...)
+#endif
+#ifdef UT_LOG_INFO
+#undef UT_LOG_INFO
+#define UT_LOG_INFO(...)
+#endif
+#endif
+
 using android::sp;
 using android::String16;
 using android::defaultServiceManager;
@@ -535,7 +547,7 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
         UT_ASSERT_FALSE(status.isOk()); \
-        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_NONE); \
+        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT); \
     } while(0)
 
 #define PLANE_CONTROL_ADD_PROP_TO_LIST(kvList, propEnum, intVal) { \
@@ -867,7 +879,9 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
         UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:mappings), status:[isOK:%s, exception:%s]", \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
-        UT_ASSERT_FALSE(status.isOk()); \
+        UT_ASSERT_TRUE(status.isOk()); \
+        UT_ASSERT_FALSE(aidl_return) << "Expected false return but got true"; \
+        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_NONE); \
     } while (0)
 
 // Macro to call and validate setVideoSourceDestinationPlaneMapping API (negative case with expected exception)
