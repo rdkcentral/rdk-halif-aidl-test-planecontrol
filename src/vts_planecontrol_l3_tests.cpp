@@ -611,8 +611,9 @@ public:
                                       decoderControlListener, testConfig, sinkConfig);
 
                     sinkThread = std::make_unique<std::thread>(&SinkTest::run, &sinkTest, true);
+                    bool isSinkAttached = (sinkHandle != nullptr);
                     videoDecoderTest decodeTest(decoderId, decoderHandle, decoderControlListener,
-                                                decoderEventListener, mAVBufferManager, false, false, testConfig, mAVbufferHelper);
+                                                decoderEventListener, mAVBufferManager, false, false, testConfig, mAVbufferHelper, isSinkAttached);
                     decoderThread= std::make_unique<std::thread>(&videoDecoderTest::run, &decodeTest, true);
 
                     std::this_thread::sleep_for(std::chrono::milliseconds(500));
