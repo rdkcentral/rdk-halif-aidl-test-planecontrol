@@ -44,14 +44,22 @@ BIN_DIR := $(ROOT_DIR)/build/bin
 LIB_DIR := $(ROOT_DIR)/build/$(TARGET)/lib
 BUILD_DIR := $(ROOT_DIR)/build/$(TARGET)/obj
 
-INC_DIRS := $(ROOT_DIR)/build/planecontrol_gen/current/h
+INC_DIRS := $(ROOT_DIR)/build/avbuffer_gen/current/h
+INC_DIRS += $(ROOT_DIR)/rdk-halif-aidl/avbuffer/current
+INC_DIRS += $(ROOT_DIR)/build/audiodecoder_gen/current/h
+INC_DIRS += $(ROOT_DIR)/build/videodecoder_gen/current/h
+INC_DIRS += $(ROOT_DIR)/build/videosink_gen/current/h
+INC_DIRS += $(ROOT_DIR)/build/planecontrol_gen/current/h
 INC_DIRS += $(ROOT_DIR)/build/usr/include
-INC_DIRS += $(ROOT_DIR)/src/
+INC_DIRS += $(ROOT_DIR)/mockservice/avbufferhelper
+INC_DIRS += $(ROOT_DIR)/src
+INC_DIRS += $(ROOT_DIR)/src
 
 XLDFLAGS := -L$(ROOT_DIR)/build/usr/lib
-XLDFLAGS += -Wl,-rpath-link=$(ROOT_DIR)/build/usr/lib
-XLDFLAGS += -lbinder -lutils
-XLDFLAGS += -lplanecontrolaidl
+XLDFLAGS += -Wl,-rpath-link=$(ROOT_DIR)/build/usr/lib -Wl,--export-dynamic
+XLDFLAGS += -laudiodecoderaidl -lavbufferaidl -lvideodecoderaidl -lvideosinkaidl -lplanecontrolaidl
+XLDFLAGS += -lhal_logger -lavbufferhelper
+XLDFLAGS += -lEGL -lGLESv2 -lpthread
 
 # required for std::optional
 CXXFLAGS += -std=c++17

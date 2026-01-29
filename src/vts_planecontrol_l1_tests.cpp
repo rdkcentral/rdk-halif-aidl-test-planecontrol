@@ -92,12 +92,6 @@ const std::vector<::com::rdk::hal::planecontrol::Property> graphicProperties = {
     ::com::rdk::hal::planecontrol::Property::VISIBLE
 };
 
-class ValidPlaneControlListener : public BnPlaneControlListener {
-public:
-
-    ValidPlaneControlListener() {};
-    virtual ~ValidPlaneControlListener() = default;
-};
 extern std::vector<planeControl_Cap> gPlaneControl_hfp;
 
 class VTS_L1_PlaneControl : public virtual UTCore
