@@ -50,8 +50,10 @@
  *
  */
 #include "vts_planecontrol.h"
+#include "vts_planecontrol_parse_testconfig.h"
 
 sp<IPlaneControl> gPlaneControlservice;
+void *gPlaneControlTestConfiguration;
 
 UT_status_t VTS_PlaneControl_init()
 {
@@ -65,10 +67,20 @@ UT_status_t VTS_PlaneControl_init()
         UT_LOG_ERROR("Failed to process the HFP file");
         return UT_STATUS_FAILURE;
     }
+    gPlaneControlTestConfiguration = vts_kvp_create_instance(PLANE_CONTROL_TEST_CONFIG_PATH);
+
+    if (gPlaneControlTestConfiguration == nullptr) {
+        UT_LOG_ERROR("Failed to create Plane Control Test Configuration instance (file missing or parse error)");
+        return UT_STATUS_FAILURE;
+    }
 
     return UT_STATUS_OK;
 }
 
+void VTS_PlaneControl_destroy()
+{
+    vts_kvp_destroy_instance(gPlaneControlTestConfiguration);
+}
  /** @} */ // End of Plane_Control_Halif_Test_Init
  /** @} */ // End of Plane_Control_Halif_Test
  /** @} */ // End of Plane_Control

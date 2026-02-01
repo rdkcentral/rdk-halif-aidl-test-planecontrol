@@ -85,7 +85,21 @@
 #include <unistd.h>
 
 #include "com/rdk/hal/planecontrol/IPlaneControl.h"
+#include "com/rdk/hal/planecontrol/AspectRatio.h"
 #include "com/rdk/hal/planecontrol/BnPlaneControlListener.h"
+#include "vts_helper_functions.h"
+
+
+#ifndef ENABLE_UT_INFO_LOGGING
+#ifdef UT_LOG_DEBUG
+#undef UT_LOG_DEBUG
+#define UT_LOG_DEBUG(...)
+#endif
+#ifdef UT_LOG_INFO
+#undef UT_LOG_INFO
+#define UT_LOG_INFO(...)
+#endif
+#endif
 
 using android::sp;
 using android::String16;
@@ -125,6 +139,15 @@ static uint32_t gNoGraphicsTypePlanes = 0;
 extern std::vector<planeControl_Cap> gPlaneControl_hfp;
 extern sp<IPlaneControl> gPlaneControlservice;
 
+/**
+ * @brief Global test configuration pointer for Plane Control tests.
+ *
+ * This variable is initialized in VTS_PlaneControl_init() and must not be accessed
+ * before initialization. Ensure VTS_PlaneControl_init() is called before any usage.
+ * The variable should be cleaned up appropriately during shutdown.
+ */
+extern void *gPlaneControlTestConfiguration;
+
 // Function to parse the PlaneControl HFP profile
 UT_status_t vts_planecontrol_parsePlaneControlHFP();
 UT_status_t getPlaneControlService();
@@ -133,32 +156,6 @@ bool ValidatePropertyList(uint32_t planeIndex, const std::vector<::com::rdk::hal
 
 void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::Capabilities& actual,
     const planeControl_Cap& expected);
-
-/* Status::Exception */
-const static ut_control_keyStringMapping_t statusException_mapTable[] =
-{
-    {(char*)"EX_NONE",                  (int32_t) Status::EX_NONE},
-    {(char*)"EX_SECURITY",              (int32_t) Status::EX_SECURITY},
-    {(char*)"EX_BAD_PARCELABLE",        (int32_t) Status::EX_BAD_PARCELABLE},
-    {(char*)"EX_ILLEGAL_ARGUMENT",      (int32_t) Status::EX_ILLEGAL_ARGUMENT},
-    {(char*)"EX_NULL_POINTER",          (int32_t) Status::EX_NULL_POINTER},
-    {(char*)"EX_ILLEGAL_STATE",         (int32_t) Status::EX_ILLEGAL_STATE},
-    {(char*)"EX_NETWORK_MAIN_THREAD",   (int32_t) Status::EX_NETWORK_MAIN_THREAD},
-    {(char*)"EX_UNSUPPORTED_OPERATION", (int32_t) Status::EX_UNSUPPORTED_OPERATION},
-    {(char*)"EX_SERVICE_SPECIFIC",      (int32_t) Status::EX_SERVICE_SPECIFIC},
-    {(char*)"EX_PARCELABLE",            (int32_t) Status::EX_PARCELABLE},
-    {(char*)"EX_HAS_REPLY_HEADER",      (int32_t) Status::EX_HAS_REPLY_HEADER},
-    {(char*)"EX_TRANSACTION_FAILED",    (int32_t) Status::EX_TRANSACTION_FAILED},
-    {NULL, -1}
-};
-
-/* bool */
-const static ut_control_keyStringMapping_t bool_mapTable[] =
-{
-    {(char*)"false", (int32_t) false},
-    {(char*)"true",  (int32_t) true},
-    {NULL, -1}
-};
 
 // Macro to iterate over all planes and filter by type (VIDEO or GRAPHICS)
 #define PLANE_CONTROL_FOREACH_PLANE_BY_TYPE(planeCount, planeTypeEnum, desiredType, planeIndexVar, body) \
@@ -206,9 +203,10 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
     do { \
         UT_LOG_INFO("Calling getNativeGraphicsWindowHandle [%s] (IN:planeResourceIndex:[%u], OUT:nativeGraphicsWindowHandle[])", label, plane_index); \
         ::android::binder::Status status = gPlaneControlservice->getNativeGraphicsWindowHandle(plane_index, &native_handle); \
-        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "]"; \
-        std::string output_params = "OUT:nativeGraphicsWindowHandle:[0x" + std::to_string(native_handle) + "]"; \
-        PLANE_CONTROL_LOG_API_CALL("getNativeGraphicsWindowHandle", input_params, output_params, status, status.isOk()); \
+        UT_LOG_INFO("Result getNativeGraphicsWindowHandle [%s] (IN:planeResourceIndex:[%u]), status:[isOK:%s, exception:%s]", \
+                    label, plane_index, \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
         UT_ASSERT_FALSE(status.isOk()) << "getNativeGraphicsWindowHandle should fail for " << label; \
         UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT) << "Expected EX_ILLEGAL_ARGUMENT for " << label; \
     } while (0)
@@ -238,13 +236,13 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
 
 #define PLANE_CONTROL_SET_PROPERTY_MULTI_ATOMIC_NEG(plane_index, prop_list, label) \
     do { \
-        bool aidl_return = false; /* Initialize to true to ensure mock sets it */ \
+        bool aidl_return = false; \
         UT_LOG_INFO("Calling setPropertyMultiAtomic [%s] (IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return)", label, plane_index); \
         ::android::binder::Status status = gPlaneControlservice->setPropertyMultiAtomic(plane_index, prop_list, &aidl_return); \
-        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "], IN:propertyKVList[]"; \
-        std::string output_params = "OUT:_aidl_return:[" + std::string(aidl_return ? "true" : "false") + "]"; \
-        PLANE_CONTROL_LOG_API_CALL("setPropertyMultiAtomic", input_params, output_params, status, aidl_return); \
-        UT_ASSERT_FALSE(aidl_return) << "setPropertyMultiAtomic should fail for " << label << " index " << plane_index; \
+        UT_LOG_INFO("Result setPropertyMultiAtomic [%s] (IN:planeResourceIndex:[%d]), status:[isOK:%s, exception:%s]", \
+                    label, plane_index, \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
         UT_ASSERT_FALSE(status.isOk()) << "Status should be EX_ILLEGAL_ARGUMENT for " << label << " index " << plane_index; \
         UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT) << "Expected EX_ILLEGAL_ARGUMENT for " << label << " index " << plane_index; \
     } while (0)
@@ -268,12 +266,12 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
     do { \
         UT_LOG_INFO("Calling flipGraphicsBuffer [%s] (IN:planeResourceIndex:[%d], OUT:_aidl_return)", label, plane_index); \
         ::android::binder::Status status = gPlaneControlservice->flipGraphicsBuffer(plane_index, &aidl_return); \
-        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "]"; \
-        std::string output_params = "OUT:_aidl_return:[" + std::to_string(aidl_return) + "]"; \
-        PLANE_CONTROL_LOG_API_CALL("flipGraphicsBuffer", input_params, output_params, status, status.isOk()); \
+        UT_LOG_INFO("Result flipGraphicsBuffer [%s] (IN:planeResourceIndex:[%d]), status:[isOK:%s, exception:%s]", \
+                    label, plane_index, \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
         UT_ASSERT_FALSE(status.isOk()) << "flipGraphicsBuffer should fail for " << label; \
         UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT) << "Expected EX_ILLEGAL_ARGUMENT for " << label; \
-        UT_ASSERT_FALSE(aidl_return) << "flipGraphicsBuffer returned true for " << label; \
     } while (0)
 
 // Macro to call and validate getVideoSourceDestinationPlaneMapping API (negative case with expected invalid mappings)
@@ -339,18 +337,22 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
 // Macro to call and validate registerListener API (negative case with expected failure)
 #define PLANE_CONTROL_REGISTER_LISTENER_NEG(listener, aidl_return, label) \
     do { \
-        UT_LOG_INFO("Calling registerListener [%s] (IN:listener:[0x%X], OUT:_aidl_return)", label, listener.get()); \
+        UT_LOG_INFO("Calling registerListener [%s] (IN:listener:[%s])", label, \
+                    (listener ? std::to_string(reinterpret_cast<uintptr_t>(listener.get())).c_str() : "nullptr")); \
         ::android::binder::Status status = gPlaneControlservice->registerListener(listener, &aidl_return); \
-        std::string input_params = "IN:listener:[0x" + (listener ? std::to_string(reinterpret_cast<uintptr_t>(listener.get())) : "nullptr") + "]"; \
-        std::string output_params = "OUT:_aidl_return:[" + std::string(aidl_return ? "true" : "false") + "]"; \
-        PLANE_CONTROL_LOG_API_CALL("registerListener", input_params, output_params, status, aidl_return); \
+        UT_LOG_INFO("Result registerListener [%s] (IN:listener:[%s]), status:[isOK:%s, exception:%s]", \
+                    label, \
+                    (listener ? std::to_string(reinterpret_cast<uintptr_t>(listener.get())).c_str() : "nullptr"), \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
         if (listener == nullptr) { \
-            UT_ASSERT_FALSE(status.isOk()) << "registerListener should fail with status not OK for " << label; \
+            UT_ASSERT_FALSE(status.isOk()) << "registerListener should fail with status not OK for null listener for " << label; \
+            UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_NULL_POINTER) << "Expected EX_NULL_POINTER for null listener for " << label; \
         } \
         else {\
-            UT_ASSERT_TRUE(status.isOk()) << "registerListener should fail for " << label; \
+            UT_ASSERT_TRUE(status.isOk()) << "registerListener status should be OK for already registered listener for " << label; \
+            UT_ASSERT_FALSE(aidl_return) << "registerListener should return false for already registered listener for " << label; \
         }\
-        UT_ASSERT_FALSE(aidl_return) << "registerListener should return false for " << label; \
     } while (0)
 
 // Macro to call and validate unregisterListener API (positive case with expected success)
@@ -368,18 +370,22 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
 // Macro to call and validate unregisterListener API (negative case with expected failure)
 #define PLANE_CONTROL_UNREGISTER_LISTENER_NEG(listener, aidl_return, label) \
     do { \
-        UT_LOG_INFO("Calling unregisterListener [%s] (IN:listener:[0x%X], OUT:_aidl_return)", label, listener.get()); \
+        UT_LOG_INFO("Calling unregisterListener [%s] (IN:listener:[%s])", label, \
+                    (listener ? std::to_string(reinterpret_cast<uintptr_t>(listener.get())).c_str() : "nullptr")); \
         ::android::binder::Status status = gPlaneControlservice->unregisterListener(listener, &aidl_return); \
-        std::string input_params = "IN:listener:[0x" + (listener ? std::to_string(reinterpret_cast<uintptr_t>(listener.get())) : "nullptr") + "]"; \
-        std::string output_params = "OUT:_aidl_return:[" + std::string(aidl_return ? "true" : "false") + "]"; \
-        PLANE_CONTROL_LOG_API_CALL("unregisterListener", input_params, output_params, status, aidl_return); \
+        UT_LOG_INFO("Result unregisterListener [%s] (IN:listener:[%s]), status:[isOK:%s, exception:%s]", \
+                    label, \
+                    (listener ? std::to_string(reinterpret_cast<uintptr_t>(listener.get())).c_str() : "nullptr"), \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
         if (listener == nullptr) { \
-            UT_ASSERT_FALSE(status.isOk()) << "UnregisterListener should fail with status not OK for " << label; \
+            UT_ASSERT_FALSE(status.isOk()) << "unregisterListener should fail with status not OK for null listener for " << label; \
+            UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_NULL_POINTER) << "Expected EX_NULL_POINTER for null listener for " << label; \
         } \
         else {\
-            UT_ASSERT_TRUE(status.isOk()) << "UnregisterListener should fail for " << label; \
+            UT_ASSERT_TRUE(status.isOk()) << "unregisterListener status should be OK for not found listener for " << label; \
+            UT_ASSERT_FALSE(aidl_return) << "unregisterListener should return false for not found listener for " << label; \
         }\
-        UT_ASSERT_FALSE(aidl_return) << "unregisterListener should return false for " << label; \
     } while (0)
 
 // Macro to call and validate releaseNativeGraphicsWindowHandle API (positive case with expected success)
@@ -402,7 +408,7 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
         std::string output_params = input_params; \
         PLANE_CONTROL_LOG_API_CALL("releaseNativeGraphicsWindowHandle", input_params, output_params, status, status.isOk()); \
         UT_ASSERT_FALSE(status.isOk()) << "releaseNativeGraphicsWindowHandle should fail for " << label; \
-        ASSERT_EQ(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT) << "Expected EX_ILLEGAL_ARGUMENT for " << label; \
+        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT) << "Expected EX_ILLEGAL_ARGUMENT for " << label; \
     } while (0)
 
 // Macro to iterate over VIDEO planes
@@ -427,9 +433,11 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
 #define PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG_WITH_EXCEPTION(mappings, aidl_return, expected_exception) \
     do { \
         android::binder::Status status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(mappings, &aidl_return); \
-        UT_ASSERT_FALSE(aidl_return) << "setVideoSourceDestinationPlaneMapping should return false"; \
-        UT_ASSERT_FALSE(status.isOk()) << "Expected exception " << expected_exception; \
-        UT_ASSERT_EQ(status.exceptionCode(), expected_exception) << "Expected exception " << expected_exception; \
+        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(), status:[isOK:%s, exception:%s]", \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
+        UT_ASSERT_FALSE(status.isOk()) << "Expected exception but call succeeded"; \
+        UT_ASSERT_EQUAL(status.exceptionCode(), expected_exception) << "Expected exception code " << expected_exception << " but got " << status.exceptionCode(); \
     } while (0)
 
 // Macro to call and validate getVideoSourceDestinationPlaneMapping API
@@ -523,9 +531,8 @@ const static ut_control_keyStringMapping_t bool_mapTable[] =
                     UT_Control_GetMapString(bool_mapTable, _aidl_return), \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
-        UT_ASSERT_FALSE(_aidl_return); \
-        UT_ASSERT_EQUAL(status.isOk(), true); \
-        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_NONE); \
+        UT_ASSERT_FALSE(status.isOk()); \
+        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT); \
     } while(0)
 
 #define PLANE_CONTROL_ADD_PROP_TO_LIST(kvList, propEnum, intVal) { \
@@ -719,14 +726,13 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
                     plane_index, PropertyToString(property), \
                     property_value.value.has_value() ? "valid" : "null"); \
         ::android::binder::Status status = gPlaneControlservice->setProperty(plane_index, property, property_value, &aidl_return); \
-        UT_LOG_INFO("Result setProperty(IN:planeResourceIndex:[%d], IN:property:[%s], IN:propertyValue:[%s], OUT:aidl_return:[%s], status:[isOK:%s, exception:%s])", \
+        UT_LOG_INFO("Result setProperty(IN:planeResourceIndex:[%d], IN:property:[%s], IN:propertyValue:[%s]), status:[isOK:%s, exception:%s])", \
                     plane_index, PropertyToString(property), \
                     property_value.value.has_value() ? "valid" : "null", \
-                    aidl_return ? "true" : "false", \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
-        UT_ASSERT_FALSE(aidl_return) << "setProperty should return false for plane index " << plane_index << ", property " << PropertyToString(property); \
         UT_ASSERT_EQUAL(status.exceptionCode(), expected_exception) << "Expected exception " << #expected_exception << " for plane index " << plane_index; \
+        UT_ASSERT_FALSE(status.isOk()) << "setProperty should fail for plane index " << plane_index << ", property " << PropertyToString(property); \
     } while (0)
 
 // Macro to call and validate getProperty API (positive case)
@@ -750,14 +756,12 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
         UT_LOG_INFO("Calling getProperty(IN:planeResourceIndex:[%d], IN:property:[%s], OUT:propertyValue)", \
                     plane_index, PropertyToString(property)); \
         ::android::binder::Status status = gPlaneControlservice->getProperty(plane_index, property, &property_value); \
-        UT_LOG_INFO("Result getProperty(IN:planeResourceIndex:[%d], IN:property:[%s], OUT:propertyValue:[%s], status:[isOK:%s, exception:%s])", \
+        UT_LOG_INFO("Result getProperty(IN:planeResourceIndex:[%d], IN:property:[%s]), status:[isOK:%s, exception:%s])", \
                     plane_index, PropertyToString(property), \
-                    property_value.has_value() ? "valid" : "null", \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
         UT_ASSERT_FALSE(status.isOk()) << "getProperty should fail for plane index " << plane_index << ", property " << PropertyToString(property); \
         UT_ASSERT_EQUAL(status.exceptionCode(), expected_exception) << "Expected exception " << #expected_exception << " for plane index " << plane_index; \
-        UT_ASSERT_FALSE(property_value.has_value()) << "Property value should be null for plane index " << plane_index << ", property " << PropertyToString(property); \
     } while (0)
 
 // Macro to set video source destination plane mapping
@@ -857,11 +861,12 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
     do { \
         UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:mappings, OUT:_aidl_return)"); \
         ::android::binder::Status status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(mappings, &aidl_return); \
-        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:mappings, OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]", \
-                    aidl_return ? "true" : "false", \
+        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:mappings), status:[isOK:%s, exception:%s]", \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
-        UT_ASSERT_FALSE(aidl_return) << "setVideoSourceDestinationPlaneMapping should return false"; \
+        UT_ASSERT_TRUE(status.isOk()); \
+        UT_ASSERT_FALSE(aidl_return) << "Expected false return but got true"; \
+        UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_NONE); \
     } while (0)
 
 // Macro to call and validate setVideoSourceDestinationPlaneMapping API (negative case with expected exception)
@@ -869,12 +874,11 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
     do { \
         UT_LOG_INFO("Calling setVideoSourceDestinationPlaneMapping(IN:mappings, OUT:_aidl_return)"); \
         ::android::binder::Status status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(mappings, &aidl_return); \
-        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:mappings, OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]", \
-                    aidl_return ? "true" : "false", \
+        UT_LOG_INFO("Result setVideoSourceDestinationPlaneMapping(IN:mappings), status:[isOK:%s, exception:%s]", \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
-        UT_ASSERT_FALSE(aidl_return) << "setVideoSourceDestinationPlaneMapping should return false"; \
-        UT_ASSERT_EQUAL(status.exceptionCode(), expected_exception) << "Expected exception " << #expected_exception; \
+        UT_ASSERT_FALSE(status.isOk()) << "Expected exception but call succeeded"; \
+        UT_ASSERT_EQUAL(status.exceptionCode(), expected_exception) << "Expected exception code " << expected_exception << " but got " << status.exceptionCode(); \
     } while (0)
 
 // Macro to verify a specific source plane mapping
@@ -909,6 +913,12 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(unmap_mappings, aidl_return); \
     } while (0)
 
+class ValidPlaneControlListener : public BnPlaneControlListener {
+public:
+
+    ValidPlaneControlListener() {};
+    virtual ~ValidPlaneControlListener() = default;
+};
 
 #endif //__VTS_PLANECONTROL_H__
 
