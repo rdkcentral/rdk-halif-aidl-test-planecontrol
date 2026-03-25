@@ -222,13 +222,13 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
         ::com::rdk::hal::planecontrol::PropertyKVPair kvPair;
 
-        kvPair.property = Property::WIDTH;
+        kvPair.property = com::rdk::hal::planecontrol::Property::WIDTH;
         std::string frameWidthPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".frameWidth";
         uint32_t frame_width = UT_KVP_PROFILE_GET_UINT32(frameWidthPath.c_str());
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(frame_width);
         propertyKVList.push_back(kvPair);
 
-        kvPair.property = Property::HEIGHT;
+        kvPair.property = com::rdk::hal::planecontrol::Property::HEIGHT;
         std::string frameHeightPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".frameHeight";
         uint32_t frame_height = UT_KVP_PROFILE_GET_UINT32(frameHeightPath.c_str());
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(frame_height);
@@ -287,12 +287,12 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         UT_ASSERT_TRUE(setResult);
 
         // Get the property value using getPropertyMulti
-        std::vector<Property> getProperties;
+        std::vector<com::rdk::hal::planecontrol::Property> getProperties;
         for (const auto& kv : propertyKVList) {
             getProperties.push_back(kv.property);
         }
 
-        std::vector<PropertyKVPair> getPropertyKVList;
+        std::vector<com::rdk::hal::planecontrol::PropertyKVPair> getPropertyKVList;
         bool getResult;
         UT_LOG_INFO("Calling getPropertyMulti(IN:planeIndex:[%d], IN:properties.size:[%zu], OUT:propertyKVList[], OUT:getResult)", planeIndex, getProperties.size());
         status = gPlaneControlservice->getPropertyMulti(planeIndex, getProperties, &getPropertyKVList, &getResult);
