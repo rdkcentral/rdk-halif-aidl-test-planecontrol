@@ -219,8 +219,8 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         int32_t planeIndex = capability.planeIndex;
 
         // Prepare Key value pair of the available properties
-        std::vector<PropertyKVPair> propertyKVList;
-        PropertyKVPair kvPair;
+        std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
+        ::com::rdk::hal::planecontrol::PropertyKVPair kvPair;
 
         kvPair.property = Property::WIDTH;
         std::string frameWidthPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".frameWidth";
@@ -234,18 +234,18 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(frame_height);
         propertyKVList.push_back(kvPair);
 
-        kvPair.property = Property::X;
+        kvPair.property = ::com::rdk::hal::planecontrol::Property::X;
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
         propertyKVList.push_back(kvPair);
 
-        kvPair.property = Property::Y;
+        kvPair.property = ::com::rdk::hal::planecontrol::Property::Y;
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
         propertyKVList.push_back(kvPair);
 
         std::string supportsAlphaPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".supportsAlpha";
         bool supportsAlpha = UT_KVP_PROFILE_GET_BOOL(supportsAlphaPath.c_str());
         if (supportsAlpha) {
-            kvPair.property = Property::ALPHA;
+            kvPair.property = ::com::rdk::hal::planecontrol::Property::ALPHA;
             kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             propertyKVList.push_back(kvPair);
         }
@@ -253,12 +253,12 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         std::string supportsZOrderPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".supportsZOrder";
         bool supportsZOrder = UT_KVP_PROFILE_GET_BOOL(supportsZOrderPath.c_str());
         if (supportsZOrder) {
-            kvPair.property = Property::ZORDER;
+            kvPair.property = ::com::rdk::hal::planecontrol::Property::ZORDER;
             kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
             propertyKVList.push_back(kvPair);
         }
 
-        kvPair.property = Property::VISIBLE;
+        kvPair.property = ::com::rdk::hal::planecontrol::Property::VISIBLE;
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
         propertyKVList.push_back(kvPair);
 
@@ -266,11 +266,11 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         char planeTypeString[256];
         UT_KVP_PROFILE_GET_STRING(planeTypePath.c_str(), planeTypeString);
         if (std::string(planeTypeString) == "VIDEO") {
-            kvPair.property = Property::OVERSCAN;
+            kvPair.property = ::com::rdk::hal::planecontrol::Property::OVERSCAN;
             kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             propertyKVList.push_back(kvPair);
 
-            kvPair.property = Property::ASPECT_RATIO;
+            kvPair.property = ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO;
             kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
             propertyKVList.push_back(kvPair);
         }
@@ -304,31 +304,31 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         UT_ASSERT_TRUE(getResult);
 
         for (const auto& kv : getPropertyKVList) {
-            if (kv.property == Property::WIDTH && kv.propertyValue.value.has_value()) {
+            if (kv.property == ::com::rdk::hal::planecontrol::Property::WIDTH && kv.propertyValue.value.has_value()) {
                 int32_t width = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
                 UT_ASSERT_EQUAL(width, frame_width);
-            } else if (kv.property == Property::HEIGHT && kv.propertyValue.value.has_value()) {
+            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::HEIGHT && kv.propertyValue.value.has_value()) {
                 int32_t height = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
                 UT_ASSERT_EQUAL(height, frame_height);
-            } else if (kv.property == Property::X && kv.propertyValue.value.has_value()) {
+            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::X && kv.propertyValue.value.has_value()) {
                 int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
                 UT_ASSERT_EQUAL(val, 0);
-            } else if (kv.property == Property::Y && kv.propertyValue.value.has_value()) {
+            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::Y && kv.propertyValue.value.has_value()) {
                 int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
                 UT_ASSERT_EQUAL(val, 0);
-            } else if (kv.property == Property::ALPHA && kv.propertyValue.value.has_value()) {
+            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::ALPHA && kv.propertyValue.value.has_value()) {
                 int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
                 UT_ASSERT_EQUAL(val, 0);
-            } else if (kv.property == Property::ZORDER && kv.propertyValue.value.has_value()) {
+            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::ZORDER && kv.propertyValue.value.has_value()) {
                 int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
                 UT_ASSERT_EQUAL(val, 1);
-            } else if (kv.property == Property::VISIBLE && kv.propertyValue.value.has_value()) {
+            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::VISIBLE && kv.propertyValue.value.has_value()) {
                 int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
                 UT_ASSERT_EQUAL(val, 1);
-            } else if (kv.property == Property::OVERSCAN && kv.propertyValue.value.has_value()) {
+            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::OVERSCAN && kv.propertyValue.value.has_value()) {
                 int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
                 UT_ASSERT_EQUAL(val, 0);
-            } else if (kv.property == Property::ASPECT_RATIO && kv.propertyValue.value.has_value()) {
+            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO && kv.propertyValue.value.has_value()) {
                 int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
                 UT_ASSERT_EQUAL(val, 1);
             }
