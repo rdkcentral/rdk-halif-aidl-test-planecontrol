@@ -110,7 +110,7 @@ using namespace ::com::rdk::hal;
 using namespace ::com::rdk::hal::videodecoder;
 using namespace ::com::rdk::hal::planecontrol;
 
-#define PLANE_CONTROL_MGR "IPlaneControl"
+#define PLANE_CONTROL_MGR "planecontrol"
 #define PLANE_CONTROL_MGR_PLANES (std::string(PLANE_CONTROL_MGR) + ".planes")
 
 #define UT_KVP_MAX_KEY_SIZE 128
@@ -490,44 +490,48 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::Capabilities& 
         UT_ASSERT_TRUE(aidl_return);                                                                                   \
     }
 
-// Macro: Builds and populates a property list
-#define PLANE_CONTROL_BUILD_PROPERTY_KV_LIST(propertyList, kvList) \
+// Macro: Builds and populates a properties list
+#define PLANE_CONTROL_BUILD_PROPERTY_LIST(propertyEnums, propertiesList) \
     do { \
-        kvList.clear(); \
-        for (const auto& property : propertyList) { \
-            ::com::rdk::hal::planecontrol::PropertyKVPair kvPair; \
-            kvPair.property = property; \
-            kvList.push_back(kvPair); \
+        propertiesList.clear(); \
+        for (const auto& property : propertyEnums) { \
+            propertiesList.push_back(property); \
         } \
     } while(0)
 
 // Macro: Executes getPropertyMulti and asserts
-#define PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(index, kvList, planeTypeLabel) \
+#define PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(index, propertyEnums, kvList, planeTypeLabel) \
     do { \
+        std::vector<::com::rdk::hal::planecontrol::Property> properties; \
+        PLANE_CONTROL_BUILD_PROPERTY_LIST(propertyEnums, properties); \
         bool _aidl_return = false; \
-        UT_LOG_INFO("Calling getPropertyMulti [%s] plane (IN:planeResourceIndex:[%d], IN/OUT:propertyKVList[], OUT:_aidl_return)", planeTypeLabel, index); \
-        ::android::binder::Status status = gPlaneControlservice->getPropertyMulti(index, &kvList, &_aidl_return); \
+        UT_LOG_INFO("Calling getPropertyMulti [%s] plane (IN:planeResourceIndex:[%d], IN:properties.size:[%zu], OUT:propertyKVList[], OUT:_aidl_return)", planeTypeLabel, index, properties.size()); \
+        ::android::binder::Status status = gPlaneControlservice->getPropertyMulti(index, properties, &kvList, &_aidl_return); \
         UT_ASSERT_TRUE(status.isOk()); \
         UT_ASSERT_TRUE(_aidl_return); \
         UT_ASSERT_FALSE(kvList.empty()); \
-        for (const auto& kvPair : kvList) { \
-            UT_ASSERT_TRUE(kvPair.propertyValue.value.has_value()); \
+        UT_ASSERT_EQUAL(kvList.size(), properties.size()); \
+        for (size_t i = 0; i < kvList.size(); i++) { \
+            UT_ASSERT_EQUAL(kvList[i].property, properties[i]); \
+            UT_ASSERT_TRUE(kvList[i].propertyValue.value.has_value()); \
         } \
-        UT_LOG_INFO("Result getPropertyMulti [%s] plane (IN:planeResourceIndex:[%d], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s])", \
-            planeTypeLabel, index, \
+        UT_LOG_INFO("Result getPropertyMulti [%s] plane (IN:planeResourceIndex:[%d], OUT:propertyKVList.size:[%zu], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s])", \
+            planeTypeLabel, index, kvList.size(), \
             UT_Control_GetMapString(bool_mapTable, _aidl_return), \
             UT_Control_GetMapString(bool_mapTable, status.isOk()), \
             UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
     } while(0)
 
 // Macro: Executes getPropertyMulti with expected failure and logs/asserts
-#define PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(index, kvList, label) \
+#define PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(index, propertyEnums, kvList, label) \
     do { \
+        std::vector<::com::rdk::hal::planecontrol::Property> properties; \
+        PLANE_CONTROL_BUILD_PROPERTY_LIST(propertyEnums, properties); \
         bool _aidl_return = false; \
-        UT_LOG_INFO("Calling getPropertyMulti [%s] (IN:planeResourceIndex:[%d], IN:propertyKVList[], OUT:_aidl_return)", label, index); \
-        ::android::binder::Status status = gPlaneControlservice->getPropertyMulti(index, &kvList, &_aidl_return); \
-        UT_LOG_INFO("Result getPropertyMulti [%s] (IN:planeResourceIndex:[%d], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s])", \
-                    label, index, \
+        UT_LOG_INFO("Calling getPropertyMulti [%s] (IN:planeResourceIndex:[%d], IN:properties.size:[%zu], OUT:propertyKVList[], OUT:_aidl_return)", label, index, properties.size()); \
+        ::android::binder::Status status = gPlaneControlservice->getPropertyMulti(index, properties, &kvList, &_aidl_return); \
+        UT_LOG_INFO("Result getPropertyMulti [%s] (IN:planeResourceIndex:[%d], OUT:propertyKVList.size:[%zu], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s])", \
+                    label, index, kvList.size(), \
                     UT_Control_GetMapString(bool_mapTable, _aidl_return), \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
@@ -557,7 +561,7 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::Capabilities& 
 		// Macro to set a uint32_t property from configuration
 #define PLANE_CONTROL_SET_CONFIG_UINT32_PROPERTY(PLANE_INDEX, PROP, PROP_NAME, PATH_SUFFIX) \
     do { \
-        std::string propPath = "IPlaneControl.planes." + std::to_string(PLANE_INDEX) + "." #PATH_SUFFIX; \
+        std::string propPath = PLANE_CONTROL_MGR_PLANES + "." + std::to_string(PLANE_INDEX) + "." #PATH_SUFFIX; \
         uint32_t value = UT_KVP_PROFILE_GET_UINT32(propPath.c_str()); \
         ::com::rdk::hal::PropertyValue propertyValue; \
         propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(value); \
@@ -589,7 +593,7 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::Capabilities& 
 // Macro to set a boolean property from configuration
 #define PLANE_CONTROL_SET_CONFIG_BOOL_PROPERTY(PLANE_INDEX, PROP, PROP_NAME, PATH_SUFFIX) \
     do { \
-        std::string propPath = "IPlaneControl.planes." + std::to_string(PLANE_INDEX) + "." #PATH_SUFFIX; \
+        std::string propPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(PLANE_INDEX) + "." #PATH_SUFFIX; \
         bool value = UT_KVP_PROFILE_GET_BOOL(propPath.c_str()); \
         ::com::rdk::hal::PropertyValue propertyValue; \
         propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(static_cast<int32_t>(value)); \
@@ -621,7 +625,7 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::Capabilities& 
 // set and get a boolean property from configuration
 #define PLANE_CONTROL_SET_GET_CONFIG_BOOL_PROPERTY(PLANE_INDEX, PROP, PROP_NAME, PATH_SUFFIX) \
     do { \
-        std::string propPath = "IPlaneControl.planes." + std::to_string(PLANE_INDEX) + "." #PATH_SUFFIX; \
+        std::string propPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(PLANE_INDEX) + "." #PATH_SUFFIX; \
         bool value = UT_KVP_PROFILE_GET_BOOL(propPath.c_str()); \
         PLANE_CONTROL_SET_CONFIG_BOOL_PROPERTY(PLANE_INDEX, PROP, PROP_NAME, PATH_SUFFIX); \
         PLANE_CONTROL_GET_CONFIG_BOOL_PROPERTY(PLANE_INDEX, PROP, PROP_NAME, value); \

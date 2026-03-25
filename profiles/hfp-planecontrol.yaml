@@ -22,17 +22,8 @@
 
 # HAL Feature Profile for planecontrol
 
-IPlaneControl:              # Component object begins
+planecontrol:                   # Component object begins
   interfaceVersion: current
-  sourceTypes:
-    - HDMI:
-      - 0
-      - 1
-    - COMPOSITE:
-      - 0
-    - SINK:
-      - 0
-      - 1
   planes:                   # Resource list
     - 0:                    # Resource object begins
         type: VIDEO

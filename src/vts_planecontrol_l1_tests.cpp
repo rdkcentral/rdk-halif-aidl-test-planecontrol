@@ -324,7 +324,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, flipGraphicsBuffer_pos) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Retrieve plane resource index using YAML macro | planeResourceIndex = UT_KVP_PROFILE_GET_UINT32(IPlaneControl.planes.<index>) | Should be successful | |
+ * | 01 | Retrieve plane resource index using YAML macro | planeResourceIndex = UT_KVP_PROFILE_GET_UINT32(planecontrol.planes.<index>) | Should be successful | |
  * | 02 | Log before calling the API | planeResourceIndex = [value] | Should be successful | |
  * | 03 | Call the flipGraphicsBuffer API with invalid index | planeResourceIndex = [value], _aidl_return = false | status.isOk() = false, _aidl_return = false | Should Fail |
  * | 04 | Log the result of the API call | planeResourceIndex = [value], _aidl_return = [false], status = [isOK:false, exception:...] | Should be successful | |
@@ -733,7 +733,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_pos) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Retrieve the number of planes from the YAML configuration | IPlaneControl.planes | planeCount should be retrieved | Should be successful |
+ * | 01 | Retrieve the number of planes from the YAML configuration | planecontrol.planes | planeCount should be retrieved | Should be successful |
  * | 02 | Calculate invalid plane resource index | invalidPlaneResourceIndex = planeCount + 1 | Should be calculated | Should be successful |
  * | 03 | Call getProperty with invalid plane resource index and valid property using PLANE_CONTROL_GET_PROPERTY_NEG | planeResourceIndex = invalidPlaneResourceIndex, property = RESOURCE_ID | status.isOk() = false, exception = EX_ILLEGAL_ARGUMENT, propertyValue.has_value() = false | Should Fail |
  * | 04 | Use valid plane resource index from VIDEO planes | validPlaneResourceIndex = VIDEO plane index | Should be retrieved | Should be successful |
@@ -741,7 +741,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_pos) {
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_neg) {
     // Step 1: Retrieve plane count
-    std::string plane_count_path = "IPlaneControl.planes";
+    std::string plane_count_path = PLANE_CONTROL_MGR_PLANES;
     uint32_t planeCount = UT_KVP_PROFILE_GET_UINT32(plane_count_path.c_str());
     UT_LOG_INFO("Retrieved %u planes from profile", planeCount);
 
@@ -936,7 +936,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_neg) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Prepare inputs for the test, including planeResourceIndex and propertyKVList with valid PropertyKVPair objects | planeResourceIndex = UT_KVP_PROFILE_GET_UINT32(IPlaneControl.planes.<index>.<key>), propertyKVList = {Property::RESOURCE_ID, Property::X, Property::Y, Property::WIDTH, Property::HEIGHT, Property::ALPHA, Property::ZORDER, Property::VISIBLE, Property::OVERSCAN, Property::ASPECT_RATIO} | Inputs prepared successfully | Should be successful |
+ * | 01 | Prepare inputs for the test, including planeResourceIndex and propertyKVList with valid PropertyKVPair objects | planeResourceIndex = UT_KVP_PROFILE_GET_UINT32(planecontrol.planes.<index>.<key>), propertyKVList = {Property::RESOURCE_ID, Property::X, Property::Y, Property::WIDTH, Property::HEIGHT, Property::ALPHA, Property::ZORDER, Property::VISIBLE, Property::OVERSCAN, Property::ASPECT_RATIO} | Inputs prepared successfully | Should be successful |
  * | 02 | Log the API call details for getPropertyMulti | planeResourceIndex, propertyKVList, _aidl_return | Log successful | Should be successful |
  * | 03 | Call the getPropertyMulti API with the prepared inputs | planeResourceIndex, propertyKVList, _aidl_return | API call should succeed | Should Pass |
  * | 04 | Verify that the status of the API call is OK | status.isOk() | True | Should Pass |
@@ -958,17 +958,14 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_pos) {
         ::com::rdk::hal::planecontrol::PlaneType planeType = plane.type;
         std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
 
-        // Step 1: Prepare inputs
+        // Step 1: Prepare inputs - use property enum lists
         if (planeType == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
-            PLANE_CONTROL_BUILD_PROPERTY_KV_LIST(videoProperties, propertyKVList);
+            PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, videoProperties, propertyKVList, "VIDEO");
         } else if (planeType == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
-            PLANE_CONTROL_BUILD_PROPERTY_KV_LIST(graphicProperties, propertyKVList);
+            PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, graphicProperties, propertyKVList, "GRAPHICS");
         } else {
             continue; // Skip unsupported plane types
         }
-
-        // Steps 2-8: Log, call, and validate getPropertyMulti
-        PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, propertyKVList, planeType == ::com::rdk::hal::planecontrol::PlaneType::VIDEO ? "VIDEO" : "GRAPHICS");
     }
 }
 
@@ -989,7 +986,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_pos) {
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
  * | 01 | Prepare an invalid plane resource index for testing | invalidPlaneResourceIndex = -1 | Should be successful | |
- * | 02 | Prepare a valid plane resource index using UT_KVP_PROFILE_GET_UINT32 | validPlaneResourceIndex = UT_KVP_PROFILE_GET_UINT32(IPlaneControl.planes.<index>.<key>) | Should be successful | |
+ * | 02 | Prepare a valid plane resource index using UT_KVP_PROFILE_GET_UINT32 | validPlaneResourceIndex = UT_KVP_PROFILE_GET_UINT32(planecontrol.planes.<index>.<key>) | Should be successful | |
  * | 03 | Create a valid property key-value pair and add to the list | property = WIDTH, propertyValue = 1920 | Should be successful | |
  * | 04 | Create an invalid property key-value pair and add to the list | property = -1 | Should be successful | |
  * | 05 | Call getPropertyMulti with invalid plane resource index | planeResourceIndex = -1, propertyKVList = [validPropertyKVPair, invalidPropertyKVPair], aidlReturn = false | aidlReturn = false, status.isOk() = true, status.exceptionCode() = EX_NONE | Should Fail |
@@ -1017,23 +1014,21 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_neg) {
     int32_t validPlaneResourceIndex = planeResourceIndices[0];
 
     // Step 3: Create valid property list
-    std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> validPropertyKVList;
-    ::com::rdk::hal::planecontrol::PropertyKVPair validKV;
-    validKV.property = ::com::rdk::hal::planecontrol::Property::WIDTH;
-    validPropertyKVList.push_back(validKV);
+    std::vector<::com::rdk::hal::planecontrol::Property> validPropertyEnums;
+    validPropertyEnums.push_back(::com::rdk::hal::planecontrol::Property::WIDTH);
 
     // Step 4: Create invalid property list
-    std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> invalidPropertyKVList;
-    ::com::rdk::hal::planecontrol::PropertyKVPair invalidKV;
-    invalidKV.property = static_cast<::com::rdk::hal::planecontrol::Property>(-1); // Invalid property
-    invalidPropertyKVList.push_back(validKV); // Include valid property
-    invalidPropertyKVList.push_back(invalidKV); // Include invalid property
+    std::vector<::com::rdk::hal::planecontrol::Property> invalidPropertyEnums;
+    invalidPropertyEnums.push_back(::com::rdk::hal::planecontrol::Property::WIDTH); // Include valid property
+    invalidPropertyEnums.push_back(static_cast<::com::rdk::hal::planecontrol::Property>(-1)); // Include invalid property
+
+    std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
 
     // Step 5: Test invalid plane resource index
-    PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(invalidPlaneResourceIndex, validPropertyKVList, "Invalid Plane Index");
+    PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(invalidPlaneResourceIndex, validPropertyEnums, propertyKVList, "Invalid Plane Index");
 
     // Step 6: Test invalid property list
-    PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(validPlaneResourceIndex, invalidPropertyKVList, "Invalid Property List");
+    PLANE_CONTROL_NEGATIVE_TEST_GET_PROPERTY_MULTI(validPlaneResourceIndex, invalidPropertyEnums, propertyKVList, "Invalid Property List");
 }
 
 /**
@@ -1054,7 +1049,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_neg) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Retrieve the plane resource index using the macro | planeResourceIndex = UT_KVP_PROFILE_GET_UINT32(IPlaneControl.planes.<index>.<key>) | Should be successful | Should be successful |
+ * | 01 | Retrieve the plane resource index using the macro | planeResourceIndex = UT_KVP_PROFILE_GET_UINT32(planecontrol.planes.<index>.<key>) | Should be successful | Should be successful |
  * | 02 | Prepare the property key-value list using macros | propertyKVList = {kvPair1, kvPair2, ...} | Should be successful | Should be successful |
  * | 03 | Log the API call | planeResourceIndex, propertyKVList | Should be successful | Should be successful |
  * | 04 | Call the setPropertyMultiAtomic API | planeResourceIndex, propertyKVList, _aidl_return | API should return true, status should be OK | Should Pass |
@@ -1333,7 +1328,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, unregisterListener_neg) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Retrieve planeResourceIndex from YAML using macro | planeResourceIndex = UT_KVP_PROFILE_GET_LIST_COUNT(IPlaneControl.planes) | Should be successful | Should be successful |
+ * | 01 | Retrieve planeResourceIndex from YAML using macro | planeResourceIndex = UT_KVP_PROFILE_GET_LIST_COUNT(planecontrol.planes) | Should be successful | Should be successful |
  * | 02 | Assume nativeWindowHandle is a valid handle obtained from some previous operation | nativeWindowHandle = 123456789 | Should be successful | Should be successful |
  * | 03 | Log the API call | planeResourceIndex = 0, nativeWindowHandle = 123456789 | Should be successful | Should be successful |
  * | 04 | Call the API releaseNativeGraphicsWindowHandle | planeResourceIndex = 0, nativeWindowHandle = 123456789 | Status is OK, exception code is EX_NONE | Should Pass |
@@ -1387,7 +1382,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, releaseNativeGraphicsWindowHandle_pos) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Retrieve the plane resource index from YAML using the macro | planeCount = UT_KVP_PROFILE_GET_LIST_COUNT(IPlaneControl.planes) | Should be successful |  |
+ * | 01 | Retrieve the plane resource index from YAML using the macro | planeCount = UT_KVP_PROFILE_GET_LIST_COUNT(planecontrol.planes) | Should be successful |  |
  * | 02 | Identify the first VIDEO type plane index for invalid test | invalidPlaneResourceIndex = videoPlaneIndices[0] | Should be successful |  |
  * | 03 | Identify a valid plane resource index that is not VIDEO type | validPlaneResourceIndex = i | Should be successful |  |
  * | 04 | Call releaseNativeGraphicsWindowHandle with invalid plane resource index | invalidPlaneResourceIndex = videoPlaneIndices[0], validNativeWindowHandle = 123456 | Should Fail |  |
