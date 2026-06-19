@@ -42,7 +42,7 @@ PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/SourceType
 PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/SourcePlaneMapping.cpp
 PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/IPlaneControl.cpp
 PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/IPlaneControlListener.cpp
-PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/Capabilities.cpp
+PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/PlaneCapabilities.cpp
 
 EMULATE_SERVICE_BIN_SRC := $(EMULATE_SERVICE_DIR)/PlaneControlService.cpp
 EMULATE_SERVICE_BIN_SRC += $(EMULATE_SERVICE_DIR)/PlaneControl.cpp

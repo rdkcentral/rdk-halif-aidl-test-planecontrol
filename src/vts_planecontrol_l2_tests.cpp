@@ -76,7 +76,7 @@
 class VTS_L2_PlaneControl : public virtual UTCore
 {
 protected:
-    static std::vector<::com::rdk::hal::planecontrol::Capabilities> sCapabilities;
+    static std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> sCapabilities;
     static std::vector<uint32_t> sVideoPlaneIndices;
     static std::vector<::com::rdk::hal::planecontrol::SourceType> sAllSourceTypes;
 
@@ -152,7 +152,7 @@ protected:
 };
 
 // Static member initialization
-std::vector<::com::rdk::hal::planecontrol::Capabilities> VTS_L2_PlaneControl::sCapabilities;
+std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> VTS_L2_PlaneControl::sCapabilities;
 std::vector<uint32_t> VTS_L2_PlaneControl::sVideoPlaneIndices;
 std::vector<::com::rdk::hal::planecontrol::SourceType> VTS_L2_PlaneControl::sAllSourceTypes;
 

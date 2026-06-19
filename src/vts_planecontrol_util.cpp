@@ -103,7 +103,7 @@ std::string dynamicRangeToString(::com::rdk::hal::videodecoder::DynamicRange ran
         case ::com::rdk::hal::videodecoder::DynamicRange::SDR: return "SDR";
         case ::com::rdk::hal::videodecoder::DynamicRange::HLG: return "HLG";
         case ::com::rdk::hal::videodecoder::DynamicRange::HDR10: return "HDR10";
-        case ::com::rdk::hal::videodecoder::DynamicRange::HDR10_PLUS: return "HDR10_PLUS";
+        case ::com::rdk::hal::videodecoder::DynamicRange::HDR10PLUS: return "HDR10PLUS";
         case ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION: return "DOLBY_VISION";
         default: return "UNKNOWN";
     }
@@ -129,7 +129,7 @@ std::string dynamicRangeToString(::com::rdk::hal::videodecoder::DynamicRange ran
     if (drStr == "SDR") return ::com::rdk::hal::videodecoder::DynamicRange::SDR;
     if (drStr == "HLG") return ::com::rdk::hal::videodecoder::DynamicRange::HLG;
     if (drStr == "HDR10") return ::com::rdk::hal::videodecoder::DynamicRange::HDR10;
-    if (drStr == "HDR10_PLUS") return ::com::rdk::hal::videodecoder::DynamicRange::HDR10_PLUS;
+    if (drStr == "HDR10PLUS") return ::com::rdk::hal::videodecoder::DynamicRange::HDR10PLUS;
     if (drStr == "DOLBY_VISION") return ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION;
     throw std::invalid_argument("Unknown dynamic range: " + drStr);
 }
@@ -393,7 +393,7 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
     return UT_STATUS_OK;
 }
 
-void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::Capabilities& actual,
+void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilities& actual,
     const planeControl_Cap& expected) {
     // Verify planeIndex
     UT_ASSERT_EQUAL(actual.planeIndex, expected.planeIndex) << "Plane index mismatch";

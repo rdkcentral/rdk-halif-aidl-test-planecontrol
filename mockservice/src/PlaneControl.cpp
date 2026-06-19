@@ -24,17 +24,64 @@
  */
 
 #include "PlaneControl.h"
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace com {
     namespace rdk {
         namespace hal {
             namespace planecontrol {
 
+                class MockGraphicsFbProvider : public BnGraphicsFbProvider {
+                public:
+                    ::android::binder::Status getCapabilities(::com::rdk::hal::planecontrol::GraphicsFbCapabilities* _aidl_return) override {
+                        _aidl_return->maxGraphicsFrameBuffers = 3;
+                        _aidl_return->maxGraphicsFrameBufferWidth = 1920;
+                        _aidl_return->maxGraphicsFrameBufferHeight = 1080;
+                        _aidl_return->modifiers = {0};
+                        _aidl_return->pixelFormats = {::com::rdk::hal::videodecoder::PixelFormat::RGB};
+                        return ::android::binder::Status::ok();
+                    }
+
+                    ::android::binder::Status commitGraphicsFb(int32_t, bool* _aidl_return) override {
+                        *_aidl_return = true;
+                        return ::android::binder::Status::ok();
+                    }
+
+                    ::android::binder::Status createGraphicsFb(int32_t width, int32_t height, ::com::rdk::hal::planecontrol::GraphicsFbInfo* outInfo, ::android::os::ParcelFileDescriptor* _aidl_return) override {
+                        if (width <= 0 || height <= 0) {
+                            return ::android::binder::Status::fromExceptionCode(::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                        }
+                        outInfo->graphicsFbId = 1;
+                        outInfo->pixelWidth = width;
+                        outInfo->pixelHeight = height;
+                        outInfo->stride = width * 4;
+                        outInfo->offset = 0;
+                        int fd = dup(STDIN_FILENO);
+                        *_aidl_return = ::android::os::ParcelFileDescriptor(fd);
+                        return ::android::binder::Status::ok();
+                    }
+
+                    ::android::binder::Status destroyGraphicsFb(int32_t) override {
+                        return ::android::binder::Status::ok();
+                    }
+
+                    ::android::binder::Status getNativeDisplayHandle(int64_t* _aidl_return) override {
+                        *_aidl_return = 0;
+                        return ::android::binder::Status::ok();
+                    }
+
+                    ::android::binder::Status getEGLPlatformType(int32_t* _aidl_return) override {
+                        *_aidl_return = 0;
+                        return ::android::binder::Status::ok();
+                    }
+                };
+
 
                 int32_t g_plane_indexes_video[NUM_PLANES_VIDEO];
                 int32_t g_plane_indexes_graphic[NUM_PLANES_GRAPHIC];
 
-                ::com::rdk::hal::planecontrol::Capabilities PlaneControl::buildCapabilities(
+                ::com::rdk::hal::planecontrol::PlaneCapabilities PlaneControl::buildCapabilities(
                     int planeIndex,
                     ::com::rdk::hal::planecontrol::PlaneType type,
                     std::vector<::com::rdk::hal::videodecoder::PixelFormat> pixelFormats,
@@ -50,7 +97,7 @@ namespace com {
                     int vsyncDisplayLatency
             )
                 {
-                    ::com::rdk::hal::planecontrol::Capabilities cap;
+                    ::com::rdk::hal::planecontrol::PlaneCapabilities cap;
                     cap.planeIndex = planeIndex;
                     cap.type = type;
                     cap.pixelFormats = pixelFormats;
@@ -68,7 +115,7 @@ namespace com {
                 }
 
 
-                std::map<::com::rdk::hal::planecontrol::Property, ::com::rdk::hal::PropertyValue> PlaneControl::buildProperties(::com::rdk::hal::planecontrol::Capabilities capabilities)
+                std::map<::com::rdk::hal::planecontrol::Property, ::com::rdk::hal::PropertyValue> PlaneControl::buildProperties(::com::rdk::hal::planecontrol::PlaneCapabilities capabilities)
                 {
                     std::map<::com::rdk::hal::planecontrol::Property, ::com::rdk::hal::PropertyValue> defaults;
 
@@ -192,7 +239,7 @@ namespace com {
                 }
 
                 android::binder::Status PlaneControl::getCapabilities(
-                    ::std::vector<::com::rdk::hal::planecontrol::Capabilities>* _aidl_return)
+                    ::std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>* _aidl_return)
                 {
                     std::lock_guard<std::mutex> lock(mHandleLock);
                     _aidl_return->clear();
@@ -201,7 +248,7 @@ namespace com {
                     mVideoPlaneCount = 0; // Reset global counter
 
                     // Plane 0: VIDEO
-                    ::com::rdk::hal::planecontrol::Capabilities cap0;
+                    ::com::rdk::hal::planecontrol::PlaneCapabilities cap0;
                     cap0.planeIndex = 0;
                     cap0.type = ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
                     cap0.pixelFormats = {::com::rdk::hal::videodecoder::PixelFormat::NATIVE};
@@ -225,7 +272,7 @@ namespace com {
                     mVideoPlaneCount++; // Increment for VIDEO plane
 
                     // Plane 1: VIDEO
-                    ::com::rdk::hal::planecontrol::Capabilities cap1;
+                    ::com::rdk::hal::planecontrol::PlaneCapabilities cap1;
                     cap1.planeIndex = 1;
                     cap1.type = ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
                     cap1.pixelFormats = {::com::rdk::hal::videodecoder::PixelFormat::NATIVE};
@@ -243,7 +290,7 @@ namespace com {
                     mVideoPlaneCount++; // Increment for VIDEO plane
 
                     // Plane 2: GRAPHICS
-                    ::com::rdk::hal::planecontrol::Capabilities cap2;
+                    ::com::rdk::hal::planecontrol::PlaneCapabilities cap2;
                     cap2.planeIndex = 2;
                     cap2.type = ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS;
                     cap2.pixelFormats = {::com::rdk::hal::videodecoder::PixelFormat::RGB};
@@ -262,19 +309,24 @@ namespace com {
                     return android::binder::Status::ok();
                 }
 
-                android::binder::Status PlaneControl::getNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t *_aidl_return)
+                android::binder::Status PlaneControl::getGraphicsFbProvider(
+                    int32_t planeResourceIndex,
+                    const ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProviderListener>& graphicsFbProviderListener,
+                    ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider>* _aidl_return)
                 {
                     std::lock_guard<std::mutex> lock(mHandleLock);
 
-                    // Check if planeResourceIndex is valid
-                    if (planeResourceIndex < 0 || planeResourceIndex >= (NUM_PLANES_GRAPHIC + NUM_PLANES_VIDEO)) {
-                        std::cout << "[SERVICE] Invalid planeResourceIndex " << planeResourceIndex << std::endl;
-                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    if (graphicsFbProviderListener == nullptr) {
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_NULL_POINTER);
                     }
 
-                    // Check if the planeResourceIndex belongs to a valid GRAPHICS plane
+                    if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
+                        *_aidl_return = nullptr;
+                        return android::binder::Status::ok();
+                    }
+
                     bool isGraphicPlane = false;
-                    for (int i = 0; i < NUM_PLANES_GRAPHIC; ++i) {
+                    for (int i = 0; i < mGraphicsPlaneCount; ++i) {
                         if (g_plane_indexes_graphic[i] == planeResourceIndex) {
                             isGraphicPlane = true;
                             break;
@@ -282,67 +334,11 @@ namespace com {
                     }
 
                     if (!isGraphicPlane) {
-                        std::cout << "[SERVICE] planeResourceIndex " << planeResourceIndex << " is not a GRAPHICS plane." << std::endl;
-                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
-                    }
-
-                    // Check if the handle already exists for this planeResourceIndex
-                    auto it = mNativeWindowHandles.find(planeResourceIndex);
-                    if (it != mNativeWindowHandles.end()) {
-                        *_aidl_return = it->second;
-                        std::cout << "[SERVICE] Returning existing handle: " << *_aidl_return << " for plane: " << planeResourceIndex << std::endl;
+                        *_aidl_return = nullptr;
                         return android::binder::Status::ok();
                     }
 
-                    // Create a new handle for the planeResourceIndex (if not found)
-                    int64_t newHandle = mNextHandle++;
-                    mNativeWindowHandles[planeResourceIndex] = newHandle;
-                    *_aidl_return = newHandle;
-                    std::cout << "[SERVICE] Created new handle: " << newHandle << " for plane: " << planeResourceIndex << std::endl;
-
-                    return android::binder::Status::ok();
-                }
-
-                android::binder::Status PlaneControl::releaseNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t nativeWindowHandle) {
-                    std::lock_guard<std::mutex> lock(mHandleLock);
-
-                    if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
-                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT, "Invalid plane resource index");
-                    }
-
-                    auto it = mNativeWindowHandles.find(planeResourceIndex);
-                    if (it == mNativeWindowHandles.end()) {
-                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT, "No handle stored for given index");
-                    }
-
-                    if (it->second != nativeWindowHandle) {
-                        return android::binder::Status::fromExceptionCode(
-                            android::binder::Status::EX_ILLEGAL_ARGUMENT,
-                            "Provided handle does not match stored handle");
-                    }
-
-                    mNativeWindowHandles.erase(it);
-                    return android::binder::Status::ok();
-                }
-
-                android::binder::Status PlaneControl::flipGraphicsBuffer(int32_t planeResourceIndex, bool* _aidl_return)
-                {
-                    std::lock_guard<std::mutex> lock(mHandleLock);
-
-                    if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
-                        *_aidl_return = false;
-                        std::cout << "[SERVICE] Invalid planeResourceIndex " << planeResourceIndex << std::endl;
-                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
-                    }
-
-                    if (mNativeWindowHandles.find(planeResourceIndex) == mNativeWindowHandles.end()) {
-                        *_aidl_return = false;
-                        std::cout << "[SERVICE] NativeWindowHandle doesnt exist for the planeResourceIndex " << planeResourceIndex << std::endl;
-                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
-                    }
-
-                    *_aidl_return = true;
-                    std::cout << "[SERVICE] Flipped graphics buffer for planeResourceIndex " << planeResourceIndex << std::endl;
+                    *_aidl_return = new MockGraphicsFbProvider();
                     return android::binder::Status::ok();
                 }
 
@@ -615,7 +611,7 @@ namespace com {
                     if (listener == nullptr)
                     {
                         *_aidl_return = false;
-                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_NULL_POINTER);
                     }
                     android::sp<IBinder> binder = IInterface::asBinder(listener);
                     for (const auto& l : mListeners)
@@ -637,7 +633,7 @@ namespace com {
                     if (listener == nullptr)
                     {
                         *_aidl_return = false;
-                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_NULL_POINTER);
                     }
                     android::sp<IBinder> binderToRemove = IInterface::asBinder(listener);
                     for (auto it = mListeners.begin(); it != mListeners.end(); ++it)

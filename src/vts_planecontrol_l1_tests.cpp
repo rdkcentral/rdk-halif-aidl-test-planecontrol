@@ -141,7 +141,7 @@ protected:
  */
 
 UT_ADD_TEST(VTS_L1_PlaneControl, getCapabilities_pos) {
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
 
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
@@ -183,7 +183,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getNativeGraphicsWindowHandle_pos) {
     UT_LOG_INFO("Starting getNativeGraphicsWindowHandle_pos");
 
     // Step 1: Retrieve capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
     // Step 2: Identify GRAPHICS planes
@@ -230,7 +230,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getNativeGraphicsWindowHandle_neg) {
     UT_LOG_INFO("Starting getNativeGraphicsWindowHandle_neg");
 
     // Step 1: Retrieve capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
     // Step 2: Identify a VIDEO plane index
@@ -334,7 +334,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, flipGraphicsBuffer_neg) {
     UT_LOG_INFO("Starting flipGraphicsBuffer_neg");
 
     // Step 1: Get capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
     // Step 2: Identify a VIDEO plane index
@@ -372,6 +372,86 @@ UT_ADD_TEST(VTS_L1_PlaneControl, flipGraphicsBuffer_neg) {
     }
 }
 
+UT_ADD_TEST(VTS_L1_PlaneControl, graphicsFbProviderLifecycle_pos) {
+    UT_LOG_INFO("Starting graphicsFbProviderLifecycle_pos");
+
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+
+    bool graphicsPlaneFound = false;
+    for (const auto& plane : capabilities) {
+        if (plane.type != ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+            continue;
+        }
+
+        graphicsPlaneFound = true;
+        ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener();
+        ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider> provider;
+
+        auto status = gPlaneControlservice->getGraphicsFbProvider(plane.planeIndex, listener, &provider);
+        UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider failed for graphics plane " << plane.planeIndex;
+        UT_ASSERT_TRUE(provider != nullptr) << "Null graphics provider for graphics plane " << plane.planeIndex;
+
+        ::com::rdk::hal::planecontrol::GraphicsFbCapabilities fbCaps;
+        status = provider->getCapabilities(&fbCaps);
+        UT_ASSERT_TRUE(status.isOk()) << "Provider getCapabilities failed for graphics plane " << plane.planeIndex;
+        UT_ASSERT_TRUE(fbCaps.maxGraphicsFrameBuffers > 0) << "Invalid maxGraphicsFrameBuffers";
+        UT_ASSERT_TRUE(fbCaps.maxGraphicsFrameBufferWidth > 0) << "Invalid maxGraphicsFrameBufferWidth";
+        UT_ASSERT_TRUE(fbCaps.maxGraphicsFrameBufferHeight > 0) << "Invalid maxGraphicsFrameBufferHeight";
+
+        int32_t width = std::min<int32_t>(64, fbCaps.maxGraphicsFrameBufferWidth);
+        int32_t height = std::min<int32_t>(64, fbCaps.maxGraphicsFrameBufferHeight);
+        width = std::max<int32_t>(1, width);
+        height = std::max<int32_t>(1, height);
+
+        ::com::rdk::hal::planecontrol::GraphicsFbInfo outInfo;
+        ::android::os::ParcelFileDescriptor fd;
+        status = provider->createGraphicsFb(width, height, &outInfo, &fd);
+        UT_ASSERT_TRUE(status.isOk()) << "createGraphicsFb failed for graphics plane " << plane.planeIndex;
+        UT_ASSERT_TRUE(outInfo.graphicsFbId >= 0) << "Invalid graphicsFbId returned";
+
+        bool commitResult = false;
+        status = provider->commitGraphicsFb(outInfo.graphicsFbId, &commitResult);
+        UT_ASSERT_TRUE(status.isOk()) << "commitGraphicsFb failed for graphicsFbId " << outInfo.graphicsFbId;
+        UT_ASSERT_TRUE(commitResult) << "commitGraphicsFb returned false";
+
+        status = provider->destroyGraphicsFb(outInfo.graphicsFbId);
+        UT_ASSERT_TRUE(status.isOk()) << "destroyGraphicsFb failed for graphicsFbId " << outInfo.graphicsFbId;
+    }
+
+    UT_ASSERT_TRUE(graphicsPlaneFound) << "No GRAPHICS plane found in capabilities";
+}
+
+UT_ADD_TEST(VTS_L1_PlaneControl, graphicsFbProviderCreate_neg) {
+    UT_LOG_INFO("Starting graphicsFbProviderCreate_neg");
+
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+
+    int32_t graphicsPlaneIndex = -1;
+    for (const auto& plane : capabilities) {
+        if (plane.type == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+            graphicsPlaneIndex = plane.planeIndex;
+            break;
+        }
+    }
+
+    UT_ASSERT_TRUE(graphicsPlaneIndex >= 0) << "No GRAPHICS plane found in capabilities";
+
+    ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener();
+    ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider> provider;
+    auto status = gPlaneControlservice->getGraphicsFbProvider(graphicsPlaneIndex, listener, &provider);
+    UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider failed for graphics plane " << graphicsPlaneIndex;
+    UT_ASSERT_TRUE(provider != nullptr) << "Null graphics provider for graphics plane " << graphicsPlaneIndex;
+
+    ::com::rdk::hal::planecontrol::GraphicsFbInfo outInfo;
+    ::android::os::ParcelFileDescriptor fd;
+    status = provider->createGraphicsFb(0, 0, &outInfo, &fd);
+    UT_ASSERT_FALSE(status.isOk()) << "createGraphicsFb should fail for width/height = 0";
+    UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT)
+        << "Expected EX_ILLEGAL_ARGUMENT for invalid createGraphicsFb dimensions";
+}
+
 
 /**
  * @brief Test the positive scenario of setting video source to destination plane mapping.
@@ -403,7 +483,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_pos) {
     UT_LOG_INFO("Starting setVideoSourceDestinationPlaneMapping_pos");
 
     // Step 1: Retrieve capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
     // Step 2: Count video planes and collect indices
@@ -467,7 +547,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_neg) {
     UT_LOG_INFO("Starting setVideoSourceDestinationPlaneMapping_neg");
 
     // Step 1: Retrieve capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
     // Step 2: Count video planes and collect indices
@@ -545,7 +625,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_neg) {
 
 UT_ADD_TEST(VTS_L1_PlaneControl, getVideoSourceDestinationPlaneMapping_pos) {
     // Step 1: Retrieve capabilities and count VIDEO planes
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
     uint32_t video_plane_count = 0;
@@ -622,7 +702,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getVideoSourceDestinationPlaneMapping_neg) {
     UT_LOG_INFO("Starting getVideoSourceDestinationPlaneMapping_neg");
 
     // Step 1: Retrieve capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
     uint32_t video_plane_count = 0;
@@ -690,7 +770,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_pos) {
     UT_ASSERT_TRUE(gPlaneControlservice != nullptr) << "PlaneControl service is not available";
 
     // Step 2: Retrieve capabilities and count planes
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
     uint32_t planeCount = capabilities.size();
     UT_LOG_INFO("Retrieved %u planes from capabilities", planeCount);
@@ -751,7 +831,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_neg) {
 
     // Step 3: Get a valid VIDEO plane index
     int32_t validPlaneResourceIndex = -1;
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
     for (const auto& cap : capabilities) {
         if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
@@ -798,7 +878,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_pos) {
     UT_ASSERT_TRUE(gPlaneControlservice != nullptr) << "PlaneControl service is not available";
 
     // Step 2: Retrieve capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
     UT_LOG_INFO("Retrieved %zu planes from capabilities", capabilities.size());
 
@@ -884,7 +964,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_neg) {
     UT_ASSERT_TRUE(gPlaneControlservice != nullptr) << "PlaneControl service is not available";
 
     // Step 2: Retrieve capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
     UT_LOG_INFO("Retrieved %zu planes from capabilities", capabilities.size());
     UT_ASSERT_FALSE(capabilities.empty()) << "No planes found in capabilities";
@@ -949,7 +1029,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_pos) {
     UT_LOG_INFO("Starting getPropertyMulti_pos");
 
     // Step 1: Get plane capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities); // Uses macro to fetch and validate capabilities
 
     // Iterate over planes
@@ -996,7 +1076,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_neg) {
     UT_LOG_INFO("Starting getPropertyMulti_neg");
 
     // Step 1: Get plane capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities); // Uses macro to fetch and validate capabilities
 
     // Step 2: Gather valid plane resource indices
@@ -1060,7 +1140,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setPropertyMultiAtomic_pos) {
     UT_LOG_INFO("Starting setPropertyMultiAtomic_pos");
 
     // Step 1: Get plane capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities); // Fetches valid plane indices
 
     // Iterate over planes
@@ -1122,7 +1202,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setPropertyMultiAtomic_neg) {
     UT_LOG_INFO("Starting setPropertyMultiAtomic_neg");
 
     // Steps 1-2: Get plane capabilities and calculate invalid indices
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
 
     std::vector<uint32_t> planeResourceIndices;
@@ -1339,7 +1419,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, releaseNativeGraphicsWindowHandle_pos) {
     UT_LOG_INFO("Starting releaseNativeGraphicsWindowHandle_pos");
 
     // Step 1: Get plane capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities); // Uses macro to fetch and validate capabilities
 
     bool graphicsPlaneFound = false;
@@ -1354,10 +1434,8 @@ UT_ADD_TEST(VTS_L1_PlaneControl, releaseNativeGraphicsWindowHandle_pos) {
         uint32_t planeResourceIndex = plane.planeIndex;
         int64_t nativeWindowHandle = 0;
 
-        // Obtain valid handle
-        ::android::binder::Status status = gPlaneControlservice->getNativeGraphicsWindowHandle(planeResourceIndex, &nativeWindowHandle);
-        ASSERT_TRUE(status.isOk()) << "getNativeGraphicsWindowHandle failed for plane index " << planeResourceIndex;
-        ASSERT_NE(nativeWindowHandle, 0) << "Invalid native window handle for plane index " << planeResourceIndex;
+        // Obtain provider for graphics plane (reuses compatibility macro name).
+        PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(planeResourceIndex, nativeWindowHandle);
 
         // Steps 3-6: Log, call, log result, and verify
         PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(planeResourceIndex, nativeWindowHandle);
@@ -1392,7 +1470,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, releaseNativeGraphicsWindowHandle_neg) {
     UT_LOG_INFO("Starting releaseNativeGraphicsWindowHandle_neg");
 
     // Step 1: Get plane capabilities
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities); // Uses macro to fetch and validate capabilities
 
     // Step 2: Identify the first VIDEO type plane index
@@ -1414,10 +1492,8 @@ UT_ADD_TEST(VTS_L1_PlaneControl, releaseNativeGraphicsWindowHandle_neg) {
         if (plane.type == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
             validPlaneResourceIndex = plane.planeIndex;
             graphicsPlaneFound = true;
-            // Obtain valid handle
-            ::android::binder::Status status = gPlaneControlservice->getNativeGraphicsWindowHandle(validPlaneResourceIndex, &validNativeWindowHandle);
-            ASSERT_TRUE(status.isOk()) << "getNativeGraphicsWindowHandle failed for plane index " << validPlaneResourceIndex;
-            ASSERT_NE(validNativeWindowHandle, 0) << "Invalid native window handle for plane index " << validPlaneResourceIndex;
+            // Obtain provider for graphics plane (reuses compatibility macro name).
+            PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(validPlaneResourceIndex, validNativeWindowHandle);
             break;
         }
     }

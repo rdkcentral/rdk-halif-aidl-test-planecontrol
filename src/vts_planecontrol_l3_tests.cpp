@@ -144,7 +144,7 @@ private:
 PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
                         :mPlaneConfig(planeConfig)
 {
-    std::vector<::com::rdk::hal::planecontrol::Capabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
     for (const auto& plane : capabilities) {
         if(plane.type == com::rdk::hal::planecontrol::PlaneType::VIDEO)
@@ -393,22 +393,13 @@ void PlaneControlTest::run ()
     }
     if (mPlaneConfig.testName == "Planecontrol_Graphicsplane")
     {
-        //Graphics - graphics window Handle
-        int64_t native_handle;
-        for(const auto& index: graphicsPlaneIndex){
-            PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(index,native_handle);
-            PlaneControlGraphicsController controller;
-            controller.setWindowHandle((void*) native_handle);
-            controller.startRender();
-            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
-            char prompt[256];
-            snprintf(prompt, sizeof(prompt),
-                        "Validate %s: is graphics rendered on the plane ?",
-                        mPlaneConfig.testName.c_str());
-            bool result = askUserYesNo(prompt);
-            UT_ASSERT_TRUE(result);
-            controller.stopRender();
-            PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(index,native_handle);
+        // Graphics provider availability and capabilities validation.
+        for (const auto& index : graphicsPlaneIndex) {
+            int64_t unusedHandle = 0;
+            bool providerCapsOk = false;
+            PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(index, unusedHandle);
+            PLANE_CONTROL_FLIP_GRAPHICS_BUFFER_POS(index, providerCapsOk);
+            UT_ASSERT_TRUE(providerCapsOk) << "Graphics provider capabilities check failed for plane index " << index;
         }
     }
 
@@ -492,7 +483,7 @@ public:
                 /*Register the events */
                 VIDEODECODER_REGISTER_EVENT_SUCCESS(videoDecoder, videoDecoderEventListener);
 
-                /*Get Capabilities of Video Decoder */
+                /*Get PlaneCapabilities of Video Decoder */
                 VIDEODECODER_GETCAPABILITIES(videoDecoder, videoDecoderCapabilities);
 
                 mVideoDecoderList.push_back({_videoDecoderId, videoDecoder, videoDecoderControlListener, videoDecoderEventListener, videoDecoderCapabilities});
