@@ -24,7 +24,10 @@
  */
 
 #include "PlaneControl.h"
+#include <chrono>
 #include <fcntl.h>
+#include <time.h>
+#include <unordered_set>
 #include <unistd.h>
 
 namespace com {
@@ -34,17 +37,38 @@ namespace com {
 
                 class MockGraphicsFbProvider : public BnGraphicsFbProvider {
                 public:
+                    explicit MockGraphicsFbProvider(const ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProviderListener>& listener)
+                        : mListener(listener), mNextGraphicsFbId(1), mCurrentGraphicsFbId(-1) {}
+
                     ::android::binder::Status getCapabilities(::com::rdk::hal::planecontrol::GraphicsFbCapabilities* _aidl_return) override {
                         _aidl_return->maxGraphicsFrameBuffers = 3;
-                        _aidl_return->maxGraphicsFrameBufferWidth = 1920;
-                        _aidl_return->maxGraphicsFrameBufferHeight = 1080;
-                        _aidl_return->modifiers = {0};
-                        _aidl_return->pixelFormats = {::com::rdk::hal::videodecoder::PixelFormat::RGB};
+                        _aidl_return->maxGraphicsFbWidth = 1920;
+                        _aidl_return->maxGraphicsFbHeight = 1080;
+                        _aidl_return->format = static_cast<int32_t>(::com::rdk::hal::videodecoder::PixelFormat::RGB);
+                        _aidl_return->modifier = 0;
                         return ::android::binder::Status::ok();
                     }
 
-                    ::android::binder::Status commitGraphicsFb(int32_t, bool* _aidl_return) override {
+                    ::android::binder::Status commitGraphicsFb(int32_t graphicsFbId, bool* _aidl_return) override {
+                        if (mAllocatedGraphicsFbIds.find(graphicsFbId) == mAllocatedGraphicsFbIds.end()) {
+                            return ::android::binder::Status::fromExceptionCode(::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                        }
+
+                        const int32_t oldGraphicsFbId = mCurrentGraphicsFbId;
+                        mCurrentGraphicsFbId = graphicsFbId;
                         *_aidl_return = true;
+
+                        if (mListener != nullptr) {
+                            struct timespec timestampSpec {};
+                            clock_gettime(CLOCK_MONOTONIC, &timestampSpec);
+                            const int64_t timestamp =
+                                static_cast<int64_t>(timestampSpec.tv_sec) * 1000000000LL + timestampSpec.tv_nsec;
+                            auto callbackStatus = mListener->onGraphicsFbReleased(oldGraphicsFbId, timestamp);
+                            if (!callbackStatus.isOk()) {
+                                return callbackStatus;
+                            }
+                        }
+
                         return ::android::binder::Status::ok();
                     }
 
@@ -52,17 +76,25 @@ namespace com {
                         if (width <= 0 || height <= 0) {
                             return ::android::binder::Status::fromExceptionCode(::android::binder::Status::EX_ILLEGAL_ARGUMENT);
                         }
-                        outInfo->graphicsFbId = 1;
+                        outInfo->graphicsFbId = mNextGraphicsFbId++;
+                        mAllocatedGraphicsFbIds.insert(outInfo->graphicsFbId);
                         outInfo->pixelWidth = width;
                         outInfo->pixelHeight = height;
                         outInfo->stride = width * 4;
                         outInfo->offset = 0;
                         int fd = dup(STDIN_FILENO);
-                        *_aidl_return = ::android::os::ParcelFileDescriptor(fd);
+                        *_aidl_return = ::android::os::ParcelFileDescriptor(::android::base::unique_fd(fd));
                         return ::android::binder::Status::ok();
                     }
 
-                    ::android::binder::Status destroyGraphicsFb(int32_t) override {
+                    ::android::binder::Status destroyGraphicsFb(int32_t graphicsFbId) override {
+                        if (mAllocatedGraphicsFbIds.erase(graphicsFbId) == 0) {
+                            return ::android::binder::Status::fromExceptionCode(::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                        }
+
+                        if (mCurrentGraphicsFbId == graphicsFbId) {
+                            mCurrentGraphicsFbId = -1;
+                        }
                         return ::android::binder::Status::ok();
                     }
 
@@ -75,6 +107,12 @@ namespace com {
                         *_aidl_return = 0;
                         return ::android::binder::Status::ok();
                     }
+
+                private:
+                    ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProviderListener> mListener;
+                    std::unordered_set<int32_t> mAllocatedGraphicsFbIds;
+                    int32_t mNextGraphicsFbId;
+                    int32_t mCurrentGraphicsFbId;
                 };
 
 
@@ -160,7 +198,7 @@ namespace com {
                     };
 
                     const std::vector<PlaneData> planes = {
-                        {0, ::com::rdk::hal::planecontrol::PlaneType::VIDEO, {::com::rdk::hal::videodecoder::PixelFormat::NATIVE}, 3840, 2160, 3840, 2160, {::com::rdk::hal::videodecoder::DynamicRange::SDR, ::com::rdk::hal::videodecoder::DynamicRange::HLG, ::com::rdk::hal::videodecoder::DynamicRange::HDR10, ::com::rdk::hal::videodecoder::DynamicRange::HDR10PLUS, ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION}, 12, 60, true, true, 3},
+                        {0, ::com::rdk::hal::planecontrol::PlaneType::VIDEO, {::com::rdk::hal::videodecoder::PixelFormat::NATIVE}, 3840, 2160, 3840, 2160, {::com::rdk::hal::videodecoder::DynamicRange::SDR, ::com::rdk::hal::videodecoder::DynamicRange::HLG, ::com::rdk::hal::videodecoder::DynamicRange::HDR10, ::com::rdk::hal::videodecoder::DynamicRange::HDR10_PLUS, ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION}, 12, 60, true, true, 3},
                         {1, ::com::rdk::hal::planecontrol::PlaneType::VIDEO, {::com::rdk::hal::videodecoder::PixelFormat::NATIVE}, 3840, 2160, 3840, 2160, {::com::rdk::hal::videodecoder::DynamicRange::SDR}, 10, 60, true, true, 3},
                         {2, ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS, {::com::rdk::hal::videodecoder::PixelFormat::RGB}, 1920, 1080, 1920, 1080, {::com::rdk::hal::videodecoder::DynamicRange::SDR}, 8, 60, true, false, 1}
                     };
@@ -260,7 +298,7 @@ namespace com {
                         ::com::rdk::hal::videodecoder::DynamicRange::SDR,
                         ::com::rdk::hal::videodecoder::DynamicRange::HLG,
                         ::com::rdk::hal::videodecoder::DynamicRange::HDR10,
-                        ::com::rdk::hal::videodecoder::DynamicRange::HDR10PLUS,
+                        ::com::rdk::hal::videodecoder::DynamicRange::HDR10_PLUS,
                         ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION
                     };
                     cap0.colorDepth = 12;
@@ -338,7 +376,7 @@ namespace com {
                         return android::binder::Status::ok();
                     }
 
-                    *_aidl_return = new MockGraphicsFbProvider();
+                    *_aidl_return = new MockGraphicsFbProvider(graphicsFbProviderListener);
                     return android::binder::Status::ok();
                 }
 
@@ -349,10 +387,18 @@ namespace com {
                     std::lock_guard<std::mutex> lock(mHandleLock);
                     std::set<std::pair<SourceType, int>> seenSources;
                     std::set<int> seenPlanes;
+                    auto isValidVideoPlaneIndex = [this](int32_t planeIndex) {
+                        for (int i = 0; i < mVideoPlaneCount; ++i) {
+                            if (g_plane_indexes_video[i] == planeIndex) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    };
 
                     // Step 1: Validate inputs
                     for (const auto& mapping : listSourcePlaneMapping) {
-                        if (mapping.destinationPlaneIndex >= mVideoPlaneCount && mapping.destinationPlaneIndex != -1) {
+                        if (mapping.destinationPlaneIndex != -1 && !isValidVideoPlaneIndex(mapping.destinationPlaneIndex)) {
                             *_aidl_return = false;
                             std::cout << "[SERVICE] video plane doesnt exist " << mapping.destinationPlaneIndex << std::endl;
                             return android::binder::Status::ok();
@@ -417,14 +463,15 @@ namespace com {
                     std::lock_guard<std::mutex> lock(mHandleLock);
                     _aidl_return->clear();
 
-                    for (int planeIndex = 0; planeIndex < mVideoPlaneCount; ++planeIndex) {
+                    for (int i = 0; i < mVideoPlaneCount; ++i) {
+                        const int32_t planeIndex = g_plane_indexes_video[i];
                         auto it = mVideoPlaneMappings.find(planeIndex);
                         ::com::rdk::hal::planecontrol::SourcePlaneMapping mapping;
                         if (it != mVideoPlaneMappings.end()) {
                             mapping = it->second;
                         } else {
-                            mapping.sourceType = ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK;
-                            mapping.sourceIndex = 0;
+                            mapping.sourceType = ::com::rdk::hal::planecontrol::SourceType::NONE;
+                            mapping.sourceIndex = -1;
                             mapping.destinationPlaneIndex = planeIndex;
                         }
                         _aidl_return->push_back(mapping);
@@ -438,7 +485,7 @@ namespace com {
                     if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
                         *_aidl_return = std::nullopt;
                         std::cout << "[SERVICE] Invalid planeResourceIndex " << planeResourceIndex << std::endl;
-                        return android::binder::Status::ok();
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
                     }
 
                     // Validate property
@@ -511,7 +558,6 @@ namespace com {
                     bool* _aidl_return) {
 
                     if (propertyKVList == nullptr || _aidl_return == nullptr) {
-                        *_aidl_return = false;
                         std::cout << "[SERVICE] Null propertyKVList or _aidl_return" << std::endl;
                         return android::binder::Status::fromExceptionCode(android::binder::Status::EX_NULL_POINTER);
                     }
@@ -525,7 +571,7 @@ namespace com {
                     if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
                         *_aidl_return = false;
                         std::cout << "[SERVICE] Invalid planeResourceIndex " << planeResourceIndex << std::endl;
-                        return android::binder::Status::ok();
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
                     }
 
                     const auto& propertyMap = mPlaneProperties[planeResourceIndex];
@@ -564,7 +610,7 @@ namespace com {
                 android::binder::Status PlaneControl::setPropertyMultiAtomic( int32_t planeResourceIndex, const std::vector <com::rdk::hal::planecontrol::PropertyKVPair> &propertyKVList, bool* _aidl_return)
                 {
                     // Input validation
-                    if (planeResourceIndex < 0 || planeResourceIndex > (NUM_PLANES_VIDEO + NUM_PLANES_GRAPHIC)) {
+                    if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
                         *_aidl_return = false;
                         return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
                     }

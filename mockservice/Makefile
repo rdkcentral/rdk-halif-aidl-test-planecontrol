@@ -18,62 +18,69 @@
 #*
 #* ******************************************************************************
 
-.PHONY: all
-
-HAL_DIR ?= $(CURDIR)
+.PHONY: all clean check-libs
 
 PLANECONTROL_AIDL_LIB_NAME := planecontrolaidl
-
-EMULATE_SERVICE_BIN := EmulatePlaneControlService
-PLANECONTROL_AIDL_LIB := lib$(PLANECONTROL_AIDL_LIB_NAME).so
+EMULATE_SERVICE_BIN_NAME := EmulatePlaneControlService
 
 BUILD_DIR ?= $(CURDIR)/../build
 
-AIDL_GEN_DIR ?= $(BUILD_DIR)/planecontrol_gen/current
+# Use cross-compiler if available (set by toolchain), otherwise use native.
+CXX ?= g++
+CXXFLAGS ?= -Wall -Wextra -std=c++17 -ggdb
+EMULATE_SERVICE_CXXFLAGS := $(CXXFLAGS) -Wall -Wextra -std=c++17 -ggdb
 
 EMULATE_SERVICE_DIR ?= $(CURDIR)/src
-
-PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/PropertyValue.cpp
-PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/PropertyKVPair.cpp
-PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/PlaneType.cpp
-PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/AspectRatio.cpp
-PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/Property.cpp
-PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/SourceType.cpp
-PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/SourcePlaneMapping.cpp
-PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/IPlaneControl.cpp
-PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/IPlaneControlListener.cpp
-PLANECONTROL_AIDL_SRC += ${AIDL_GEN_DIR}/cpp/com/rdk/hal/planecontrol/PlaneCapabilities.cpp
 
 EMULATE_SERVICE_BIN_SRC := $(EMULATE_SERVICE_DIR)/PlaneControlService.cpp
 EMULATE_SERVICE_BIN_SRC += $(EMULATE_SERVICE_DIR)/PlaneControl.cpp
 
+# Use headers from CMake-generated locations in rdk-halif-aidl
+RDK_HAL_DIR ?= $(BUILD_DIR)/../rdk-halif-aidl
+COMMON_HEADERS ?= $(RDK_HAL_DIR)/common/current/include
+PLANECONTROL_HEADERS ?= $(RDK_HAL_DIR)/out/build/include/planecontrol/current/include
+VIDEODECODER_HEADERS ?= $(RDK_HAL_DIR)/out/build/include/videodecoder/current/include
+BINDER_SDK_HEADERS ?= $(RDK_HAL_DIR)/out/build/include/binder_sdk
 
-EMULATE_SERVICE_INC_FLAGS := -I$(AIDL_GEN_DIR)/h
+EMULATE_SERVICE_INC_FLAGS := -I$(COMMON_HEADERS)
+EMULATE_SERVICE_INC_FLAGS += -I$(PLANECONTROL_HEADERS)
+EMULATE_SERVICE_INC_FLAGS += -I$(VIDEODECODER_HEADERS)
+EMULATE_SERVICE_INC_FLAGS += -I$(BINDER_SDK_HEADERS)
 EMULATE_SERVICE_INC_FLAGS += -I$(BUILD_DIR)/usr/include
 
-EMULATE_SERVICE_LD_LIBS := -lbinder -lutils
+EMULATE_SERVICE_LD_LIBS := -lbinder -lutils -lbase
 
 EMULATE_SERVICE_LDFLAGS := -L$(BUILD_DIR)/usr/lib
 EMULATE_SERVICE_LDFLAGS += -Wl,-rpath-link=$(BUILD_DIR)/usr/lib
+EMULATE_SERVICE_LDFLAGS += -Wl,--copy-dt-needed-entries
 
-EMULATE_SERVICE_CFLAGS := -Wall -Wextra -std=c++17 -ggdb
+EMULATE_SERVICE_BIN := $(BUILD_DIR)/bin/$(EMULATE_SERVICE_BIN_NAME)
 
-PLANECONTROL_AIDL_LIB := $(BUILD_DIR)/usr/lib/$(PLANECONTROL_AIDL_LIB)
-EMULATE_SERVICE_BIN := $(BUILD_DIR)/usr/lib/$(EMULATE_SERVICE_BIN)
+all: $(EMULATE_SERVICE_BIN)
 
-all: $(EMULATE_SERVICE_BIN) $(PLANECONTROL_AIDL_LIB)
+check-libs:
+	@echo "Checking required runtime libraries in $(BUILD_DIR)/usr/lib"
+	@test -e "$(BUILD_DIR)/usr/lib/libplanecontrol-vcurrent-cpp.so" || { echo "ERROR: missing $(BUILD_DIR)/usr/lib/libplanecontrol-vcurrent-cpp.so"; exit 1; }
+	@test -e "$(BUILD_DIR)/usr/lib/libvideodecoder-vcurrent-cpp.so" || { echo "ERROR: missing $(BUILD_DIR)/usr/lib/libvideodecoder-vcurrent-cpp.so"; exit 1; }
+	@test -e "$(BUILD_DIR)/usr/lib/libcommon-vcurrent-cpp.so" || { echo "ERROR: missing $(BUILD_DIR)/usr/lib/libcommon-vcurrent-cpp.so"; exit 1; }
+	@test -e "$(BUILD_DIR)/usr/lib/libbinder.so" || { echo "ERROR: missing $(BUILD_DIR)/usr/lib/libbinder.so"; exit 1; }
+	@test -e "$(BUILD_DIR)/usr/lib/libutils.so" || { echo "ERROR: missing $(BUILD_DIR)/usr/lib/libutils.so"; exit 1; }
+	@test -e "$(BUILD_DIR)/usr/lib/libbase.so" || { echo "ERROR: missing $(BUILD_DIR)/usr/lib/libbase.so"; exit 1; }
+	@echo "Library check passed"
 
-$(PLANECONTROL_AIDL_LIB): $(PLANECONTROL_AIDL_SRC:%.cpp=%.o)
-	g++ -shared $(EMULATE_SERVICE_LDFLAGS) $^ -o $@ $(EMULATE_SERVICE_LD_LIBS)
-
-$(EMULATE_SERVICE_BIN): $(PLANECONTROL_AIDL_LIB)
-$(EMULATE_SERVICE_BIN): $(EMULATE_SERVICE_BIN_SRC:%.cpp=%.o)
-	g++ $(EMULATE_SERVICE_LDFLAGS) \
+$(EMULATE_SERVICE_BIN): check-libs $(EMULATE_SERVICE_BIN_SRC:%.cpp=%.o)
+	@mkdir -p $(dir $@)
+	$(CXX) $(EMULATE_SERVICE_CXXFLAGS) $(EMULATE_SERVICE_LDFLAGS) \
 		$(EMULATE_SERVICE_BIN_SRC:%.cpp=%.o) -o $@ \
 		$(EMULATE_SERVICE_LD_LIBS) \
 		-lpthread \
-		-l$(PLANECONTROL_AIDL_LIB_NAME)
+		-lplanecontrol-vcurrent-cpp \
+		-lvideodecoder-vcurrent-cpp \
+		-lcommon-vcurrent-cpp
 
-# TODO: to be compile out of source tree
 %.o: %.cpp
-	g++ $(EMULATE_SERVICE_CFLAGS) $(EMULATE_SERVICE_INC_FLAGS) -fPIC -c $< -o $@
+	$(CXX) $(EMULATE_SERVICE_CXXFLAGS) $(EMULATE_SERVICE_INC_FLAGS) -fPIC -Wno-error -w -c $< -o $@
+
+clean:
+	rm -f $(EMULATE_SERVICE_BIN_SRC:%.cpp=%.o)
+	rm -f $(EMULATE_SERVICE_BIN)

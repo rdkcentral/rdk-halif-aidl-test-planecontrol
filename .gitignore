@@ -6,3 +6,6 @@
 ut
 build
 rdk-halif-aidl
+linux_binder_idl
+.vscode
+.lastlogin

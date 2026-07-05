@@ -64,6 +64,16 @@
 #include "vts_videosink.h"
 #include "vts_videodecoder.h"
 #include "vts_planecontrol.h"
+#include <algorithm>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+#include <vector>
+#include <cstring>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <cerrno>
+#include <cinttypes>
 
 using namespace std::chrono;
 using namespace std;
@@ -115,6 +125,103 @@ static bool askUserYesNo(const std::string& question)
         }
 
         UT_LOG_INFO("Invalid input. Please type \"yes\" or \"no\".");
+    }
+}
+
+class RecordingGraphicsFbProviderListenerL3 : public BnGraphicsFbProviderListener {
+public:
+    ::android::binder::Status onGraphicsFbReleased(int32_t oldGraphicsFbId, int64_t elapsedRealtimeNanos) override {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mCallbackReceived = true;
+        mOldGraphicsFbId = oldGraphicsFbId;
+        mElapsedRealtimeNanos = elapsedRealtimeNanos;
+        mCondition.notify_all();
+        return ::android::binder::Status::ok();
+    }
+
+    bool waitForCallback(int32_t& oldGraphicsFbId, int64_t& elapsedRealtimeNanos, int timeoutMs = 1200) {
+        std::unique_lock<std::mutex> lock(mMutex);
+        const bool ready = mCondition.wait_for(lock, std::chrono::milliseconds(timeoutMs), [this]() {
+            return mCallbackReceived;
+        });
+        if (!ready) {
+            return false;
+        }
+
+        oldGraphicsFbId = mOldGraphicsFbId;
+        elapsedRealtimeNanos = mElapsedRealtimeNanos;
+        return true;
+    }
+
+    void reset() {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mCallbackReceived = false;
+        mOldGraphicsFbId = -1;
+        mElapsedRealtimeNanos = -1;
+    }
+
+private:
+    std::mutex mMutex;
+    std::condition_variable mCondition;
+    bool mCallbackReceived = false;
+    int32_t mOldGraphicsFbId = -1;
+    int64_t mElapsedRealtimeNanos = -1;
+};
+
+/**
+ * @brief Software-rasterizes a filled triangle into a DMA-BUF mapped memory region.
+ *
+ * Triangle occupies ~80% of the buffer area:
+ *   - v0: top-center  (w/2,   h/10)
+ *   - v1: bottom-left (w/10,  9h/10)
+ *   - v2: bottom-right(9w/10, 9h/10)
+ *
+ * Pixel format: 4 bytes/pixel, BGRA order. Background is black (0x00,0x00,0x00,0xFF).
+ *
+ * @param base    Pointer to the start of the mmap'd DMA-BUF memory.
+ * @param stride  Row stride in bytes (from GraphicsFbInfo.stride).
+ * @param pixelWidth  Frame width in pixels (from GraphicsFbInfo.pixelWidth).
+ * @param pixelHeight Frame height in pixels (from GraphicsFbInfo.pixelHeight).
+ * @param offset  Byte offset from base to pixel data start (from GraphicsFbInfo.offset).
+ * @param r       Red channel (0-255) of the triangle fill colour.
+ * @param g       Green channel (0-255) of the triangle fill colour.
+ * @param b       Blue channel (0-255) of the triangle fill colour.
+ */
+static void drawTriangleToDmaBuf(
+    uint8_t* base, int32_t stride, int32_t pixelWidth, int32_t pixelHeight, int32_t offset,
+    uint8_t r, uint8_t g, uint8_t b)
+{
+    const int32_t v0x = pixelWidth / 2,          v0y = pixelHeight / 10;
+    const int32_t v1x = pixelWidth / 10,          v1y = (pixelHeight * 9) / 10;
+    const int32_t v2x = (pixelWidth * 9) / 10,   v2y = (pixelHeight * 9) / 10;
+
+    uint8_t* pixels = base + offset;
+    for (int32_t py = 0; py < pixelHeight; ++py)
+    {
+        uint8_t* row = pixels + static_cast<size_t>(py) * static_cast<size_t>(stride);
+        for (int32_t px = 0; px < pixelWidth; ++px)
+        {
+            // Edge function: positive when point is on the left side of each directed edge
+            const int64_t e0 = (int64_t)(px - v0x) * (v1y - v0y) - (int64_t)(py - v0y) * (v1x - v0x);
+            const int64_t e1 = (int64_t)(px - v1x) * (v2y - v1y) - (int64_t)(py - v1y) * (v2x - v1x);
+            const int64_t e2 = (int64_t)(px - v2x) * (v0y - v2y) - (int64_t)(py - v2y) * (v0x - v2x);
+
+            uint8_t* pixel = row + px * 4;
+            if (e0 >= 0 && e1 >= 0 && e2 >= 0)
+            {
+                pixel[0] = b;       // B
+                pixel[1] = g;       // G
+                pixel[2] = r;       // R
+                pixel[3] = 0xFF;    // A
+            }
+            else
+            {
+                pixel[0] = 0x00;    // black background
+                pixel[1] = 0x00;
+                pixel[2] = 0x00;
+                pixel[3] = 0xFF;
+            }
+        }
     }
 }
 
@@ -393,13 +500,193 @@ void PlaneControlTest::run ()
     }
     if (mPlaneConfig.testName == "Planecontrol_Graphicsplane")
     {
-        // Graphics provider availability and capabilities validation.
-        for (const auto& index : graphicsPlaneIndex) {
-            int64_t unusedHandle = 0;
-            bool providerCapsOk = false;
-            PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(index, unusedHandle);
-            PLANE_CONTROL_FLIP_GRAPHICS_BUFFER_POS(index, providerCapsOk);
-            UT_ASSERT_TRUE(providerCapsOk) << "Graphics provider capabilities check failed for plane index " << index;
+        UT_ASSERT_TRUE(!graphicsPlaneIndex.empty()) << "No GRAPHICS plane found for Planecontrol_Graphicsplane";
+
+        for (const auto& index : graphicsPlaneIndex)
+        {
+            // -----------------------------------------------------------------------
+            // Step 1: Get IGraphicsFbProvider and validate capabilities
+            // -----------------------------------------------------------------------
+            ::android::sp<RecordingGraphicsFbProviderListenerL3> listener = new RecordingGraphicsFbProviderListenerL3();
+            ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider> provider;
+            PLANE_CONTROL_GET_GRAPHICS_FB_PROVIDER_WITH_LISTENER_POS(index, listener, provider);
+
+            ::com::rdk::hal::planecontrol::GraphicsFbCapabilities fbCaps;
+            PLANE_CONTROL_GRAPHICS_FB_PROVIDER_GET_CAPABILITIES_POS(provider, fbCaps, index);
+            UT_ASSERT_TRUE(fbCaps.maxGraphicsFrameBuffers > 0)
+                << "Invalid maxGraphicsFrameBuffers for plane index: " << index;
+            UT_ASSERT_TRUE(fbCaps.maxGraphicsFrameBufferWidth > 0)
+                << "Invalid maxGraphicsFrameBufferWidth for plane index: " << index;
+            UT_ASSERT_TRUE(fbCaps.maxGraphicsFrameBufferHeight > 0)
+                << "Invalid maxGraphicsFrameBufferHeight for plane index: " << index;
+            UT_LOG_INFO("Graphics plane %d capabilities: maxFBs=%d maxW=%d maxH=%d format=0x%x modifier=0x%" PRIx64,
+                        index, fbCaps.maxGraphicsFrameBuffers,
+                        fbCaps.maxGraphicsFrameBufferWidth, fbCaps.maxGraphicsFrameBufferHeight,
+                        fbCaps.format, (uint64_t)fbCaps.modifier);
+
+            const int32_t fbWidth  = std::min<int32_t>(fbCaps.maxGraphicsFrameBufferWidth,  1920);
+            const int32_t fbHeight = std::min<int32_t>(fbCaps.maxGraphicsFrameBufferHeight, 1080);
+
+            // -----------------------------------------------------------------------
+            // Step 2: Single-frame orange triangle via DMA-BUF software rendering
+            //   createGraphicsFb → mmap → drawTriangleToDmaBuf → munmap → commitGraphicsFb
+            // -----------------------------------------------------------------------
+            {
+                ::com::rdk::hal::planecontrol::GraphicsFbInfo fbInfo;
+                ::android::os::ParcelFileDescriptor fd;
+                PLANE_CONTROL_GRAPHICS_FB_PROVIDER_CREATE_FB_POS(provider, fbWidth, fbHeight, fbInfo, fd, index);
+                UT_ASSERT_TRUE(fbInfo.graphicsFbId >= 0)
+                    << "createGraphicsFb returned invalid id for plane index: " << index;
+                UT_LOG_INFO("Created FB id=%d size=%dx%d stride=%d offset=%d for plane %d",
+                            fbInfo.graphicsFbId, fbInfo.pixelWidth, fbInfo.pixelHeight,
+                            fbInfo.stride, fbInfo.offset, index);
+
+                const size_t mapLength = static_cast<size_t>(fbInfo.stride) *
+                                         static_cast<size_t>(fbInfo.pixelHeight);
+                void* mapped = mmap(nullptr, mapLength, PROT_READ | PROT_WRITE, MAP_SHARED, fd.get(), 0);
+                if (mapped != MAP_FAILED)
+                {
+                    UT_LOG_INFO("Drawing orange triangle into DMA-BUF (plane %d)", index);
+                    drawTriangleToDmaBuf(static_cast<uint8_t*>(mapped),
+                                         fbInfo.stride, fbInfo.pixelWidth, fbInfo.pixelHeight,
+                                         fbInfo.offset,
+                                         255, 165, 0);  // RGB: orange
+                    munmap(mapped, mapLength);
+                }
+                else
+                {
+                    UT_LOG_WARN("mmap failed for DMA-BUF on plane %d (errno=%d) — pixel draw skipped", index, errno);
+                }
+
+                bool commitResult = false;
+                PLANE_CONTROL_GRAPHICS_FB_PROVIDER_COMMIT_FB_POS(provider, fbInfo.graphicsFbId, commitResult, index);
+                UT_ASSERT_TRUE(commitResult)
+                    << "commitGraphicsFb (orange triangle) returned false for plane: " << index;
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+
+                char prompt[256];
+                snprintf(prompt, sizeof(prompt),
+                         "Validate %s (plane %d): Is an orange triangle visible on the graphics plane?",
+                         mPlaneConfig.testName.c_str(), index);
+                bool result = askUserYesNo(prompt);
+                UT_ASSERT_TRUE(result) << "Orange triangle not confirmed visible on plane " << index;
+
+                PLANE_CONTROL_GRAPHICS_FB_PROVIDER_DESTROY_FB_POS(provider, fbInfo.graphicsFbId, index);
+            }
+
+            // -----------------------------------------------------------------------
+            // Step 3: Double-buffered frame flip — orange FB1 → cyan FB2
+            //   Validates onGraphicsFbReleased callback fires with correct oldGraphicsFbId
+            // -----------------------------------------------------------------------
+            {
+                ::com::rdk::hal::planecontrol::GraphicsFbInfo fbInfo1, fbInfo2;
+                ::android::os::ParcelFileDescriptor fd1, fd2;
+
+                PLANE_CONTROL_GRAPHICS_FB_PROVIDER_CREATE_FB_POS(provider, fbWidth, fbHeight, fbInfo1, fd1, index);
+                UT_ASSERT_TRUE(fbInfo1.graphicsFbId >= 0)
+                    << "createGraphicsFb (FB1) invalid id for plane: " << index;
+
+                PLANE_CONTROL_GRAPHICS_FB_PROVIDER_CREATE_FB_POS(provider, fbWidth, fbHeight, fbInfo2, fd2, index);
+                UT_ASSERT_TRUE(fbInfo2.graphicsFbId >= 0)
+                    << "createGraphicsFb (FB2) invalid id for plane: " << index;
+                UT_ASSERT_NOT_EQUAL(fbInfo1.graphicsFbId, fbInfo2.graphicsFbId)
+                    << "FB1 and FB2 must have unique IDs on plane: " << index;
+
+                // Draw orange into FB1
+                const size_t mapLen1 = static_cast<size_t>(fbInfo1.stride) *
+                                        static_cast<size_t>(fbInfo1.pixelHeight);
+                void* map1 = mmap(nullptr, mapLen1, PROT_READ | PROT_WRITE, MAP_SHARED, fd1.get(), 0);
+                if (map1 != MAP_FAILED)
+                {
+                    UT_LOG_INFO("Drawing orange triangle into FB1 (plane %d)", index);
+                    drawTriangleToDmaBuf(static_cast<uint8_t*>(map1),
+                                         fbInfo1.stride, fbInfo1.pixelWidth, fbInfo1.pixelHeight,
+                                         fbInfo1.offset,
+                                         255, 165, 0);  // RGB: orange
+                    munmap(map1, mapLen1);
+                }
+                else
+                {
+                    UT_LOG_WARN("mmap failed for FB1 on plane %d (errno=%d) — pixel draw skipped", index, errno);
+                }
+
+                // Draw cyan into FB2
+                const size_t mapLen2 = static_cast<size_t>(fbInfo2.stride) *
+                                        static_cast<size_t>(fbInfo2.pixelHeight);
+                void* map2 = mmap(nullptr, mapLen2, PROT_READ | PROT_WRITE, MAP_SHARED, fd2.get(), 0);
+                if (map2 != MAP_FAILED)
+                {
+                    UT_LOG_INFO("Drawing cyan triangle into FB2 (plane %d)", index);
+                    drawTriangleToDmaBuf(static_cast<uint8_t*>(map2),
+                                         fbInfo2.stride, fbInfo2.pixelWidth, fbInfo2.pixelHeight,
+                                         fbInfo2.offset,
+                                         0, 255, 255);  // RGB: cyan
+                    munmap(map2, mapLen2);
+                }
+                else
+                {
+                    UT_LOG_WARN("mmap failed for FB2 on plane %d (errno=%d) — pixel draw skipped", index, errno);
+                }
+
+                // Commit FB1 (orange) — displays first frame
+                bool commitResult = false;
+                PLANE_CONTROL_GRAPHICS_FB_PROVIDER_COMMIT_FB_POS(provider, fbInfo1.graphicsFbId, commitResult, index);
+                UT_ASSERT_TRUE(commitResult)
+                    << "commitGraphicsFb (FB1 orange) returned false for plane: " << index;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+                // Reset listener state, then commit FB2 (cyan) — triggers onGraphicsFbReleased(FB1)
+                listener->reset();
+                commitResult = false;
+                PLANE_CONTROL_GRAPHICS_FB_PROVIDER_COMMIT_FB_POS(provider, fbInfo2.graphicsFbId, commitResult, index);
+                UT_ASSERT_TRUE(commitResult)
+                    << "commitGraphicsFb (FB2 cyan) returned false for plane: " << index;
+
+                int32_t oldGraphicsFbId = -1;
+                int64_t elapsedRealtimeNanos = -1;
+                const bool callbackReceived = listener->waitForCallback(oldGraphicsFbId, elapsedRealtimeNanos);
+                UT_ASSERT_TRUE(callbackReceived)
+                    << "onGraphicsFbReleased callback not received after double-buffer commit on plane: " << index;
+                UT_ASSERT_TRUE(oldGraphicsFbId == -1 || oldGraphicsFbId == fbInfo1.graphicsFbId)
+                    << "Unexpected oldGraphicsFbId: expected -1 or " << fbInfo1.graphicsFbId
+                    << " got " << oldGraphicsFbId << " on plane: " << index;
+                UT_ASSERT_TRUE(elapsedRealtimeNanos >= 0)
+                    << "Invalid elapsedRealtimeNanos in callback on plane: " << index;
+                UT_LOG_INFO("Double-buffer flip callback: oldGraphicsFbId=%d elapsedNs=%" PRId64 " (plane %d)",
+                            oldGraphicsFbId, elapsedRealtimeNanos, index);
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+
+                char prompt[256];
+                snprintf(prompt, sizeof(prompt),
+                         "Validate %s (plane %d): Were both triangles displayed in sequence (orange then cyan)?",
+                         mPlaneConfig.testName.c_str(), index);
+                bool result = askUserYesNo(prompt);
+                UT_ASSERT_TRUE(result) << "Double-buffer triangle flip not confirmed on plane " << index;
+
+                PLANE_CONTROL_GRAPHICS_FB_PROVIDER_DESTROY_FB_POS(provider, fbInfo1.graphicsFbId, index);
+                PLANE_CONTROL_GRAPHICS_FB_PROVIDER_DESTROY_FB_POS(provider, fbInfo2.graphicsFbId, index);
+            }
+
+            // -----------------------------------------------------------------------
+            // Step 4: Validate getNativeDisplayHandle and getEGLPlatformType API
+            //   These are EGL compositor setup APIs; validated as "call returns OK".
+            //   No EGL rendering is performed here — the DMA-BUF path above is the
+            //   primary graphics plane test.
+            // -----------------------------------------------------------------------
+            {
+                int64_t nativeDisplayHandle = 0;
+                int32_t eglPlatformType = 0;
+                ::android::binder::Status status = provider->getNativeDisplayHandle(&nativeDisplayHandle);
+                UT_ASSERT_TRUE(status.isOk())
+                    << "getNativeDisplayHandle failed for plane index: " << index;
+                status = provider->getEGLPlatformType(&eglPlatformType);
+                UT_ASSERT_TRUE(status.isOk())
+                    << "getEGLPlatformType failed for plane index: " << index;
+                UT_LOG_INFO("EGL info for plane %d: nativeDisplayHandle=%" PRId64 " eglPlatformType=0x%x",
+                            index, nativeDisplayHandle, eglPlatformType);
+            }
         }
     }
 

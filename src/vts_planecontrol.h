@@ -189,8 +189,8 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
         UT_ASSERT_EQUAL(capabilities_var.size(), gPlaneControl_hfp.size()) << "PlaneCapabilities size mismatch with HFP"; \
     } while (0)
 
-// Macro to call and validate getNativeGraphicsWindowHandle API (positive case with expected success)
-#define PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_POS(plane_index, native_handle) \
+// Macro to call and validate getGraphicsFbProvider API (positive case)
+#define PLANE_CONTROL_GET_GRAPHICS_FB_PROVIDER_POS(plane_index, native_handle) \
     do { \
         ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener(); \
         ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider> provider; \
@@ -204,8 +204,8 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
         native_handle = static_cast<int64_t>(plane_index); \
     } while (0)
 
-// Macro to call and validate getNativeGraphicsWindowHandle API (negative case with expected failure)
-#define PLANE_CONTROL_GET_NATIVE_GRAPHICS_WINDOW_NEG(plane_index, native_handle, label) \
+// Macro to call and validate getGraphicsFbProvider API (negative case)
+#define PLANE_CONTROL_GET_GRAPHICS_FB_PROVIDER_NEG(plane_index, native_handle, label) \
     do { \
         ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener(); \
         ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider> provider; \
@@ -218,6 +218,75 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
                     provider != nullptr ? "valid" : "null"); \
         UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider should return EX_NONE for " << label; \
         UT_ASSERT_TRUE(provider == nullptr) << "Expected null provider for " << label; \
+    } while (0)
+
+// Macro to call and validate getGraphicsFbProvider API (positive case with provider output)
+#define PLANE_CONTROL_GET_GRAPHICS_FB_PROVIDER_INSTANCE_POS(plane_index, provider_out) \
+    do { \
+        ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener(); \
+        ::android::binder::Status status = gPlaneControlservice->getGraphicsFbProvider(plane_index, listener, &provider_out); \
+        UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider failed for plane index " << plane_index; \
+        UT_ASSERT_TRUE(provider_out != nullptr) << "Expected provider for graphics plane index " << plane_index; \
+    } while (0)
+
+// Macro to call and validate getGraphicsFbProvider API with caller-provided listener
+#define PLANE_CONTROL_GET_GRAPHICS_FB_PROVIDER_WITH_LISTENER_POS(plane_index, listener_in, provider_out) \
+    do { \
+        ::android::binder::Status status = gPlaneControlservice->getGraphicsFbProvider(plane_index, listener_in, &provider_out); \
+        UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider failed for plane index " << plane_index; \
+        UT_ASSERT_TRUE(provider_out != nullptr) << "Expected provider for graphics plane index " << plane_index; \
+    } while (0)
+
+// Macro to call and validate IGraphicsFbProvider.getCapabilities API (positive case)
+#define PLANE_CONTROL_GRAPHICS_FB_PROVIDER_GET_CAPABILITIES_POS(provider_instance, fb_caps_out, plane_index) \
+    do { \
+        ::android::binder::Status status = provider_instance->getCapabilities(&fb_caps_out); \
+        UT_ASSERT_TRUE(status.isOk()) << "IGraphicsFbProvider.getCapabilities failed for graphics plane " << plane_index; \
+    } while (0)
+
+// Macro to call and validate IGraphicsFbProvider.createGraphicsFb API (positive case)
+#define PLANE_CONTROL_GRAPHICS_FB_PROVIDER_CREATE_FB_POS(provider_instance, width_in, height_in, out_info, out_fd, plane_index) \
+    do { \
+        ::android::binder::Status status = provider_instance->createGraphicsFb(width_in, height_in, &out_info, &out_fd); \
+        UT_ASSERT_TRUE(status.isOk()) << "createGraphicsFb failed for graphics plane " << plane_index; \
+    } while (0)
+
+// Macro to call and validate IGraphicsFbProvider.commitGraphicsFb API (positive case)
+#define PLANE_CONTROL_GRAPHICS_FB_PROVIDER_COMMIT_FB_POS(provider_instance, fb_id, commit_result, plane_index) \
+    do { \
+        ::android::binder::Status status = provider_instance->commitGraphicsFb(fb_id, &commit_result); \
+        UT_ASSERT_TRUE(status.isOk()) << "commitGraphicsFb failed for graphics plane " << plane_index << ", graphicsFbId " << fb_id; \
+    } while (0)
+
+// Macro to call and validate IGraphicsFbProvider.destroyGraphicsFb API (positive case)
+#define PLANE_CONTROL_GRAPHICS_FB_PROVIDER_DESTROY_FB_POS(provider_instance, fb_id, plane_index) \
+    do { \
+        ::android::binder::Status status = provider_instance->destroyGraphicsFb(fb_id); \
+        UT_ASSERT_TRUE(status.isOk()) << "destroyGraphicsFb failed for graphics plane " << plane_index << ", graphicsFbId " << fb_id; \
+    } while (0)
+
+// Macro to call and validate IGraphicsFbProvider.getNativeDisplayHandle API (positive case)
+#define PLANE_CONTROL_GET_NATIVE_DISPLAY_HANDLE_POS(plane_index, native_display_handle) \
+    do { \
+        ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener(); \
+        ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider> provider; \
+        ::android::binder::Status status = gPlaneControlservice->getGraphicsFbProvider(plane_index, listener, &provider); \
+        UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider failed for plane index " << plane_index; \
+        UT_ASSERT_TRUE(provider != nullptr) << "Expected provider for graphics plane index " << plane_index; \
+        status = provider->getNativeDisplayHandle(&native_display_handle); \
+        UT_ASSERT_TRUE(status.isOk()) << "getNativeDisplayHandle failed for plane index " << plane_index; \
+    } while (0)
+
+// Macro to call and validate IGraphicsFbProvider.getEGLPlatformType API (positive case)
+#define PLANE_CONTROL_GET_EGL_PLATFORM_TYPE_POS(plane_index, egl_platform_type) \
+    do { \
+        ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener(); \
+        ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider> provider; \
+        ::android::binder::Status status = gPlaneControlservice->getGraphicsFbProvider(plane_index, listener, &provider); \
+        UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider failed for plane index " << plane_index; \
+        UT_ASSERT_TRUE(provider != nullptr) << "Expected provider for graphics plane index " << plane_index; \
+        status = provider->getEGLPlatformType(&egl_platform_type); \
+        UT_ASSERT_TRUE(status.isOk()) << "getEGLPlatformType failed for plane index " << plane_index; \
     } while (0)
 
 // Macro to add a property to a PropertyKVPair list
@@ -254,41 +323,6 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
         UT_ASSERT_FALSE(status.isOk()) << "Status should be EX_ILLEGAL_ARGUMENT for " << label << " index " << plane_index; \
         UT_ASSERT_EQUAL(status.exceptionCode(), ::android::binder::Status::EX_ILLEGAL_ARGUMENT) << "Expected EX_ILLEGAL_ARGUMENT for " << label << " index " << plane_index; \
-    } while (0)
-
-// Macro to call and validate flipGraphicsBuffer API (positive case)
-#define PLANE_CONTROL_FLIP_GRAPHICS_BUFFER_POS(plane_index, aidl_return) \
-    do { \
-        ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener(); \
-        ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider> provider; \
-        ::com::rdk::hal::planecontrol::GraphicsFbCapabilities fbCaps; \
-        ::android::binder::Status status = gPlaneControlservice->getGraphicsFbProvider(plane_index, listener, &provider); \
-        UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider failed for plane index: " << plane_index; \
-        UT_ASSERT_TRUE(provider != nullptr) << "Expected provider for graphics plane index: " << plane_index; \
-        status = provider->getCapabilities(&fbCaps); \
-        UT_LOG_INFO("getCapabilities(provider) for plane [%d], status:[isOK:%s, exception:%s]", \
-                    plane_index, \
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
-        UT_ASSERT_TRUE(status.isOk()) << "IGraphicsFbProvider.getCapabilities failed for plane index: " << plane_index; \
-        aidl_return = true; \
-    } while (0)
-
-// Macro to call and validate flipGraphicsBuffer API (negative case with expected failure)
-#define PLANE_CONTROL_FLIP_GRAPHICS_BUFFER_NEG(plane_index, aidl_return, label) \
-    do { \
-        ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener(); \
-        ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider> provider; \
-        UT_LOG_INFO("Calling getGraphicsFbProvider [%s] (IN:planeResourceIndex:[%d], IN:listener, OUT:provider)", label, plane_index); \
-        ::android::binder::Status status = gPlaneControlservice->getGraphicsFbProvider(plane_index, listener, &provider); \
-        UT_LOG_INFO("Result getGraphicsFbProvider [%s] (IN:planeResourceIndex:[%d]), status:[isOK:%s, exception:%s], provider:[%s]", \
-                    label, plane_index, \
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()), \
-                    provider != nullptr ? "valid" : "null"); \
-        UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider should return EX_NONE for " << label; \
-        UT_ASSERT_TRUE(provider == nullptr) << "Expected null provider for " << label; \
-        aidl_return = false; \
     } while (0)
 
 // Macro to call and validate getVideoSourceDestinationPlaneMapping API (negative case with expected invalid mappings)
@@ -403,34 +437,6 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
             UT_ASSERT_TRUE(status.isOk()) << "unregisterListener status should be OK for not found listener for " << label; \
             UT_ASSERT_FALSE(aidl_return) << "unregisterListener should return false for not found listener for " << label; \
         }\
-    } while (0)
-
-// Macro to call and validate releaseNativeGraphicsWindowHandle API (positive case with expected success)
-#define PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_POS(plane_index, native_handle) \
-    do { \
-        ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener(); \
-        ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider> provider; \
-        UT_LOG_INFO("Calling getGraphicsFbProvider(IN:planeResourceIndex:[%u], IN:listener, OUT:provider)", plane_index); \
-        ::android::binder::Status status = gPlaneControlservice->getGraphicsFbProvider(plane_index, listener, &provider); \
-        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "]"; \
-        std::string output_params = "OUT:provider:[" + std::string(provider != nullptr ? "valid" : "null") + "]"; \
-        PLANE_CONTROL_LOG_API_CALL("getGraphicsFbProvider", input_params, output_params, status, status.isOk()); \
-        UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider failed for plane index " << plane_index; \
-        UT_ASSERT_TRUE(provider != nullptr) << "Expected provider for graphics plane index " << plane_index; \
-    } while (0)
-
-// Macro to call and validate releaseNativeGraphicsWindowHandle API (negative case with expected failure)
-#define PLANE_CONTROL_RELEASE_NATIVE_GRAPHICS_WINDOW_NEG(plane_index, native_handle, label) \
-    do { \
-        ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener(); \
-        ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider> provider; \
-        UT_LOG_INFO("Calling getGraphicsFbProvider [%s] (IN:planeResourceIndex:[%u], IN:listener, OUT:provider)", label, plane_index); \
-        ::android::binder::Status status = gPlaneControlservice->getGraphicsFbProvider(plane_index, listener, &provider); \
-        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "]"; \
-        std::string output_params = "OUT:provider:[" + std::string(provider != nullptr ? "valid" : "null") + "]"; \
-        PLANE_CONTROL_LOG_API_CALL("getGraphicsFbProvider", input_params, output_params, status, status.isOk()); \
-        UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider should return EX_NONE for " << label; \
-        UT_ASSERT_TRUE(provider == nullptr) << "Expected null provider for " << label; \
     } while (0)
 
 // Macro to iterate over VIDEO planes
