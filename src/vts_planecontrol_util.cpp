@@ -292,7 +292,10 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
 
         // Read source types (optional field)
         std::string sourceTypesPath = planeBasePath + ".sourceTypes";
-        int32_t source_type_count = UT_KVP_PROFILE_GET_LIST_COUNT(sourceTypesPath.c_str());
+        int32_t source_type_count = 0;
+        if (ut_kvp_fieldPresent(kvp_instance, sourceTypesPath.c_str())) {
+            source_type_count = UT_KVP_PROFILE_GET_LIST_COUNT(sourceTypesPath.c_str());
+        }
         UT_LOG_INFO("Plane %d: source type count=%d", i, source_type_count);
         cap.sourceTypes.clear();
         if (source_type_count > 0) {

@@ -92,18 +92,6 @@
 #include "com/rdk/hal/planecontrol/BnPlaneControlListener.h"
 #include "vts_helper_functions.h"
 
-
-#ifndef ENABLE_UT_INFO_LOGGING
-#ifdef UT_LOG_DEBUG
-#undef UT_LOG_DEBUG
-#define UT_LOG_DEBUG(...)
-#endif
-#ifdef UT_LOG_INFO
-#undef UT_LOG_INFO
-#define UT_LOG_INFO(...)
-#endif
-#endif
-
 using android::sp;
 using android::String16;
 using android::defaultServiceManager;
@@ -224,9 +212,13 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
 #define PLANE_CONTROL_GET_GRAPHICS_FB_PROVIDER_INSTANCE_POS(plane_index, provider_out) \
     do { \
         ::android::sp<ValidGraphicsFbProviderListener> listener = new ValidGraphicsFbProviderListener(); \
-        ::android::binder::Status status = gPlaneControlservice->getGraphicsFbProvider(plane_index, listener, &provider_out); \
+       UT_LOG_INFO("Calling getGraphicsFbProvider(IN:planeResourceIndex:[%u], IN:graphicsFbProviderListener, OUT:provider)", plane_index); \
+        ::android::binder::Status status = gPlaneControlservice->getGraphicsFbProvider(plane_index, listener, &provider); \
+        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "]"; \
+        std::string output_params = "OUT:provider:[" + std::string(provider != nullptr ? "valid" : "null") + "]"; \
+        PLANE_CONTROL_LOG_API_CALL("getGraphicsFbProvider", input_params, output_params, status, status.isOk()); \
         UT_ASSERT_TRUE(status.isOk()) << "getGraphicsFbProvider failed for plane index " << plane_index; \
-        UT_ASSERT_TRUE(provider_out != nullptr) << "Expected provider for graphics plane index " << plane_index; \
+        UT_ASSERT_TRUE(provider != nullptr) << "Expected non-null provider for graphics plane index " << plane_index; \
     } while (0)
 
 // Macro to call and validate getGraphicsFbProvider API with caller-provided listener

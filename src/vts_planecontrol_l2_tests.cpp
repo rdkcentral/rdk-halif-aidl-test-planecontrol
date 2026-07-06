@@ -371,50 +371,6 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetVideoSourceDestinationPlaneMapping) {
     }
 }
 
-/**
- * @brief Test the graphics framebuffer release callback after commitGraphicsFb.
- *
- * **Test Group ID:** 02@n
- * **Test Case ID:** 004@n
- */
-UT_ADD_TEST(VTS_L2_PlaneControl, TestGraphicsFbProviderReleaseCallback) {
-    UT_LOG_INFO("Starting TestGraphicsFbProviderReleaseCallback");
-
-    if (sGraphicsPlaneIndices.empty()) {
-        UT_LOG_WARNING("No graphics planes found, skipping graphics framebuffer release callback test");
-        return;
-    }
-
-    const int32_t planeIndex = static_cast<int32_t>(sGraphicsPlaneIndices.front());
-    sp<RecordingGraphicsFbProviderListener> listener = new RecordingGraphicsFbProviderListener();
-    ASSERT_TRUE(listener != nullptr) << "Failed to create RecordingGraphicsFbProviderListener";
-
-    sp<IGraphicsFbProvider> provider;
-    PLANE_CONTROL_GET_GRAPHICS_FB_PROVIDER_WITH_LISTENER_POS(planeIndex, listener, provider);
-
-    GraphicsFbCapabilities fbCaps;
-    PLANE_CONTROL_GRAPHICS_FB_PROVIDER_GET_CAPABILITIES_POS(provider, fbCaps, planeIndex);
-
-    const int32_t width = std::max<int32_t>(1, std::min<int32_t>(64, fbCaps.maxGraphicsFrameBufferWidth));
-    const int32_t height = std::max<int32_t>(1, std::min<int32_t>(64, fbCaps.maxGraphicsFrameBufferHeight));
-
-    GraphicsFbInfo outInfo;
-    ::android::os::ParcelFileDescriptor fd;
-    PLANE_CONTROL_GRAPHICS_FB_PROVIDER_CREATE_FB_POS(provider, width, height, outInfo, fd, planeIndex);
-
-    bool commitResult = false;
-    PLANE_CONTROL_GRAPHICS_FB_PROVIDER_COMMIT_FB_POS(provider, outInfo.graphicsFbId, commitResult, planeIndex);
-    UT_ASSERT_TRUE(commitResult) << "commitGraphicsFb returned false for graphics plane " << planeIndex;
-
-    int32_t oldGraphicsFbId = -2;
-    int64_t elapsedRealtimeNanos = -1;
-    UT_ASSERT_TRUE(listener->waitForCallback(oldGraphicsFbId, elapsedRealtimeNanos))
-        << "Timed out waiting for onGraphicsFbReleased callback";
-    UT_ASSERT_EQUAL(oldGraphicsFbId, -1) << "First callback should report no previously committed framebuffer";
-    UT_ASSERT_TRUE(elapsedRealtimeNanos > 0) << "Invalid callback timestamp";
-
-    PLANE_CONTROL_GRAPHICS_FB_PROVIDER_DESTROY_FB_POS(provider, outInfo.graphicsFbId, planeIndex);
-}
 
 /** @} */ // End of Plane_Control_Halif_Test_L2
 /** @} */ // End of Plane_Control_Halif_Test

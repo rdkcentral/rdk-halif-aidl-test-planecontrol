@@ -83,10 +83,13 @@ using namespace std;
 /* Test class registration with UT_Core */
 UT_ADD_TEST_TO_GROUP(VTS_L3_PlaneControl, UT_TESTS_L3)
 
-static const char *gModuleName = "IVideoSinkManager";
+static const char *gModuleName = "IPlaneControl";
 static const char *gVideoDecoderModuleName = "IVideoDecoderManager";
 static const char *gTestGroup = "L3";
 static IAVBufferHelper* gAVbufferHelper;
+static const char *kPlanecontrolGraphicsplane = "Planecontrol_Graphicsplane";
+static const char *kPlanecontrolGraphicsplaneAuto = "Planecontrol_Graphicsplane_Auto";
+static const char *kPlanecontrolGraphicsplaneClient = "Planecontrol_Graphicsplane_Client";
 
 static std::vector<int> videoPlaneIndex;
 static std::vector<int> graphicsPlaneIndex;
@@ -126,6 +129,55 @@ static bool askUserYesNo(const std::string& question)
 
         UT_LOG_INFO("Invalid input. Please type \"yes\" or \"no\".");
     }
+}
+
+static bool isGraphicsPlaneTestName(const std::string& testName)
+{
+    return (testName == kPlanecontrolGraphicsplane ||
+            testName == kPlanecontrolGraphicsplaneAuto ||
+            testName == kPlanecontrolGraphicsplaneClient);
+}
+
+static bool isGraphicsPlaneAutoTest(const std::string& testName)
+{
+    return testName == kPlanecontrolGraphicsplaneAuto;
+}
+
+static bool isGraphicsPlaneClientTest(const std::string& testName)
+{
+    return testName == kPlanecontrolGraphicsplaneClient;
+}
+
+static size_t getGraphicsFbMapLength(const ::com::rdk::hal::planecontrol::GraphicsFbInfo& fbInfo)
+{
+    return static_cast<size_t>(fbInfo.offset) +
+           static_cast<size_t>(fbInfo.stride) * static_cast<size_t>(fbInfo.pixelHeight);
+}
+
+static void verifyTriangleSpotPixels(
+    uint8_t* base, int32_t stride, int32_t pixelWidth, int32_t pixelHeight, int32_t offset,
+    uint8_t r, uint8_t g, uint8_t b)
+{
+    auto pixelAt = [&](int32_t x, int32_t y) -> uint8_t* {
+        return base + offset + static_cast<size_t>(y) * static_cast<size_t>(stride) + static_cast<size_t>(x) * 4;
+    };
+
+    const int32_t inX = pixelWidth / 2;
+    const int32_t inY = (pixelHeight * 7) / 10;
+    const int32_t outX = pixelWidth / 20;
+    const int32_t outY = pixelHeight / 20;
+
+    uint8_t* inPixel = pixelAt(inX, inY);
+    UT_ASSERT_EQUAL(inPixel[0], b);
+    UT_ASSERT_EQUAL(inPixel[1], g);
+    UT_ASSERT_EQUAL(inPixel[2], r);
+    UT_ASSERT_EQUAL(inPixel[3], 0xFF);
+
+    uint8_t* outPixel = pixelAt(outX, outY);
+    UT_ASSERT_EQUAL(outPixel[0], 0x00);
+    UT_ASSERT_EQUAL(outPixel[1], 0x00);
+    UT_ASSERT_EQUAL(outPixel[2], 0x00);
+    UT_ASSERT_EQUAL(outPixel[3], 0xFF);
 }
 
 class RecordingGraphicsFbProviderListenerL3 : public BnGraphicsFbProviderListener {
@@ -252,6 +304,8 @@ PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
                         :mPlaneConfig(planeConfig)
 {
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+    videoPlaneIndex.clear();
+    graphicsPlaneIndex.clear();
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
     for (const auto& plane : capabilities) {
         if(plane.type == com::rdk::hal::planecontrol::PlaneType::VIDEO)
@@ -283,11 +337,20 @@ static void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlane
 
 void PlaneControlTest::run ()
 {
+    if (isGraphicsPlaneTestName(mPlaneConfig.testName) && graphicsPlaneIndex.empty())
+    {
+        UT_LOG_INFO("Skipping %s because no GRAPHICS plane is advertised by the platform HFP/capabilities",
+                    mPlaneConfig.testName.c_str());
+        return;
+    }
 
     bool aidl_return = false;
-    PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
-    checkPlaneMappings(mPlaneConfig.planeMappings);
-    std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+    if (!isGraphicsPlaneTestName(mPlaneConfig.testName))
+    {
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
+        checkPlaneMappings(mPlaneConfig.planeMappings);
+        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+    }
     if (mPlaneConfig.testName == "Planecontrol_Swapping")
     {
         // Swap planes
@@ -498,12 +561,93 @@ void PlaneControlTest::run ()
         }
     //Geometry - Plane size
     }
-    if (mPlaneConfig.testName == "Planecontrol_Graphicsplane")
+    if (isGraphicsPlaneTestName(mPlaneConfig.testName))
     {
-        UT_ASSERT_TRUE(!graphicsPlaneIndex.empty()) << "No GRAPHICS plane found for Planecontrol_Graphicsplane";
+        const bool autoMode = isGraphicsPlaneAutoTest(mPlaneConfig.testName);
+        const bool clientMode = isGraphicsPlaneClientTest(mPlaneConfig.testName);
+        UT_ASSERT_TRUE(!graphicsPlaneIndex.empty()) << "No GRAPHICS plane found for " << mPlaneConfig.testName;
 
         for (const auto& index : graphicsPlaneIndex)
         {
+            if (clientMode)
+            {
+                PlaneControlGraphicsController graphicsClient;
+                const bool connected = graphicsClient.connectPlaneControlProvider(index);
+                UT_ASSERT_TRUE(connected) << "connectPlaneControlProvider failed for plane: " << index;
+
+                PlaneControlGraphicsController::GraphicsFbClientBuffer fb1;
+                PlaneControlGraphicsController::GraphicsFbClientBuffer fb2;
+                UT_ASSERT_TRUE(graphicsClient.createGraphicsFbBuffer(1920, 1080, fb1))
+                    << "createGraphicsFbBuffer FB1 failed for plane: " << index;
+                UT_ASSERT_TRUE(graphicsClient.createGraphicsFbBuffer(1920, 1080, fb2))
+                    << "createGraphicsFbBuffer FB2 failed for plane: " << index;
+                UT_ASSERT_NOT_EQUAL(fb1.graphicsFbId, fb2.graphicsFbId)
+                    << "Client buffers must have unique graphicsFbId for plane: " << index;
+
+                const size_t mapLen1 = static_cast<size_t>(fb1.offset) +
+                                       static_cast<size_t>(fb1.stride) * static_cast<size_t>(fb1.height);
+                void* map1 = mmap(nullptr, mapLen1, PROT_READ | PROT_WRITE, MAP_SHARED, fb1.fd, 0);
+                if (map1 != MAP_FAILED)
+                {
+                    drawTriangleToDmaBuf(static_cast<uint8_t*>(map1),
+                                         fb1.stride, fb1.width, fb1.height, fb1.offset,
+                                         255, 165, 0);
+                    munmap(map1, mapLen1);
+                }
+
+                const size_t mapLen2 = static_cast<size_t>(fb2.offset) +
+                                       static_cast<size_t>(fb2.stride) * static_cast<size_t>(fb2.height);
+                void* map2 = mmap(nullptr, mapLen2, PROT_READ | PROT_WRITE, MAP_SHARED, fb2.fd, 0);
+                if (map2 != MAP_FAILED)
+                {
+                    drawTriangleToDmaBuf(static_cast<uint8_t*>(map2),
+                                         fb2.stride, fb2.width, fb2.height, fb2.offset,
+                                         0, 255, 255);
+                    munmap(map2, mapLen2);
+                }
+
+                const int32_t pairCount = 4;
+                for (int32_t pair = 0; pair < pairCount; ++pair)
+                {
+                    auto& firstFb = (pair % 2 == 0) ? fb1 : fb2;
+                    auto& secondFb = (pair % 2 == 0) ? fb2 : fb1;
+
+                    bool accepted = false;
+                    UT_ASSERT_TRUE(graphicsClient.commitGraphicsFbBuffer(firstFb.graphicsFbId, accepted));
+                    UT_ASSERT_TRUE(accepted) << "commitGraphicsFbBuffer first failed for plane: " << index;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+                    accepted = false;
+                    UT_ASSERT_TRUE(graphicsClient.commitGraphicsFbBuffer(secondFb.graphicsFbId, accepted));
+                    UT_ASSERT_TRUE(accepted) << "commitGraphicsFbBuffer second failed for plane: " << index;
+
+                    int32_t releasedId = -1;
+                    int64_t elapsedNs = -1;
+                    UT_ASSERT_TRUE(graphicsClient.waitForReleasedGraphicsFb(releasedId, elapsedNs))
+                        << "waitForReleasedGraphicsFb failed for plane: " << index << " pair=" << pair;
+                    if (pair == 0)
+                    {
+                        UT_ASSERT_TRUE(releasedId == -1 || releasedId == firstFb.graphicsFbId)
+                            << "Unexpected released buffer id for plane: " << index;
+                    }
+                    else
+                    {
+                        UT_ASSERT_EQUAL(releasedId, firstFb.graphicsFbId)
+                            << "Unexpected released buffer id for plane: " << index << " pair=" << pair;
+                    }
+                    UT_ASSERT_TRUE(elapsedNs >= 0) << "Invalid elapsedNs for plane: " << index;
+                }
+
+                UT_ASSERT_TRUE(graphicsClient.destroyGraphicsFbBuffer(fb1.graphicsFbId))
+                    << "destroyGraphicsFbBuffer FB1 failed for plane: " << index;
+                UT_ASSERT_TRUE(graphicsClient.destroyGraphicsFbBuffer(fb2.graphicsFbId))
+                    << "destroyGraphicsFbBuffer FB2 failed for plane: " << index;
+                close(fb1.fd);
+                close(fb2.fd);
+                graphicsClient.disconnectPlaneControlProvider();
+                continue;
+            }
+
             // -----------------------------------------------------------------------
             // Step 1: Get IGraphicsFbProvider and validate capabilities
             // -----------------------------------------------------------------------
@@ -515,22 +659,25 @@ void PlaneControlTest::run ()
             PLANE_CONTROL_GRAPHICS_FB_PROVIDER_GET_CAPABILITIES_POS(provider, fbCaps, index);
             UT_ASSERT_TRUE(fbCaps.maxGraphicsFrameBuffers > 0)
                 << "Invalid maxGraphicsFrameBuffers for plane index: " << index;
-            UT_ASSERT_TRUE(fbCaps.maxGraphicsFrameBufferWidth > 0)
-                << "Invalid maxGraphicsFrameBufferWidth for plane index: " << index;
-            UT_ASSERT_TRUE(fbCaps.maxGraphicsFrameBufferHeight > 0)
-                << "Invalid maxGraphicsFrameBufferHeight for plane index: " << index;
+            UT_ASSERT_TRUE(fbCaps.maxGraphicsFbWidth > 0)
+                << "Invalid maxGraphicsFbWidth for plane index: " << index;
+            UT_ASSERT_TRUE(fbCaps.maxGraphicsFbHeight > 0)
+                << "Invalid maxGraphicsFbHeight for plane index: " << index;
             UT_LOG_INFO("Graphics plane %d capabilities: maxFBs=%d maxW=%d maxH=%d format=0x%x modifier=0x%" PRIx64,
                         index, fbCaps.maxGraphicsFrameBuffers,
-                        fbCaps.maxGraphicsFrameBufferWidth, fbCaps.maxGraphicsFrameBufferHeight,
+                        fbCaps.maxGraphicsFbWidth, fbCaps.maxGraphicsFbHeight,
                         fbCaps.format, (uint64_t)fbCaps.modifier);
+            UT_ASSERT_TRUE(fbCaps.format != 0)
+                << "Invalid graphics format for plane index: " << index;
 
-            const int32_t fbWidth  = std::min<int32_t>(fbCaps.maxGraphicsFrameBufferWidth,  1920);
-            const int32_t fbHeight = std::min<int32_t>(fbCaps.maxGraphicsFrameBufferHeight, 1080);
+            const int32_t fbWidth  = std::min<int32_t>(fbCaps.maxGraphicsFbWidth,  1920);
+            const int32_t fbHeight = std::min<int32_t>(fbCaps.maxGraphicsFbHeight, 1080);
 
             // -----------------------------------------------------------------------
             // Step 2: Single-frame orange triangle via DMA-BUF software rendering
             //   createGraphicsFb → mmap → drawTriangleToDmaBuf → munmap → commitGraphicsFb
             // -----------------------------------------------------------------------
+            if (!clientMode)
             {
                 ::com::rdk::hal::planecontrol::GraphicsFbInfo fbInfo;
                 ::android::os::ParcelFileDescriptor fd;
@@ -541,8 +688,7 @@ void PlaneControlTest::run ()
                             fbInfo.graphicsFbId, fbInfo.pixelWidth, fbInfo.pixelHeight,
                             fbInfo.stride, fbInfo.offset, index);
 
-                const size_t mapLength = static_cast<size_t>(fbInfo.stride) *
-                                         static_cast<size_t>(fbInfo.pixelHeight);
+                const size_t mapLength = getGraphicsFbMapLength(fbInfo);
                 void* mapped = mmap(nullptr, mapLength, PROT_READ | PROT_WRITE, MAP_SHARED, fd.get(), 0);
                 if (mapped != MAP_FAILED)
                 {
@@ -551,6 +697,10 @@ void PlaneControlTest::run ()
                                          fbInfo.stride, fbInfo.pixelWidth, fbInfo.pixelHeight,
                                          fbInfo.offset,
                                          255, 165, 0);  // RGB: orange
+                    verifyTriangleSpotPixels(static_cast<uint8_t*>(mapped),
+                                             fbInfo.stride, fbInfo.pixelWidth, fbInfo.pixelHeight,
+                                             fbInfo.offset,
+                                             255, 165, 0);
                     munmap(mapped, mapLength);
                 }
                 else
@@ -565,12 +715,15 @@ void PlaneControlTest::run ()
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
 
-                char prompt[256];
-                snprintf(prompt, sizeof(prompt),
-                         "Validate %s (plane %d): Is an orange triangle visible on the graphics plane?",
-                         mPlaneConfig.testName.c_str(), index);
-                bool result = askUserYesNo(prompt);
-                UT_ASSERT_TRUE(result) << "Orange triangle not confirmed visible on plane " << index;
+                if (!autoMode)
+                {
+                    char prompt[256];
+                    snprintf(prompt, sizeof(prompt),
+                             "Validate %s (plane %d): Is an orange triangle visible on the graphics plane?",
+                             mPlaneConfig.testName.c_str(), index);
+                    bool result = askUserYesNo(prompt);
+                    UT_ASSERT_TRUE(result) << "Orange triangle not confirmed visible on plane " << index;
+                }
 
                 PLANE_CONTROL_GRAPHICS_FB_PROVIDER_DESTROY_FB_POS(provider, fbInfo.graphicsFbId, index);
             }
@@ -594,8 +747,7 @@ void PlaneControlTest::run ()
                     << "FB1 and FB2 must have unique IDs on plane: " << index;
 
                 // Draw orange into FB1
-                const size_t mapLen1 = static_cast<size_t>(fbInfo1.stride) *
-                                        static_cast<size_t>(fbInfo1.pixelHeight);
+                const size_t mapLen1 = getGraphicsFbMapLength(fbInfo1);
                 void* map1 = mmap(nullptr, mapLen1, PROT_READ | PROT_WRITE, MAP_SHARED, fd1.get(), 0);
                 if (map1 != MAP_FAILED)
                 {
@@ -604,6 +756,10 @@ void PlaneControlTest::run ()
                                          fbInfo1.stride, fbInfo1.pixelWidth, fbInfo1.pixelHeight,
                                          fbInfo1.offset,
                                          255, 165, 0);  // RGB: orange
+                    verifyTriangleSpotPixels(static_cast<uint8_t*>(map1),
+                                             fbInfo1.stride, fbInfo1.pixelWidth, fbInfo1.pixelHeight,
+                                             fbInfo1.offset,
+                                             255, 165, 0);
                     munmap(map1, mapLen1);
                 }
                 else
@@ -612,8 +768,7 @@ void PlaneControlTest::run ()
                 }
 
                 // Draw cyan into FB2
-                const size_t mapLen2 = static_cast<size_t>(fbInfo2.stride) *
-                                        static_cast<size_t>(fbInfo2.pixelHeight);
+                const size_t mapLen2 = getGraphicsFbMapLength(fbInfo2);
                 void* map2 = mmap(nullptr, mapLen2, PROT_READ | PROT_WRITE, MAP_SHARED, fd2.get(), 0);
                 if (map2 != MAP_FAILED)
                 {
@@ -622,6 +777,10 @@ void PlaneControlTest::run ()
                                          fbInfo2.stride, fbInfo2.pixelWidth, fbInfo2.pixelHeight,
                                          fbInfo2.offset,
                                          0, 255, 255);  // RGB: cyan
+                    verifyTriangleSpotPixels(static_cast<uint8_t*>(map2),
+                                             fbInfo2.stride, fbInfo2.pixelWidth, fbInfo2.pixelHeight,
+                                             fbInfo2.offset,
+                                             0, 255, 255);
                     munmap(map2, mapLen2);
                 }
                 else
@@ -629,41 +788,61 @@ void PlaneControlTest::run ()
                     UT_LOG_WARN("mmap failed for FB2 on plane %d (errno=%d) — pixel draw skipped", index, errno);
                 }
 
-                // Commit FB1 (orange) — displays first frame
-                bool commitResult = false;
-                PLANE_CONTROL_GRAPHICS_FB_PROVIDER_COMMIT_FB_POS(provider, fbInfo1.graphicsFbId, commitResult, index);
-                UT_ASSERT_TRUE(commitResult)
-                    << "commitGraphicsFb (FB1 orange) returned false for plane: " << index;
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                // Commit sequence. Client mode repeats pairs to validate release callbacks over time.
+                const int32_t pairCount = clientMode ? 4 : 1;
+                for (int32_t pair = 0; pair < pairCount; ++pair)
+                {
+                    const int32_t firstId = (pair % 2 == 0) ? fbInfo1.graphicsFbId : fbInfo2.graphicsFbId;
+                    const int32_t secondId = (pair % 2 == 0) ? fbInfo2.graphicsFbId : fbInfo1.graphicsFbId;
 
-                // Reset listener state, then commit FB2 (cyan) — triggers onGraphicsFbReleased(FB1)
-                listener->reset();
-                commitResult = false;
-                PLANE_CONTROL_GRAPHICS_FB_PROVIDER_COMMIT_FB_POS(provider, fbInfo2.graphicsFbId, commitResult, index);
-                UT_ASSERT_TRUE(commitResult)
-                    << "commitGraphicsFb (FB2 cyan) returned false for plane: " << index;
+                    bool commitResult = false;
+                    PLANE_CONTROL_GRAPHICS_FB_PROVIDER_COMMIT_FB_POS(provider, firstId, commitResult, index);
+                    UT_ASSERT_TRUE(commitResult)
+                        << "commitGraphicsFb (first frame) returned false for plane: " << index
+                        << " pair=" << pair;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-                int32_t oldGraphicsFbId = -1;
-                int64_t elapsedRealtimeNanos = -1;
-                const bool callbackReceived = listener->waitForCallback(oldGraphicsFbId, elapsedRealtimeNanos);
-                UT_ASSERT_TRUE(callbackReceived)
-                    << "onGraphicsFbReleased callback not received after double-buffer commit on plane: " << index;
-                UT_ASSERT_TRUE(oldGraphicsFbId == -1 || oldGraphicsFbId == fbInfo1.graphicsFbId)
-                    << "Unexpected oldGraphicsFbId: expected -1 or " << fbInfo1.graphicsFbId
-                    << " got " << oldGraphicsFbId << " on plane: " << index;
-                UT_ASSERT_TRUE(elapsedRealtimeNanos >= 0)
-                    << "Invalid elapsedRealtimeNanos in callback on plane: " << index;
-                UT_LOG_INFO("Double-buffer flip callback: oldGraphicsFbId=%d elapsedNs=%" PRId64 " (plane %d)",
-                            oldGraphicsFbId, elapsedRealtimeNanos, index);
+                    listener->reset();
+                    commitResult = false;
+                    PLANE_CONTROL_GRAPHICS_FB_PROVIDER_COMMIT_FB_POS(provider, secondId, commitResult, index);
+                    UT_ASSERT_TRUE(commitResult)
+                        << "commitGraphicsFb (second frame) returned false for plane: " << index
+                        << " pair=" << pair;
+
+                    int32_t oldGraphicsFbId = -1;
+                    int64_t elapsedRealtimeNanos = -1;
+                    const bool callbackReceived = listener->waitForCallback(oldGraphicsFbId, elapsedRealtimeNanos);
+                    UT_ASSERT_TRUE(callbackReceived)
+                        << "onGraphicsFbReleased callback not received after double-buffer commit on plane: "
+                        << index << " pair=" << pair;
+                    if (pair == 0)
+                    {
+                        UT_ASSERT_TRUE(oldGraphicsFbId == -1 || oldGraphicsFbId == firstId)
+                            << "Unexpected oldGraphicsFbId: expected -1 or " << firstId
+                            << " got " << oldGraphicsFbId << " on plane: " << index;
+                    }
+                    else
+                    {
+                        UT_ASSERT_EQUAL(oldGraphicsFbId, firstId)
+                            << "Unexpected released fb id on plane: " << index << " pair=" << pair;
+                    }
+                    UT_ASSERT_TRUE(elapsedRealtimeNanos >= 0)
+                        << "Invalid elapsedRealtimeNanos in callback on plane: " << index;
+                    UT_LOG_INFO("Double-buffer flip callback: oldGraphicsFbId=%d elapsedNs=%" PRId64 " (plane %d pair %d)",
+                                oldGraphicsFbId, elapsedRealtimeNanos, index, pair);
+                }
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
 
-                char prompt[256];
-                snprintf(prompt, sizeof(prompt),
-                         "Validate %s (plane %d): Were both triangles displayed in sequence (orange then cyan)?",
-                         mPlaneConfig.testName.c_str(), index);
-                bool result = askUserYesNo(prompt);
-                UT_ASSERT_TRUE(result) << "Double-buffer triangle flip not confirmed on plane " << index;
+                if (!autoMode && !clientMode)
+                {
+                    char prompt[256];
+                    snprintf(prompt, sizeof(prompt),
+                             "Validate %s (plane %d): Were both triangles displayed in sequence (orange then cyan)?",
+                             mPlaneConfig.testName.c_str(), index);
+                    bool result = askUserYesNo(prompt);
+                    UT_ASSERT_TRUE(result) << "Double-buffer triangle flip not confirmed on plane " << index;
+                }
 
                 PLANE_CONTROL_GRAPHICS_FB_PROVIDER_DESTROY_FB_POS(provider, fbInfo1.graphicsFbId, index);
                 PLANE_CONTROL_GRAPHICS_FB_PROVIDER_DESTROY_FB_POS(provider, fbInfo2.graphicsFbId, index);
@@ -675,6 +854,7 @@ void PlaneControlTest::run ()
             //   No EGL rendering is performed here — the DMA-BUF path above is the
             //   primary graphics plane test.
             // -----------------------------------------------------------------------
+            if (!clientMode)
             {
                 int64_t nativeDisplayHandle = 0;
                 int32_t eglPlatformType = 0;
@@ -708,6 +888,7 @@ public:
     sp<IAVBuffer> mAVBufferManager;
     sp<ValidPlaneControlListener> mPlaneControlListener;
     bool aidlReturn = false;
+    bool mPlaneListenerRegistered = false;
     IAVBufferHelper* mAVbufferHelper;
 
     void SetUp() override
@@ -729,6 +910,10 @@ public:
 
         if (gPlaneControlservice == nullptr) {
                 UT_FAIL_FATAL("PlaneControl Service not available");
+        }
+
+        if (gPlaneControlTestConfiguration == nullptr) {
+            UT_FAIL_FATAL("PlaneControl test configuration handle is null. Ensure vts_l3_PlaneControl_test_config.yaml is available from the test runtime working directory.");
         }
 
         vector<IVideoSink::Id> sinkIds;
@@ -800,7 +985,22 @@ public:
             mVideoSinkList.push_back({_sinkId, videoSink, videoSinkControlListener, videoSinkEventListener});
         }
 
-        PLANE_CONTROL_REGISTER_LISTENER_POS(mPlaneControlListener,aidlReturn);
+        ::android::binder::Status planeListenerStatus =
+            gPlaneControlservice->registerListener(mPlaneControlListener, &aidlReturn);
+        if (!planeListenerStatus.isOk() || !aidlReturn)
+        {
+            bool unregisterResult = false;
+            ::android::binder::Status unregisterStatus =
+                gPlaneControlservice->unregisterListener(mPlaneControlListener, &unregisterResult);
+            UT_LOG_WARNING("registerListener first-attempt failed (isOk=%d, exception=%d, result=%d); trying after unregister", planeListenerStatus.isOk(), planeListenerStatus.exceptionCode(), aidlReturn);
+            UT_LOG_WARNING("cleanup unregister status (isOk=%d, exception=%d, result=%d)", unregisterStatus.isOk(), unregisterStatus.exceptionCode(), unregisterResult);
+            planeListenerStatus = gPlaneControlservice->registerListener(mPlaneControlListener, &aidlReturn);
+        }
+
+        mPlaneListenerRegistered = planeListenerStatus.isOk() && (planeListenerStatus.exceptionCode() == Status::EX_NONE) && aidlReturn;
+        UT_ASSERT_TRUE(planeListenerStatus.isOk()) << "registerListener binder call failed";
+        UT_ASSERT_EQUAL(Status::EX_NONE, planeListenerStatus.exceptionCode()) << "registerListener returned an exception";
+        UT_ASSERT_TRUE(aidlReturn) << "registerEventListener returned false";
     }
 
     bool isVideoSinkUsable(const IVideoSink::Id& sinkId)
@@ -886,7 +1086,7 @@ public:
 
 
                     SinkTest sinkTest(sinkId, sinkHandle, sinkControlListener, sinkEventListener,
-                                      decoderControlListener, testConfig, sinkConfig);
+                                      decoderControlListener, decoderId, testConfig, sinkConfig, false);
 
                     sinkThread = std::make_unique<std::thread>(&SinkTest::run, &sinkTest, true);
                     bool isSinkAttached = (sinkHandle != nullptr);
@@ -928,10 +1128,38 @@ public:
         vector<videoDecoderTestConfiguration_t> decoderConfigs;
         vector<videoTestConfiguration_t> sinkConfigs;
         vector<planeControlTestConfig_t> planeConfigs;
+        const bool graphicsOnlyTest = isGraphicsPlaneTestName(testName != nullptr ? testName : "");
 
-        vts_planecontrol_parse_testconfig(gPlaneControlTestConfiguration, PLANE_CONTROL_MGR, gTestGroup, testName, planeConfigs);
+        UT_status_t planeConfigStatus =
+            vts_planecontrol_parse_testconfig(gPlaneControlTestConfiguration, gModuleName, gTestGroup, testName, planeConfigs);
+        if (planeConfigStatus != UT_STATUS_OK)
+        {
+            planeConfigs.clear();
+            planeConfigStatus =
+                vts_planecontrol_parse_testconfig(gPlaneControlTestConfiguration, PLANE_CONTROL_MGR, gTestGroup, testName, planeConfigs);
+        }
+        UT_ASSERT_EQUAL(UT_STATUS_OK, planeConfigStatus) << "Failed to parse plane control test config";
+        if (planeConfigStatus != UT_STATUS_OK)
+        {
+            return;
+        }
 
-        vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, PLANE_CONTROL_MGR, gTestGroup, testName, decoderConfigs);
+        if (graphicsOnlyTest)
+        {
+            if (gNoGraphicsTypePlanes == 0)
+            {
+                UT_LOG_INFO("Skipping %s because no GRAPHICS planes are advertised in the HFP/capabilities", testName);
+                return;
+            }
+            for (auto& planeConfig : planeConfigs)
+            {
+                PlaneControlTest planeControlTest(planeConfig);
+                planeControlTest.run();
+            }
+            return;
+        }
+
+        vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, gVideoDecoderModuleName, gTestGroup, testName, decoderConfigs);
 
         vts_videosink_parse_testconfig(gPlaneControlTestConfiguration, VIDEODECODERMGR, gTestGroup, "Sink_QueueDepth", sinkConfigs);
 
@@ -964,7 +1192,24 @@ public:
         {
             VIDEODECODER_UNREGISTER_EVENT_SUCCESS(videoDecoder,videoDecoderEventListener);
         }
-        PLANE_CONTROL_UNREGISTER_LISTENER_POS(mPlaneControlListener,aidlReturn);
+        if (mPlaneControlListener != nullptr)
+        {
+            bool unregisterResult = false;
+            ::android::binder::Status status =
+                gPlaneControlservice->unregisterListener(mPlaneControlListener, &unregisterResult);
+
+            if (mPlaneListenerRegistered)
+            {
+                UT_ASSERT_TRUE(status.isOk()) << "unregisterEventListener binder call failed";
+                UT_ASSERT_EQUAL(Status::EX_NONE, status.exceptionCode()) << "unregisterEventListener returned an exception";
+                UT_ASSERT_TRUE(unregisterResult) << "unregisterEventListener returned false";
+            }
+            else
+            {
+                UT_LOG_INFO("Skipping strict unregister assertions because listener registration was not successful (isOk=%d, exception=%d, result=%d)",
+                            status.isOk(), status.exceptionCode(), unregisterResult);
+            }
+        }
         mVideoSinkList.clear();
         mVideoDecoderList.clear();
         //TODO: check right place to call joinThreadPool
@@ -1114,7 +1359,31 @@ UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Pixelformat)
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Graphicsplane)
 {
-    const char *testName = "Planecontrol_Graphicsplane";
+    const char *testName = kPlanecontrolGraphicsplane;
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the controller's ability to render graphics plane in non-interactive mode
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 014@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Graphicsplane_Auto)
+{
+    const char *testName = kPlanecontrolGraphicsplaneAuto;
+
+    runSingleProcessTest(testName);
+}
+/**
+ * @brief Test the controller's graphics plane client-style double-buffer flow
+ *
+ * **Test Group ID:** 003@n
+ * **Test Case ID:** 015@n
+ */
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Graphicsplane_Client)
+{
+    const char *testName = kPlanecontrolGraphicsplaneClient;
 
     runSingleProcessTest(testName);
 }
