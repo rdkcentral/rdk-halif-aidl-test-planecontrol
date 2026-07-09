@@ -139,9 +139,44 @@ extern sp<IPlaneControl> gPlaneControlservice;
  */
 extern void *gPlaneControlTestConfiguration;
 
+enum class GraphicsClientPattern
+{
+    TRIANGLE,
+    RECTANGLE,
+    SOLID,
+    SOLID_YELLOW,
+    IMAGE
+};
+
 // Function to parse the PlaneControl HFP profile
 UT_status_t vts_planecontrol_parsePlaneControlHFP();
 UT_status_t getPlaneControlService();
+bool askUserYesNo(const std::string& question);
+bool isGraphicsPlaneTestName(const std::string& testName);
+bool isGraphicsPlaneAutoTest(const std::string& testName);
+bool isGraphicsPlaneClientTest(const std::string& testName);
+size_t getGraphicsFbMapLength(const ::com::rdk::hal::planecontrol::GraphicsFbInfo& fbInfo);
+void verifyTriangleSpotPixels(
+    uint8_t* base, int32_t stride, int32_t pixelWidth, int32_t pixelHeight, int32_t offset,
+    uint8_t r, uint8_t g, uint8_t b);
+
+std::string getGraphicsClientImagePath();
+bool hasGraphicsClientImagePath();
+GraphicsClientPattern getGraphicsClientPattern();
+const char* getGraphicsClientPatternLabel(GraphicsClientPattern pattern);
+void drawTriangleToDmaBuf(
+    uint8_t* base, int32_t stride, int32_t pixelWidth, int32_t pixelHeight, int32_t offset,
+    uint8_t r, uint8_t g, uint8_t b);
+void drawRectangleToDmaBuf(
+    uint8_t* base, int32_t stride, int32_t pixelWidth, int32_t pixelHeight, int32_t offset,
+    uint8_t r, uint8_t g, uint8_t b);
+void fillSolidColorToDmaBuf(
+    uint8_t* base, int32_t stride, int32_t pixelWidth, int32_t pixelHeight, int32_t offset,
+    uint8_t r, uint8_t g, uint8_t b);
+void drawClientPatternToDmaBuf(
+    GraphicsClientPattern pattern,
+    uint8_t* base, int32_t stride, int32_t pixelWidth, int32_t pixelHeight, int32_t offset,
+    uint8_t r, uint8_t g, uint8_t b);
 
 bool ValidatePropertyList(uint32_t planeIndex, const std::vector<::com::rdk::hal::planecontrol::Property>& expectedProperties, const std::string& planeType);
 

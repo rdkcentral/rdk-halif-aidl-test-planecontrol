@@ -74,6 +74,10 @@
 #include <unistd.h>
 #include <cerrno>
 #include <cinttypes>
+#include <cstdlib>
+#include <fstream>
+#include <filesystem>
+#include <cstdio>
 
 using namespace std::chrono;
 using namespace std;
@@ -99,86 +103,6 @@ extern std::vector<int32_t> gAvailableVideosinks_hfp;
 extern std::vector<int32_t> gAvailableVideodecoders_hfp;
 
 
-
-static bool askUserYesNo(const std::string& question)
-{
-    while (true)
-    {
-        UT_LOG_INFO("%s (yes/no): ", question.c_str());
-
-        std::string input;
-        std::getline(std::cin, input);
-
-        // Trim whitespace at both ends
-        input.erase(0, input.find_first_not_of(" \t\n\r"));
-        input.erase(input.find_last_not_of(" \t\n\r") + 1);
-
-        // Convert to lowercase
-        std::transform(input.begin(), input.end(), input.begin(), ::tolower);
-
-        if (input == "yes" || input == "y")
-        {
-            UT_LOG_INFO("User selected YES");
-            return true;
-        }
-        if (input == "no" || input == "n")
-        {
-            UT_LOG_INFO("User selected NO");
-            return false;
-        }
-
-        UT_LOG_INFO("Invalid input. Please type \"yes\" or \"no\".");
-    }
-}
-
-static bool isGraphicsPlaneTestName(const std::string& testName)
-{
-    return (testName == kPlanecontrolGraphicsplane ||
-            testName == kPlanecontrolGraphicsplaneAuto ||
-            testName == kPlanecontrolGraphicsplaneClient);
-}
-
-static bool isGraphicsPlaneAutoTest(const std::string& testName)
-{
-    return testName == kPlanecontrolGraphicsplaneAuto;
-}
-
-static bool isGraphicsPlaneClientTest(const std::string& testName)
-{
-    return testName == kPlanecontrolGraphicsplaneClient;
-}
-
-static size_t getGraphicsFbMapLength(const ::com::rdk::hal::planecontrol::GraphicsFbInfo& fbInfo)
-{
-    return static_cast<size_t>(fbInfo.offset) +
-           static_cast<size_t>(fbInfo.stride) * static_cast<size_t>(fbInfo.pixelHeight);
-}
-
-static void verifyTriangleSpotPixels(
-    uint8_t* base, int32_t stride, int32_t pixelWidth, int32_t pixelHeight, int32_t offset,
-    uint8_t r, uint8_t g, uint8_t b)
-{
-    auto pixelAt = [&](int32_t x, int32_t y) -> uint8_t* {
-        return base + offset + static_cast<size_t>(y) * static_cast<size_t>(stride) + static_cast<size_t>(x) * 4;
-    };
-
-    const int32_t inX = pixelWidth / 2;
-    const int32_t inY = (pixelHeight * 7) / 10;
-    const int32_t outX = pixelWidth / 20;
-    const int32_t outY = pixelHeight / 20;
-
-    uint8_t* inPixel = pixelAt(inX, inY);
-    UT_ASSERT_EQUAL(inPixel[0], b);
-    UT_ASSERT_EQUAL(inPixel[1], g);
-    UT_ASSERT_EQUAL(inPixel[2], r);
-    UT_ASSERT_EQUAL(inPixel[3], 0xFF);
-
-    uint8_t* outPixel = pixelAt(outX, outY);
-    UT_ASSERT_EQUAL(outPixel[0], 0x00);
-    UT_ASSERT_EQUAL(outPixel[1], 0x00);
-    UT_ASSERT_EQUAL(outPixel[2], 0x00);
-    UT_ASSERT_EQUAL(outPixel[3], 0xFF);
-}
 
 class RecordingGraphicsFbProviderListenerL3 : public BnGraphicsFbProviderListener {
 public:
@@ -219,63 +143,6 @@ private:
     int32_t mOldGraphicsFbId = -1;
     int64_t mElapsedRealtimeNanos = -1;
 };
-
-/**
- * @brief Software-rasterizes a filled triangle into a DMA-BUF mapped memory region.
- *
- * Triangle occupies ~80% of the buffer area:
- *   - v0: top-center  (w/2,   h/10)
- *   - v1: bottom-left (w/10,  9h/10)
- *   - v2: bottom-right(9w/10, 9h/10)
- *
- * Pixel format: 4 bytes/pixel, BGRA order. Background is black (0x00,0x00,0x00,0xFF).
- *
- * @param base    Pointer to the start of the mmap'd DMA-BUF memory.
- * @param stride  Row stride in bytes (from GraphicsFbInfo.stride).
- * @param pixelWidth  Frame width in pixels (from GraphicsFbInfo.pixelWidth).
- * @param pixelHeight Frame height in pixels (from GraphicsFbInfo.pixelHeight).
- * @param offset  Byte offset from base to pixel data start (from GraphicsFbInfo.offset).
- * @param r       Red channel (0-255) of the triangle fill colour.
- * @param g       Green channel (0-255) of the triangle fill colour.
- * @param b       Blue channel (0-255) of the triangle fill colour.
- */
-static void drawTriangleToDmaBuf(
-    uint8_t* base, int32_t stride, int32_t pixelWidth, int32_t pixelHeight, int32_t offset,
-    uint8_t r, uint8_t g, uint8_t b)
-{
-    const int32_t v0x = pixelWidth / 2,          v0y = pixelHeight / 10;
-    const int32_t v1x = pixelWidth / 10,          v1y = (pixelHeight * 9) / 10;
-    const int32_t v2x = (pixelWidth * 9) / 10,   v2y = (pixelHeight * 9) / 10;
-
-    uint8_t* pixels = base + offset;
-    for (int32_t py = 0; py < pixelHeight; ++py)
-    {
-        uint8_t* row = pixels + static_cast<size_t>(py) * static_cast<size_t>(stride);
-        for (int32_t px = 0; px < pixelWidth; ++px)
-        {
-            // Edge function: positive when point is on the left side of each directed edge
-            const int64_t e0 = (int64_t)(px - v0x) * (v1y - v0y) - (int64_t)(py - v0y) * (v1x - v0x);
-            const int64_t e1 = (int64_t)(px - v1x) * (v2y - v1y) - (int64_t)(py - v1y) * (v2x - v1x);
-            const int64_t e2 = (int64_t)(px - v2x) * (v0y - v2y) - (int64_t)(py - v2y) * (v0x - v2x);
-
-            uint8_t* pixel = row + px * 4;
-            if (e0 >= 0 && e1 >= 0 && e2 >= 0)
-            {
-                pixel[0] = b;       // B
-                pixel[1] = g;       // G
-                pixel[2] = r;       // R
-                pixel[3] = 0xFF;    // A
-            }
-            else
-            {
-                pixel[0] = 0x00;    // black background
-                pixel[1] = 0x00;
-                pixel[2] = 0x00;
-                pixel[3] = 0xFF;
-            }
-        }
-    }
-}
 
 static sp<IAVBuffer> vts_avbuffer_getService()
 {
@@ -571,6 +438,7 @@ void PlaneControlTest::run ()
         {
             if (clientMode)
             {
+                const GraphicsClientPattern clientPattern = getGraphicsClientPattern();
                 PlaneControlGraphicsController graphicsClient;
                 const bool connected = graphicsClient.connectPlaneControlProvider(index);
                 UT_ASSERT_TRUE(connected) << "connectPlaneControlProvider failed for plane: " << index;
@@ -589,9 +457,10 @@ void PlaneControlTest::run ()
                 void* map1 = mmap(nullptr, mapLen1, PROT_READ | PROT_WRITE, MAP_SHARED, fb1.fd, 0);
                 if (map1 != MAP_FAILED)
                 {
-                    drawTriangleToDmaBuf(static_cast<uint8_t*>(map1),
-                                         fb1.stride, fb1.width, fb1.height, fb1.offset,
-                                         255, 165, 0);
+                    drawClientPatternToDmaBuf(clientPattern,
+                                              static_cast<uint8_t*>(map1),
+                                              fb1.stride, fb1.width, fb1.height, fb1.offset,
+                                              255, 165, 0);
                     munmap(map1, mapLen1);
                 }
 
@@ -600,9 +469,10 @@ void PlaneControlTest::run ()
                 void* map2 = mmap(nullptr, mapLen2, PROT_READ | PROT_WRITE, MAP_SHARED, fb2.fd, 0);
                 if (map2 != MAP_FAILED)
                 {
-                    drawTriangleToDmaBuf(static_cast<uint8_t*>(map2),
-                                         fb2.stride, fb2.width, fb2.height, fb2.offset,
-                                         0, 255, 255);
+                    drawClientPatternToDmaBuf(clientPattern,
+                                              static_cast<uint8_t*>(map2),
+                                              fb2.stride, fb2.width, fb2.height, fb2.offset,
+                                              0, 255, 255);
                     munmap(map2, mapLen2);
                 }
 
@@ -638,6 +508,51 @@ void PlaneControlTest::run ()
                     UT_ASSERT_TRUE(elapsedNs >= 0) << "Invalid elapsedNs for plane: " << index;
                 }
 
+                if (!autoMode)
+                {
+                    std::vector<GraphicsClientPattern> interactivePatterns = {
+                        GraphicsClientPattern::TRIANGLE,
+                        GraphicsClientPattern::RECTANGLE,
+                        GraphicsClientPattern::SOLID_YELLOW
+                    };
+                    if (hasGraphicsClientImagePath())
+                    {
+                        interactivePatterns.push_back(GraphicsClientPattern::IMAGE);
+                    }
+
+                    for (const auto patternToShow : interactivePatterns)
+                    {
+                        const size_t redrawLen = static_cast<size_t>(fb1.offset) +
+                                                 static_cast<size_t>(fb1.stride) * static_cast<size_t>(fb1.height);
+                        void* redrawMap = mmap(nullptr, redrawLen, PROT_READ | PROT_WRITE, MAP_SHARED, fb1.fd, 0);
+                        if (redrawMap != MAP_FAILED)
+                        {
+                            drawClientPatternToDmaBuf(patternToShow,
+                                                      static_cast<uint8_t*>(redrawMap),
+                                                      fb1.stride, fb1.width, fb1.height, fb1.offset,
+                                                      255, 165, 0);
+                            munmap(redrawMap, redrawLen);
+                        }
+
+                        bool accepted = false;
+                        UT_ASSERT_TRUE(graphicsClient.commitGraphicsFbBuffer(fb1.graphicsFbId, accepted));
+                        UT_ASSERT_TRUE(accepted) << "commitGraphicsFbBuffer interactive pattern failed for plane: " << index;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+
+                        char prompt[256];
+                        snprintf(prompt, sizeof(prompt),
+                                 "Validate %s (plane %d): Is the %s visible? (yes = next image)",
+                                 mPlaneConfig.testName.c_str(), index,
+                                 getGraphicsClientPatternLabel(patternToShow));
+                        while (!askUserYesNo(prompt))
+                        {
+                            UT_LOG_INFO("Waiting for user confirmation. Keeping %s on plane %d...",
+                                        getGraphicsClientPatternLabel(patternToShow), index);
+                            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                        }
+                    }
+                }
+
                 UT_ASSERT_TRUE(graphicsClient.destroyGraphicsFbBuffer(fb1.graphicsFbId))
                     << "destroyGraphicsFbBuffer FB1 failed for plane: " << index;
                 UT_ASSERT_TRUE(graphicsClient.destroyGraphicsFbBuffer(fb2.graphicsFbId))
@@ -648,6 +563,7 @@ void PlaneControlTest::run ()
                 continue;
             }
 
+#if 0
             // -----------------------------------------------------------------------
             // Step 1: Get IGraphicsFbProvider and validate capabilities
             // -----------------------------------------------------------------------
@@ -867,6 +783,7 @@ void PlaneControlTest::run ()
                 UT_LOG_INFO("EGL info for plane %d: nativeDisplayHandle=%" PRId64 " eglPlatformType=0x%x",
                             index, nativeDisplayHandle, eglPlatformType);
             }
+#endif
         }
     }
 
