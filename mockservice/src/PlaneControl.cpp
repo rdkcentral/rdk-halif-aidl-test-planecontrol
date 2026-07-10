@@ -98,16 +98,6 @@ namespace com {
                         return ::android::binder::Status::ok();
                     }
 
-                    ::android::binder::Status getNativeDisplayHandle(int64_t* _aidl_return) override {
-                        *_aidl_return = 0;
-                        return ::android::binder::Status::ok();
-                    }
-
-                    ::android::binder::Status getEGLPlatformType(int32_t* _aidl_return) override {
-                        *_aidl_return = 0;
-                        return ::android::binder::Status::ok();
-                    }
-
                 private:
                     ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProviderListener> mListener;
                     std::unordered_set<int32_t> mAllocatedGraphicsFbIds;

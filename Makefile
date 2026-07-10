@@ -53,7 +53,6 @@ INC_DIRS += $(ROOT_DIR)/build/planecontrol_gen/current/h
 INC_DIRS += $(ROOT_DIR)/build/usr/include
 INC_DIRS += $(ROOT_DIR)/mockservice/avbufferhelper
 INC_DIRS += $(ROOT_DIR)/src
-INC_DIRS += $(ROOT_DIR)/src
 
 XLDFLAGS := -L$(ROOT_DIR)/build/usr/lib
 XLDFLAGS += -Wl,-rpath-link=$(ROOT_DIR)/build/usr/lib -Wl,--export-dynamic
@@ -79,7 +78,7 @@ export CXXFLAGS
 all: $(TARGET_EXEC)
 
 $(TARGET_EXEC):
-	make -C ${UT_CORE_DIR} -j $(shell nproc) TARGET=$(TARGET) VARIANT=$(VARIANT)
+	make -C $(UT_CORE_DIR) -j $(shell nproc) TARGET=$(TARGET) VARIANT=$(VARIANT)
 
 build_mock:
 	$(ROOT_DIR)/build.sh mock
@@ -88,4 +87,4 @@ clean_mock:
 	make -C $(ROOT_DIR)/mockservice clean
 
 clean:
-	make -C ${UT_CORE_DIR} -j TARGET=$(TARGET) VARIANT=$(VARIANT) clean
+	make -C $(UT_CORE_DIR) -j TARGET=$(TARGET) VARIANT=$(VARIANT) clean

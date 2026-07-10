@@ -21,6 +21,7 @@
 
 set -euo pipefail
 
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -87,13 +88,36 @@ manifest_component_version()
 ensure_rdk_hal_repo()
 {
     if [ ! -d "${RDK_HAL_DIR}" ]; then
-        git clone -b "${RDK_HALIF_AIDL_VERSION}" https://github.com/rdkcentral/rdk-halif-aidl.git "${RDK_HAL_DIR}"
-        return 0
+        git clone https://github.com/rdkcentral/rdk-halif-aidl.git "${RDK_HAL_DIR}"
+    fi
+
+    if [ ! -d "${RDK_HAL_DIR}/.git" ]; then
+        echo -e "${BOLD}${RED}ERROR: ${RDK_HAL_DIR} exists but is not a git repository${RESET}"
+        exit 1
     fi
 
     pushd "${RDK_HAL_DIR}" >/dev/null
-    git fetch -q --tags origin
-    git checkout "${RDK_HALIF_AIDL_VERSION}"
+
+    local target_ref="${RDK_HALIF_AIDL_VERSION}"
+    local current_ref
+    current_ref="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached)"
+
+    if [ "${current_ref}" != "${target_ref}" ]; then
+        if [ -n "$(git status --porcelain)" ]; then
+            echo -e "${YELLOW}Cleaning uncommitted changes in ${RDK_HAL_DIR}...${RESET}"
+            git checkout . || {
+                git clean -fd || true
+            }
+        fi
+
+        git fetch -q --tags origin
+        if ! git checkout "${target_ref}"; then
+            echo -e "${BOLD}${RED}ERROR: unable to checkout RDK_HALIF_AIDL_VERSION=${target_ref}${RESET}"
+            popd >/dev/null
+            exit 1
+        fi
+    fi
+
     popd >/dev/null
 }
 
@@ -226,20 +250,58 @@ resolve_aidl_bin()
 
 ensure_colorama_for_system_python()
 {
-    local sys_python="/usr/bin/python3"
-    if [ ! -x "${sys_python}" ]; then
-        sys_python="python3"
+    local candidates=()
+    local py
+    local usersite
+    local has_colorama=0
+
+    # Prefer host/system Python first, then whatever python3 is first on PATH.
+    if [ -x "/usr/bin/python3" ]; then
+        candidates+=("/usr/bin/python3")
     fi
 
-    if ! "${sys_python}" -c 'import colorama' >/dev/null 2>&1; then
-        echo -e "${CYAN}Installing colorama for ${sys_python}...${RESET}"
-        "${sys_python}" -m pip install --quiet --user colorama >/dev/null 2>&1 || true
+    if command -v python3 >/dev/null 2>&1; then
+        candidates+=("$(command -v python3)")
     fi
 
-    if ! "${sys_python}" -c 'import colorama' >/dev/null 2>&1; then
-        echo -e "${BOLD}${RED}ERROR: colorama is not available for ${sys_python}${RESET}"
-        echo "Install it with: ${sys_python} -m pip install --user colorama"
+    if [ "${#candidates[@]}" -eq 0 ]; then
+        echo -e "${BOLD}${RED}ERROR: python3 not found on PATH${RESET}"
         exit 1
+    fi
+
+    for py in "${candidates[@]}"; do
+        if ! "${py}" -c 'import colorama' >/dev/null 2>&1; then
+            echo -e "${CYAN}Installing colorama for ${py}...${RESET}"
+            "${py}" -m pip install --quiet colorama >/dev/null 2>&1 || \
+            "${py}" -m pip install --quiet --user colorama >/dev/null 2>&1 || true
+        fi
+
+        if "${py}" -c 'import colorama' >/dev/null 2>&1; then
+            has_colorama=1
+        else
+            echo -e "${YELLOW}Warning: colorama is not available for ${py}; trying next python...${RESET}"
+            continue
+        fi
+
+        # Some SDK shells set PYTHONNOUSERSITE=1; prepend usersite so subprocesses still resolve colorama.
+        usersite="$("${py}" -c 'import site; print(site.getusersitepackages())' 2>/dev/null || true)"
+        if [ -n "${usersite}" ] && [ -d "${usersite}" ]; then
+            case ":${PYTHONPATH:-}:" in
+                *":${usersite}:"*) ;;
+                *) export PYTHONPATH="${usersite}${PYTHONPATH:+:${PYTHONPATH}}" ;;
+            esac
+        fi
+    done
+
+    if [ "${has_colorama}" -eq 0 ]; then
+        echo -e "${BOLD}${RED}ERROR: colorama could not be imported in any detected python3 interpreter${RESET}"
+        echo "Install it with: /usr/bin/python3 -m pip install --user colorama"
+        exit 1
+    fi
+
+    # Ensure /usr/bin/env python3 resolves to host python for aidl_ops.py shebang.
+    if [ -x "/usr/bin/python3" ] && /usr/bin/python3 -c 'import colorama' >/dev/null 2>&1; then
+        export PATH="/usr/bin:/bin:${PATH}"
     fi
 }
 
@@ -295,21 +357,110 @@ prepare_aidl_binder_sdk()
 
 find_host_cmake()
 {
-    local candidates=("cmake" "cmake3" "/usr/bin/cmake" "/usr/local/bin/cmake")
+    local candidates=("/usr/bin/cmake" "cmake" "cmake3" "/usr/local/bin/cmake" "${OECORE_NATIVE_SYSROOT:-}/usr/bin/cmake")
     local c
+
+    # Validate required command support instead of version guessing only.
+    local cmake_probe_script
+    cmake_probe_script="$(mktemp)"
+    cat > "${cmake_probe_script}" <<'EOF'
+file(WRITE "${CMAKE_BINARY_DIR}/.cmake_copy_file_probe_src" "ok")
+file(COPY_FILE "${CMAKE_BINARY_DIR}/.cmake_copy_file_probe_src" "${CMAKE_BINARY_DIR}/.cmake_copy_file_probe_dst")
+EOF
+
     for c in "${candidates[@]}"; do
+        [ -z "${c}" ] && continue
         if command -v "${c}" &>/dev/null || [ -x "${c}" ]; then
             local ver
-            ver=$(${c} --version 2>/dev/null | awk 'NR==1{print $3}')
+            ver="$("${c}" --version 2>/dev/null | awk 'NR==1{print $3}')"
             local major minor
             IFS='.' read -r major minor _ <<< "${ver}"
-            if [ "${major:-0}" -gt 3 ] || { [ "${major:-0}" -eq 3 ] && [ "${minor:-0}" -ge 19 ]; }; then
+
+            if [ "${major:-0}" -lt 3 ] || { [ "${major:-0}" -eq 3 ] && [ "${minor:-0}" -lt 19 ]; }; then
+                continue
+            fi
+
+            if "${c}" -P "${cmake_probe_script}" >/dev/null 2>&1; then
+                rm -f "${cmake_probe_script}" .cmake_copy_file_probe_src .cmake_copy_file_probe_dst
                 echo "${c}"
                 return 0
             fi
         fi
     done
-    echo "cmake"
+
+    rm -f "${cmake_probe_script}" .cmake_copy_file_probe_src .cmake_copy_file_probe_dst
+    echo -e "${BOLD}${RED}ERROR: no cmake with file(COPY_FILE) support found on PATH${RESET}"
+    echo "Please use cmake >= 3.21 (or another cmake that supports file(COPY_FILE))."
+    exit 1
+}
+
+fix_aidl_ops_shebang()
+{
+    local aidl_ops="${LINUX_BINDER_DIR}/host/aidl_ops.py"
+
+    if [ ! -f "${aidl_ops}" ]; then
+        return 0
+    fi
+
+    # Keep AIDL ops on host python to avoid toolchain python module mismatches.
+    if head -1 "${aidl_ops}" | grep -q "#!/usr/bin/env python3"; then
+        echo "Fixing aidl_ops.py shebang to use /usr/bin/python3 explicitly..."
+        sed -i '1s|#!/usr/bin/env python3|#!/usr/bin/python3|' "${aidl_ops}"
+    fi
+}
+
+build_modules_manifest_released()
+{
+    local host_cmake="$1"
+    local manifest_file="${RDK_HAL_DIR}/versions_released.yaml"
+    local temp_manifest
+    local common_ver videodecoder_ver planecontrol_ver
+    local cmake_dir
+
+    if [ ! -f "${manifest_file}" ]; then
+        echo -e "${BOLD}${RED}ERROR: versions_released manifest not found: ${manifest_file}${RESET}"
+        exit 1
+    fi
+
+    common_ver="$(awk '
+        /^default:/ {def=$2}
+        /^components:/ {inmap=1; next}
+        inmap && /^[^[:space:]#]/ {inmap=0}
+        inmap && $1=="common:" {print ($2==""?def:$2); found=1; exit}
+        END {if (!found) print (def==""?"current":def)}
+    ' "${manifest_file}")"
+    videodecoder_ver="$(awk '
+        /^default:/ {def=$2}
+        /^components:/ {inmap=1; next}
+        inmap && /^[^[:space:]#]/ {inmap=0}
+        inmap && $1=="videodecoder:" {print ($2==""?def:$2); found=1; exit}
+        END {if (!found) print (def==""?"current":def)}
+    ' "${manifest_file}")"
+    planecontrol_ver="$(awk '
+        /^default:/ {def=$2}
+        /^components:/ {inmap=1; next}
+        inmap && /^[^[:space:]#]/ {inmap=0}
+        inmap && $1=="planecontrol:" {print ($2==""?def:$2); found=1; exit}
+        END {if (!found) print (def==""?"current":def)}
+    ' "${manifest_file}")"
+
+    temp_manifest="$(mktemp)"
+    cat > "${temp_manifest}" <<EOF
+default: current
+components:
+  common: ${common_ver}
+  videodecoder: ${videodecoder_ver}
+  planecontrol: ${planecontrol_ver}
+EOF
+
+    cmake_dir="$(dirname "${host_cmake}")"
+    echo -e "${BOLD}${CYAN}Building HAL modules for mock subset via released manifest: ${manifest_file}${RESET}"
+    (
+        cd "${RDK_HAL_DIR}"
+        PATH="${cmake_dir}:/usr/bin:/bin:${PATH}" ./build_modules.sh manifest --file "${temp_manifest}"
+    )
+
+    rm -f "${temp_manifest}"
 }
 
 generate_hal_interface()
@@ -344,6 +495,7 @@ stage_generated_aidl_libs()
 {
     local plane_ver video_ver common_ver
     local plane_lib video_lib common_lib
+    local plane_headers_dir video_headers_dir common_headers_dir
     local interface_headers_dir
     local hal_lib_dir
 
@@ -352,6 +504,10 @@ stage_generated_aidl_libs()
     plane_ver="$(manifest_component_version planecontrol)"
     video_ver="$(manifest_component_version videodecoder)"
     common_ver="$(manifest_component_version common)"
+
+    plane_headers_dir="${RDK_HAL_DIR}/out/build/include/planecontrol/${plane_ver}/include"
+    video_headers_dir="${RDK_HAL_DIR}/out/build/include/videodecoder/${video_ver}/include"
+    common_headers_dir="${RDK_HAL_DIR}/out/build/include/common/${common_ver}/include"
 
     plane_lib=$(find "${hal_lib_dir}" -type f -name "libplanecontrol-vcurrent-cpp.so" 2>/dev/null | head -1)
     [ -n "${plane_lib}" ] || plane_lib=$(find "${hal_lib_dir}" -type f -name "libplanecontrol-v${plane_ver}-cpp.so" 2>/dev/null | head -1)
@@ -363,7 +519,9 @@ stage_generated_aidl_libs()
 
     common_lib=$(find "${BUILD_DIR}" -type f -path "*_aidl/*" -name "libcommon-vcurrent-cpp.so" 2>/dev/null | head -1)
     [ -n "${common_lib}" ] || common_lib=$(find "${hal_lib_dir}" -type f -name "libcommon-vcurrent-cpp.so" 2>/dev/null | head -1)
+    [ -n "${common_lib}" ] || common_lib=$(find "${hal_lib_dir}" -type f -name "libcommon-v${common_ver}-cpp.so" 2>/dev/null | head -1)
     [ -n "${common_lib}" ] || common_lib=$(find "${BUILD_DIR}" -type f -path "*_aidl/*" -name "libcommon-v${common_ver}-cpp.so" 2>/dev/null | head -1)
+    [ -n "${common_lib}" ] || common_lib=$(find "${hal_lib_dir}" -type f -name "libcommon-v*-cpp.so" 2>/dev/null | head -1)
     [ -n "${common_lib}" ] || common_lib=$(find "${BUILD_DIR}" -type f -path "*_aidl/*" -name "libcommon-v*-cpp.so" 2>/dev/null | head -1)
 
     if [ -z "${plane_lib}" ] || [ -z "${video_lib}" ] || [ -z "${common_lib}" ]; then
@@ -376,7 +534,18 @@ stage_generated_aidl_libs()
     cp -f "${common_lib}" "${BUILD_INSTALL_PREFIX}/lib/"
 
     install -d "${BUILD_INSTALL_PREFIX}/include"
+    # Make released snapshot headers visible through the legacy current/include paths.
+    install -d "${RDK_HAL_DIR}/out/build/include/planecontrol/current"
+    install -d "${RDK_HAL_DIR}/out/build/include/videodecoder/current"
+    install -d "${RDK_HAL_DIR}/out/build/include/common/current"
+    [ -d "${plane_headers_dir}" ] && ln -sfn "${plane_headers_dir}" "${RDK_HAL_DIR}/out/build/include/planecontrol/current/include"
+    [ -d "${video_headers_dir}" ] && ln -sfn "${video_headers_dir}" "${RDK_HAL_DIR}/out/build/include/videodecoder/current/include"
+    [ -d "${common_headers_dir}" ] && ln -sfn "${common_headers_dir}" "${RDK_HAL_DIR}/out/build/include/common/current/include"
+
     for interface_headers_dir in \
+        "${common_headers_dir}" \
+        "${plane_headers_dir}" \
+        "${video_headers_dir}" \
         "${RDK_HAL_DIR}/common/current/include" \
         "${RDK_HAL_DIR}/out/build/include/planecontrol/current/include" \
         "${RDK_HAL_DIR}/out/build/include/videodecoder/current/include"; do
@@ -490,20 +659,13 @@ build_mock_only()
         fi
 
         ensure_colorama_for_system_python
+        fix_aidl_ops_shebang
         prepare_aidl_binder_sdk
 
         local host_cmake
         host_cmake="$(find_host_cmake)"
 
-        local plane_ver video_ver
-        plane_ver="$(manifest_component_version planecontrol)"
-        video_ver="$(manifest_component_version videodecoder)"
-
-        generate_hal_interface "planecontrol" "${plane_ver}" "planecontrol_aidl" "${host_cmake}"
-        generate_hal_interface "videodecoder" "${video_ver}" "videodecoder_aidl" "${host_cmake}"
-
-        "${host_cmake}" --build "${BUILD_DIR}/planecontrol_aidl" -j"$(nproc)"
-        "${host_cmake}" --build "${BUILD_DIR}/videodecoder_aidl" -j"$(nproc)"
+        build_modules_manifest_released "${host_cmake}"
 
         stage_generated_aidl_libs
     fi

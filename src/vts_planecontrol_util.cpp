@@ -303,10 +303,22 @@ bool askUserYesNo(const std::string& question)
         UT_LOG_INFO("%s (yes/no): ", question.c_str());
 
         std::string input;
-        std::getline(std::cin, input);
+        if (!std::getline(std::cin, input))
+        {
+            UT_LOG_INFO("No user input available (EOF)");
+            return false;
+        }
 
-        input.erase(0, input.find_first_not_of(" \t\n\r"));
-        input.erase(input.find_last_not_of(" \t\n\r") + 1);
+        const auto first = input.find_first_not_of(" \t\n\r");
+        if (first == std::string::npos)
+        {
+            input.clear();
+        }
+        else
+        {
+            const auto last = input.find_last_not_of(" \t\n\r");
+            input = input.substr(first, last - first + 1);
+        }
 
         std::transform(input.begin(), input.end(), input.begin(), ::tolower);
 

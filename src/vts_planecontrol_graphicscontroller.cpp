@@ -148,6 +148,7 @@ bool PlaneControlGraphicsController::createGraphicsFbBuffer(int32_t width, int32
     if (dupFd < 0)
     {
         std::cerr << "dup for graphics fb fd failed\n";
+        (void)graphicsFbProvider_->destroyGraphicsFb(info.graphicsFbId);
         return false;
     }
 

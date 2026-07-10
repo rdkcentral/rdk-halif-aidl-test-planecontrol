@@ -21,11 +21,17 @@
 .PHONY: all clean check-libs
 
 PLANECONTROL_AIDL_LIB_NAME := planecontrolaidl
+VIDEODECODER_AIDL_LIB_NAME := videodecoderaidl
+COMMON_AIDL_LIB_NAME := common
 EMULATE_SERVICE_BIN_NAME := EmulatePlaneControlService
+
+PLANECONTROL_AIDL_LIB := lib$(PLANECONTROL_AIDL_LIB_NAME).so
+VIDEODECODER_AIDL_LIB := lib$(VIDEODECODER_AIDL_LIB_NAME).so
+COMMON_AIDL_LIB := lib$(COMMON_AIDL_LIB_NAME).so
 
 BUILD_DIR ?= $(CURDIR)/../build
 
-# Use cross-compiler if available (set by toolchain), otherwise use native.
+# Use cross-compiler if available (set by toolchain), otherwise use native
 CXX ?= g++
 CXXFLAGS ?= -Wall -Wextra -std=c++17 -ggdb
 EMULATE_SERVICE_CXXFLAGS := $(CXXFLAGS) -Wall -Wextra -std=c++17 -ggdb
@@ -53,6 +59,10 @@ EMULATE_SERVICE_LD_LIBS := -lbinder -lutils -lbase
 EMULATE_SERVICE_LDFLAGS := -L$(BUILD_DIR)/usr/lib
 EMULATE_SERVICE_LDFLAGS += -Wl,-rpath-link=$(BUILD_DIR)/usr/lib
 EMULATE_SERVICE_LDFLAGS += -Wl,--copy-dt-needed-entries
+
+PLANECONTROL_AIDL_LIB := $(BUILD_DIR)/usr/lib/$(PLANECONTROL_AIDL_LIB)
+VIDEODECODER_AIDL_LIB := $(BUILD_DIR)/usr/lib/$(VIDEODECODER_AIDL_LIB)
+COMMON_AIDL_LIB := $(BUILD_DIR)/usr/lib/$(COMMON_AIDL_LIB)
 
 EMULATE_SERVICE_BIN := $(BUILD_DIR)/bin/$(EMULATE_SERVICE_BIN_NAME)
 
