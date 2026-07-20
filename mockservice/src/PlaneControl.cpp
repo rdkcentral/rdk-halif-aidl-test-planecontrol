@@ -158,8 +158,11 @@ namespace com {
                     defaults[::com::rdk::hal::planecontrol::Property::WIDTH] = makeIntValue(capabilities.maxWidth);
                     defaults[::com::rdk::hal::planecontrol::Property::HEIGHT] = makeIntValue(capabilities.maxHeight);
                     defaults[::com::rdk::hal::planecontrol::Property::ALPHA] = makeIntValue(255);
-                    defaults[::com::rdk::hal::planecontrol::Property::ZORDER] = makeIntValue(capabilities.planeIndex);
                     defaults[::com::rdk::hal::planecontrol::Property::VISIBLE] = makeIntValue(0);
+
+                    if (capabilities.supportsZOrder) {
+                        defaults[::com::rdk::hal::planecontrol::Property::ZORDER] = makeIntValue(capabilities.planeIndex);
+                    }
 
                     if (capabilities.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
                         // Defaults for grapics planes
@@ -270,70 +273,7 @@ namespace com {
                     ::std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>* _aidl_return)
                 {
                     std::lock_guard<std::mutex> lock(mHandleLock);
-                    _aidl_return->clear();
-
-                    // Set number of video planes
-                    mVideoPlaneCount = 0; // Reset global counter
-
-                    // Plane 0: VIDEO
-                    ::com::rdk::hal::planecontrol::PlaneCapabilities cap0;
-                    cap0.planeIndex = 0;
-                    cap0.type = ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
-                    cap0.pixelFormats = {::com::rdk::hal::videodecoder::PixelFormat::NATIVE};
-                    cap0.maxWidth = 3840;
-                    cap0.maxHeight = 2160;
-                    cap0.frameWidth = 3840;
-                    cap0.frameHeight = 2160;
-                    cap0.supportedDynamicRanges = {
-                        ::com::rdk::hal::videodecoder::DynamicRange::SDR,
-                        ::com::rdk::hal::videodecoder::DynamicRange::HLG,
-                        ::com::rdk::hal::videodecoder::DynamicRange::HDR10,
-                        ::com::rdk::hal::videodecoder::DynamicRange::HDR10_PLUS,
-                        ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION
-                    };
-                    cap0.colorDepth = 12;
-                    cap0.maxFrameRate = 60;
-                    cap0.supportsAlpha = true;
-                    cap0.supportsZOrder = true;
-                    cap0.vsyncDisplayLatency = 3;
-                    _aidl_return->push_back(cap0);
-                    mVideoPlaneCount++; // Increment for VIDEO plane
-
-                    // Plane 1: VIDEO
-                    ::com::rdk::hal::planecontrol::PlaneCapabilities cap1;
-                    cap1.planeIndex = 1;
-                    cap1.type = ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
-                    cap1.pixelFormats = {::com::rdk::hal::videodecoder::PixelFormat::NATIVE};
-                    cap1.maxWidth = 3840;
-                    cap1.maxHeight = 2160;
-                    cap1.frameWidth = 3840;
-                    cap1.frameHeight = 2160;
-                    cap1.supportedDynamicRanges = {::com::rdk::hal::videodecoder::DynamicRange::SDR};
-                    cap1.colorDepth = 10;
-                    cap1.maxFrameRate = 60;
-                    cap1.supportsAlpha = true;
-                    cap1.supportsZOrder = true;
-                    cap1.vsyncDisplayLatency = 3;
-                    _aidl_return->push_back(cap1);
-                    mVideoPlaneCount++; // Increment for VIDEO plane
-
-                    // Plane 2: GRAPHICS
-                    ::com::rdk::hal::planecontrol::PlaneCapabilities cap2;
-                    cap2.planeIndex = 2;
-                    cap2.type = ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS;
-                    cap2.pixelFormats = {::com::rdk::hal::videodecoder::PixelFormat::RGB};
-                    cap2.maxWidth = 1920;
-                    cap2.maxHeight = 1080;
-                    cap2.frameWidth = 1920;
-                    cap2.frameHeight = 1080;
-                    cap2.supportedDynamicRanges = {::com::rdk::hal::videodecoder::DynamicRange::SDR};
-                    cap2.colorDepth = 8;
-                    cap2.maxFrameRate = 60;
-                    cap2.supportsAlpha = true;
-                    cap2.supportsZOrder = false;
-                    cap2.vsyncDisplayLatency = 1;
-                    _aidl_return->push_back(cap2);
-
+                    *_aidl_return = mCapabilities;
                     return android::binder::Status::ok();
                 }
 
@@ -536,6 +476,12 @@ namespace com {
                         return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
                     }
 
+                    auto planeIt = mPlaneProperties.find(planeResourceIndex);
+                    if (planeIt == mPlaneProperties.end() || planeIt->second.find(property) == planeIt->second.end()) {
+                        *_aidl_return = false;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+
                     mPlaneProperties[planeResourceIndex][property] = propertyValue;
                     *_aidl_return = true;
                     return android::binder::Status::ok();
@@ -628,6 +574,12 @@ namespace com {
 
                         if (val.value.has_value() && val.value->getTag() != PropertyValue::Value::Tag::intValue)
                         {
+                            *_aidl_return = false;
+                            return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                        }
+
+                        auto planeIt = mPlaneProperties.find(planeResourceIndex);
+                        if (planeIt == mPlaneProperties.end() || planeIt->second.find(prop) == planeIt->second.end()) {
                             *_aidl_return = false;
                             return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
                         }

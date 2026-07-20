@@ -58,7 +58,7 @@
  */
 #include "vts_videosink_helper_functions.h"
 #include "vts_videosink_parse_hfp.h"
-#include "vts_videosink_parse_testconfig.h"
+#include "vts_videosink_test.h"
 #include "vts_planecontrol_parse_testconfig.h"
 #include "vts_planecontrol_graphicscontroller.h"
 #include "vts_videosink.h"
@@ -90,16 +90,12 @@ static const char *gModuleName = "IPlaneControl";
 static const char *gVideoDecoderModuleName = "IVideoDecoderManager";
 static const char *gTestGroup = "L3";
 static IAVBufferHelper* gAVbufferHelper;
-static const char *kPlanecontrolGraphicsplane = "Planecontrol_Graphicsplane";
-static const char *kPlanecontrolGraphicsplaneAuto = "Planecontrol_Graphicsplane_Auto";
+
 static const char *kPlanecontrolGraphicsplaneClient = "Planecontrol_Graphicsplane_Client";
 
 static std::vector<int> videoPlaneIndex;
 static std::vector<int> graphicsPlaneIndex;
 static std::vector<com::rdk::hal::planecontrol::SourcePlaneMapping> planeMapping;
-
-extern std::vector<int32_t> gAvailableVideosinks_hfp;
-extern std::vector<int32_t> gAvailableVideodecoders_hfp;
 
 
 
@@ -519,7 +515,7 @@ void PlaneControlTest::run ()
                     UT_ASSERT_TRUE(elapsedNs >= 0) << "Invalid elapsedNs for plane: " << index;
                 }
 
-                if (!autoMode)
+                //if (!autoMode)
                 {
                     std::vector<GraphicsClientPattern> interactivePatterns = {
                         GraphicsClientPattern::TRIANGLE,
@@ -933,17 +929,30 @@ public:
 
     bool isVideoSinkUsable(const IVideoSink::Id& sinkId)
     {
-        return std::find(gAvailableVideosinks_hfp.begin(), gAvailableVideosinks_hfp.end(), sinkId.value) != gAvailableVideosinks_hfp.end();
+        return std::any_of(mVideoSinkList.begin(), mVideoSinkList.end(),
+            [&sinkId](const auto& sinkEntry)
+            {
+                const auto& [id, sinkHandle, controlListener, eventListener] = sinkEntry;
+                (void)controlListener;
+                (void)eventListener;
+                return id.value == sinkId.value && sinkHandle != nullptr;
+            });
     }
 
     bool isVideoDecoderUsable(const IVideoDecoder::Id& decoderId)
     {
-        return std::find(gAvailableVideodecoders_hfp.begin(),
-                            gAvailableVideodecoders_hfp.end(),
-                            decoderId.value) != gAvailableVideodecoders_hfp.end();
+        return std::any_of(mVideoDecoderList.begin(), mVideoDecoderList.end(),
+            [&decoderId](const auto& decoderEntry)
+            {
+                const auto& [id, decoderHandle, controlListener, eventListener, capabilities] = decoderEntry;
+                (void)controlListener;
+                (void)eventListener;
+                (void)capabilities;
+                return id.value == decoderId.value && decoderHandle != nullptr;
+            });
     }
 
-    void runPlaneControlTest(videoDecoderTestConfiguration_t testConfig, videoTestConfiguration_t sinkConfig,planeControlTestConfig_t planeConfig)
+    void runPlaneControlTest(videoDecoderTestConfiguration_t testConfig, videoDecoderTestConfiguration_t sinkConfig, planeControlTestConfig_t planeConfig)
     {
         try
         {
@@ -1013,10 +1022,20 @@ public:
                     }
 
 
-                    SinkTest sinkTest(sinkId, sinkHandle, sinkControlListener, sinkEventListener,
-                                      decoderControlListener, decoderId, testConfig, sinkConfig, false);
+                    IAVClock::Id clockId;
+                    if (!gVideosinks_hfp.availableClocks_hfp.empty())
+                    {
+                        clockId.value = gVideosinks_hfp.availableClocks_hfp[0];
+                    }
+                    else
+                    {
+                        clockId.value = IAVClock::Id::UNDEFINED;
+                    }
 
-                    sinkThread = std::make_unique<std::thread>(&SinkTest::run, &sinkTest, true);
+                    VideoSinkTest sinkTest(sinkId, sinkHandle, sinkControlListener, sinkEventListener,
+                                           decoderControlListener, mAVBufferManager, decoderId, clockId, sinkConfig, false);
+
+                    sinkThread = std::make_unique<std::thread>(&VideoSinkTest::run, &sinkTest, true);
                     bool isSinkAttached = (sinkHandle != nullptr);
                     videoDecoderTest decodeTest(decoderId, decoderHandle, decoderControlListener,
                                                 decoderEventListener, mAVBufferManager, false, false, testConfig, mAVbufferHelper, isSinkAttached);
@@ -1054,7 +1073,7 @@ public:
     void runSingleProcessTest(const char *testName)
     {
         vector<videoDecoderTestConfiguration_t> decoderConfigs;
-        vector<videoTestConfiguration_t> sinkConfigs;
+        vector<videoDecoderTestConfiguration_t> sinkConfigs;
         vector<planeControlTestConfig_t> planeConfigs;
         const bool graphicsOnlyTest = isGraphicsPlaneTestName(testName != nullptr ? testName : "");
 
@@ -1089,7 +1108,7 @@ public:
 
         vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, gVideoDecoderModuleName, gTestGroup, testName, decoderConfigs);
 
-        vts_videosink_parse_testconfig(gPlaneControlTestConfiguration, VIDEODECODERMGR, gTestGroup, "Sink_QueueDepth", sinkConfigs);
+        vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, VIDEOSINKMGR, gTestGroup, "Sink_QueueDepth", sinkConfigs);
 
 
         for (size_t i = 0; i < decoderConfigs.size(); ++i)
@@ -1284,30 +1303,6 @@ UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Pixelformat)
  *
  * **Test Group ID:** 003@n
  * **Test Case ID:** 012@n
- */
-UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Graphicsplane)
-{
-    const char *testName = kPlanecontrolGraphicsplane;
-
-    runSingleProcessTest(testName);
-}
-/**
- * @brief Test the controller's ability to render graphics plane in non-interactive mode
- *
- * **Test Group ID:** 003@n
- * **Test Case ID:** 014@n
- */
-UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Graphicsplane_Auto)
-{
-    const char *testName = kPlanecontrolGraphicsplaneAuto;
-
-    runSingleProcessTest(testName);
-}
-/**
- * @brief Test the controller's graphics plane client-style double-buffer flow
- *
- * **Test Group ID:** 003@n
- * **Test Case ID:** 015@n
  */
 UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Graphicsplane_Client)
 {

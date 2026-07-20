@@ -208,16 +208,16 @@ build_linux_binder_target()
 
     # Some SDK environments force CMAKE_MAKE_PROGRAM=/usr/bin/gmake even when gmake is absent.
     # Override it here so host tool configure checks can always invoke an existing make binary.
-        PATH="/usr/bin:/bin:${PATH}" \
+    PATH="/usr/bin:/bin:${PATH}" \
     MAKE="${make_cmd}" \
     CMAKE_MAKE_PROGRAM="${make_cmd}" \
-        ./build-linux-binder-aidl.sh no-host-aidl
+    env -u PKG_CONFIG -u PKG_CONFIG_EXECUTABLE ./build-linux-binder-aidl.sh no-host-aidl
 
-        # Build host AIDL tools via upstream script, while preventing inherited invalid make settings.
-        PATH="/usr/bin:/bin:${PATH}" \
-        MAKE="${make_cmd}" \
-        BUILD_TYPE="${BUILD_TYPE:-Release}" \
-        env -u CMAKE_MAKE_PROGRAM ./build-aidl-generator-tool.sh
+    # Build host AIDL tools via upstream script, while preventing inherited invalid make settings.
+    PATH="/usr/bin:/bin:${PATH}" \
+    MAKE="${make_cmd}" \
+    BUILD_TYPE="${BUILD_TYPE:-Release}" \
+    env -u CMAKE_MAKE_PROGRAM -u PKG_CONFIG -u PKG_CONFIG_EXECUTABLE ./build-aidl-generator-tool.sh
     popd >/dev/null
 
     LINUX_BINDER_OUT_DIR="${LINUX_BINDER_DIR}/out/target"
@@ -457,7 +457,15 @@ EOF
     echo -e "${BOLD}${CYAN}Building HAL modules for mock subset via released manifest: ${manifest_file}${RESET}"
     (
         cd "${RDK_HAL_DIR}"
-        PATH="${cmake_dir}:/usr/bin:/bin:${PATH}" ./build_modules.sh manifest --file "${temp_manifest}"
+                rm -rf \
+                        "${RDK_HAL_DIR}/build/common/${common_ver}" \
+                        "${RDK_HAL_DIR}/build/videodecoder/${videodecoder_ver}" \
+                        "${RDK_HAL_DIR}/build/planecontrol/${planecontrol_ver}"
+        # build_mock.sh already provisions host-side binder tools separately,
+        # so allow the released-manifest wrapper to run inside sourced cross envs.
+        PATH="${cmake_dir}:/usr/bin:/bin:${PATH}" \
+        BINDER_ALLOW_CROSS_ENV=1 \
+        ./build_modules.sh manifest --file "${temp_manifest}"
     )
 
     rm -f "${temp_manifest}"
@@ -499,7 +507,7 @@ stage_generated_aidl_libs()
     local interface_headers_dir
     local hal_lib_dir
 
-    hal_lib_dir="${RDK_HAL_DIR}/out/target/lib/halif"
+    hal_lib_dir="${RDK_HAL_DIR}/out/target/lib/rdk-halif-aidl"
 
     plane_ver="$(manifest_component_version planecontrol)"
     video_ver="$(manifest_component_version videodecoder)"
