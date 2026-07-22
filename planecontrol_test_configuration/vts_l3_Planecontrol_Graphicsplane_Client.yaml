@@ -1,0 +1,24 @@
+IPlaneControl:
+  stream_download_path: "" #`URL` path to download the video test streams
+  input_streams_path: "assets/streams/input" #Target path where input streams are stored
+  reference_streams_path: "assets/streams/reference/" #Target path for reference decoded streams
+  L3:
+    Planecontrol_Graphicsplane_Client:
+      Controls:
+        delay_between_steps: 300 # Insert delay in msec between each step
+      Inputs:
+        Streams:
+          - Codec: H264
+            Name: H264_HD_30_YUV420
+            rms_diff_threshold: 0.5
+            decode_time_threshold: 10000000
+        mapping:
+          - step:
+            - plane_index: 0
+              source: NONE
+              source_index: 0
+              decoderId: 0
+              X: 0
+              Y: 0
+              height: 1080
+              width: 1920

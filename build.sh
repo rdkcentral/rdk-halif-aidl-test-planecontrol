@@ -25,6 +25,12 @@ declare -r UT_CORE_DIR="${TOP}/ut/ut-core"
 declare -r BUILD_DIR="${TOP}/build"
 declare -r BUILD_INSTALL_PREFIX=${BUILD_DIR}/usr
 
+# build_mock.sh owns mock-only flow and handles binder/AIDL provisioning.
+if [ "${1:-}" == "mock" ]; then
+    shift
+    exec "${TOP}/build_mock.sh" "$@"
+fi
+
 DEF_LINUX_BINDER="`realpath ${TOP}/../`/linux_binder_idl"
 # AIDL_BIN: path of aidl compiler
 AIDL_BIN=${AIDL_BIN:-${DEF_LINUX_BINDER}/out/aidl}

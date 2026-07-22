@@ -42,7 +42,11 @@
 #include <iomanip>
 
 #include "com/rdk/hal/planecontrol/BnPlaneControl.h"
+#include "com/rdk/hal/planecontrol/BnGraphicsFbProvider.h"
 #include "com/rdk/hal/planecontrol/IPlaneControlListener.h"
+#include "com/rdk/hal/planecontrol/IGraphicsFbProvider.h"
+#include "com/rdk/hal/planecontrol/IGraphicsFbProviderListener.h"
+#include <binder/ParcelFileDescriptor.h>
 #include "com/rdk/hal/videodecoder/DynamicRange.h"
 #include "com/rdk/hal/videodecoder/PixelFormat.h"
 
@@ -64,10 +68,8 @@ namespace com {
 
                     static char const *getServiceName() { return IPlaneControl::serviceName().c_str(); }
 
-                    ::android::binder::Status getCapabilities(::std::vector<::com::rdk::hal::planecontrol::Capabilities>* _aidl_return) override;
-                    ::android::binder::Status getNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t* _aidl_return) override;
-                    ::android::binder::Status releaseNativeGraphicsWindowHandle(int32_t planeResourceIndex, int64_t nativeWindowHandle) override;
-                    ::android::binder::Status flipGraphicsBuffer(int32_t planeResourceIndex, bool* _aidl_return) override;
+                    ::android::binder::Status getCapabilities(::std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>* _aidl_return) override;
+                    ::android::binder::Status getGraphicsFbProvider(int32_t planeResourceIndex, const ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProviderListener>& graphicsFbProviderListener, ::android::sp<::com::rdk::hal::planecontrol::IGraphicsFbProvider>* _aidl_return) override;
                     ::android::binder::Status setVideoSourceDestinationPlaneMapping(const ::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>& listSourcePlaneMapping, bool* _aidl_return) override;
                     ::android::binder::Status getVideoSourceDestinationPlaneMapping(::std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping>* _aidl_return) override;
                     ::android::binder::Status getProperty(int32_t planeResourceIndex, ::com::rdk::hal::planecontrol::Property property, ::std::optional<::com::rdk::hal::PropertyValue>* _aidl_return) override;
@@ -84,11 +86,11 @@ namespace com {
                     std::set<android::sp<IPlaneControlListener>> mListeners;
                     std::mutex mHandleLock;
                     int64_t mNextHandle = 0x10000000;
-                    std::vector<::com::rdk::hal::planecontrol::Capabilities> mCapabilities;
+                    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> mCapabilities;
                     int mVideoPlaneCount;
                     int mGraphicsPlaneCount;
 
-                    ::com::rdk::hal::planecontrol::Capabilities buildCapabilities(
+                    ::com::rdk::hal::planecontrol::PlaneCapabilities buildCapabilities(
                             int index,
                             ::com::rdk::hal::planecontrol::PlaneType type,
                             std::vector<::com::rdk::hal::videodecoder::PixelFormat> pixelFormats,
@@ -104,7 +106,7 @@ namespace com {
                             int vsyncDisplayLatency
                     );
 
-                    std::map<::com::rdk::hal::planecontrol::Property, ::com::rdk::hal::PropertyValue> buildProperties(::com::rdk::hal::planecontrol::Capabilities capabilities);
+                    std::map<::com::rdk::hal::planecontrol::Property, ::com::rdk::hal::PropertyValue> buildProperties(::com::rdk::hal::planecontrol::PlaneCapabilities capabilities);
                 };
             }
         }

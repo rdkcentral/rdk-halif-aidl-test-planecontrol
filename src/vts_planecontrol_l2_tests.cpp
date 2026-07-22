@@ -76,8 +76,9 @@
 class VTS_L2_PlaneControl : public virtual UTCore
 {
 protected:
-    static std::vector<::com::rdk::hal::planecontrol::Capabilities> sCapabilities;
+    static std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> sCapabilities;
     static std::vector<uint32_t> sVideoPlaneIndices;
+    static std::vector<uint32_t> sGraphicsPlaneIndices;
     static std::vector<::com::rdk::hal::planecontrol::SourceType> sAllSourceTypes;
 
     static void SetUpTestSuite() {
@@ -109,10 +110,15 @@ protected:
         for (const auto& capability : sCapabilities) {
             if (capability.type == PlaneType::VIDEO) {
                 sVideoPlaneIndices.push_back(capability.planeIndex);
+            } else if (capability.type == PlaneType::GRAPHICS) {
+                sGraphicsPlaneIndices.push_back(capability.planeIndex);
             }
         }
         if (sVideoPlaneIndices.size() < 2) {
             UT_LOG_WARNING("Only %zu video planes found, some tests may be limited", sVideoPlaneIndices.size());
+        }
+        if (sGraphicsPlaneIndices.empty()) {
+            UT_LOG_WARNING("No graphics planes found, GraphicsFb lifecycle tests will be skipped");
         }
     }
 
@@ -151,9 +157,43 @@ protected:
     }
 };
 
+class RecordingGraphicsFbProviderListener : public BnGraphicsFbProviderListener {
+public:
+    ::android::binder::Status onGraphicsFbReleased(int32_t oldGraphicsFbId, int64_t elapsedRealtimeNanos) override {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mCallbackReceived = true;
+        mOldGraphicsFbId = oldGraphicsFbId;
+        mElapsedRealtimeNanos = elapsedRealtimeNanos;
+        mCondition.notify_all();
+        return ::android::binder::Status::ok();
+    }
+
+    bool waitForCallback(int32_t& oldGraphicsFbId, int64_t& elapsedRealtimeNanos) {
+        std::unique_lock<std::mutex> lock(mMutex);
+        const bool ready = mCondition.wait_for(lock, std::chrono::milliseconds(500), [this]() {
+            return mCallbackReceived;
+        });
+        if (!ready) {
+            return false;
+        }
+
+        oldGraphicsFbId = mOldGraphicsFbId;
+        elapsedRealtimeNanos = mElapsedRealtimeNanos;
+        return true;
+    }
+
+private:
+    std::mutex mMutex;
+    std::condition_variable mCondition;
+    bool mCallbackReceived = false;
+    int32_t mOldGraphicsFbId = -1;
+    int64_t mElapsedRealtimeNanos = -1;
+};
+
 // Static member initialization
-std::vector<::com::rdk::hal::planecontrol::Capabilities> VTS_L2_PlaneControl::sCapabilities;
+std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> VTS_L2_PlaneControl::sCapabilities;
 std::vector<uint32_t> VTS_L2_PlaneControl::sVideoPlaneIndices;
+std::vector<uint32_t> VTS_L2_PlaneControl::sGraphicsPlaneIndices;
 std::vector<::com::rdk::hal::planecontrol::SourceType> VTS_L2_PlaneControl::sAllSourceTypes;
 
 /**
@@ -183,7 +223,6 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetProperty) {
 
         PLANE_CONTROL_SET_INT_ZERO_PROPERTY(planeIndex, Y, Y);
         PLANE_CONTROL_GET_INT_ZERO_PROPERTY(planeIndex, Y, Y);
-
 
         PLANE_CONTROL_SET_GET_CONFIG_BOOL_PROPERTY(planeIndex, ALPHA, ALPHA, supportsAlpha);
 
@@ -275,16 +314,7 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
             propertyKVList.push_back(kvPair);
         }
 
-        // Use setPropertyMultiAtomic method
-        bool setResult;
-        UT_LOG_INFO("Calling setPropertyMultiAtomic(IN:planeIndex:[%d], IN:propertyKVList[])", planeIndex);
-        auto status = gPlaneControlservice->setPropertyMultiAtomic(planeIndex, propertyKVList, &setResult);
-        UT_LOG_INFO("Result setPropertyMultiAtomic(IN:planeIndex:[%d], IN:propertyKVList[], OUT:setResult:[%d], status:[isOK:%s, exception:%s])",
-                    planeIndex, setResult,
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_TRUE(status.isOk());
-        UT_ASSERT_TRUE(setResult);
+        PLANE_CONTROL_SET_PROPERTY_MULTI_ATOMIC(planeIndex, propertyKVList);
 
         // Get the property value using getPropertyMulti
         std::vector<com::rdk::hal::planecontrol::Property> getProperties;
@@ -293,45 +323,34 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         }
 
         std::vector<com::rdk::hal::planecontrol::PropertyKVPair> getPropertyKVList;
-        bool getResult;
-        UT_LOG_INFO("Calling getPropertyMulti(IN:planeIndex:[%d], IN:properties.size:[%zu], OUT:propertyKVList[], OUT:getResult)", planeIndex, getProperties.size());
-        status = gPlaneControlservice->getPropertyMulti(planeIndex, getProperties, &getPropertyKVList, &getResult);
-        UT_LOG_INFO("Result getPropertyMulti(IN:planeIndex:[%d], OUT:propertyKVList.size:[%zu], OUT:getResult:[%d], status:[isOK:%s, exception:%s])",
-                    planeIndex, getPropertyKVList.size(), getResult,
-                    UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-        UT_ASSERT_TRUE(status.isOk());
-        UT_ASSERT_TRUE(getResult);
+        PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeIndex, getProperties, getPropertyKVList, "all");
 
-        for (const auto& kv : getPropertyKVList) {
-            if (kv.property == ::com::rdk::hal::planecontrol::Property::WIDTH && kv.propertyValue.value.has_value()) {
-                int32_t width = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
-                UT_ASSERT_EQUAL(width, frame_width);
-            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::HEIGHT && kv.propertyValue.value.has_value()) {
-                int32_t height = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
-                UT_ASSERT_EQUAL(height, frame_height);
-            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::X && kv.propertyValue.value.has_value()) {
-                int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
-                UT_ASSERT_EQUAL(val, 0);
-            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::Y && kv.propertyValue.value.has_value()) {
-                int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
-                UT_ASSERT_EQUAL(val, 0);
-            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::ALPHA && kv.propertyValue.value.has_value()) {
-                int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
-                UT_ASSERT_EQUAL(val, 0);
-            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::ZORDER && kv.propertyValue.value.has_value()) {
-                int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
-                UT_ASSERT_EQUAL(val, 1);
-            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::VISIBLE && kv.propertyValue.value.has_value()) {
-                int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
-                UT_ASSERT_EQUAL(val, 1);
-            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::OVERSCAN && kv.propertyValue.value.has_value()) {
-                int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
-                UT_ASSERT_EQUAL(val, 0);
-            } else if (kv.property == ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO && kv.propertyValue.value.has_value()) {
-                int32_t val = kv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
-                UT_ASSERT_EQUAL(val, 1);
+        for (const auto& setKv : propertyKVList) {
+            bool foundMatchingProperty = false;
+            for (const auto& getKv : getPropertyKVList) {
+                if (getKv.property != setKv.property) {
+                    continue;
+                }
+
+                foundMatchingProperty = true;
+                UT_ASSERT_TRUE(setKv.propertyValue.value.has_value())
+                    << "Set value missing for property " << static_cast<int32_t>(setKv.property)
+                    << " on plane " << planeIndex;
+                UT_ASSERT_TRUE(getKv.propertyValue.value.has_value())
+                    << "Get value missing for property " << static_cast<int32_t>(setKv.property)
+                    << " on plane " << planeIndex;
+
+                const int32_t expectedVal = setKv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
+                const int32_t actualVal = getKv.propertyValue.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>();
+                UT_ASSERT_EQUAL(actualVal, expectedVal)
+                    << "Round-trip mismatch for property " << static_cast<int32_t>(setKv.property)
+                    << " on plane " << planeIndex;
+                break;
             }
+
+            UT_ASSERT_TRUE(foundMatchingProperty)
+                << "Property missing in getPropertyMulti response for plane " << planeIndex
+                << ", property " << static_cast<int32_t>(setKv.property);
         }
     }
 }
@@ -351,6 +370,7 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetVideoSourceDestinationPlaneMapping) {
         PLANE_CONTROL_GET_MAPPING(sourceType, sVideoPlaneIndices[0], sVideoPlaneIndices[1]);
     }
 }
+
 
 /** @} */ // End of Plane_Control_Halif_Test_L2
 /** @} */ // End of Plane_Control_Halif_Test
