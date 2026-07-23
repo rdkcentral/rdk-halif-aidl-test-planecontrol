@@ -72,5 +72,5 @@ planecontrol:                   # Component object begins
         colorDepth: 8
         maxFrameRate: 60
         supportsAlpha: true
-        supportsZOrder: false
+        supportsZOrder: true
         vsyncDisplayLatency: 1
