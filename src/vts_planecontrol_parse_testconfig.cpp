@@ -77,6 +77,14 @@ static ::com::rdk::hal::planecontrol::SourceType stringToSourceType(const std::s
 UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *module, const char *testGroup, const char *testName,std::vector<planeControlTestConfig_t>& testConfig)
 {
     ut_kvp_status_t status;
+    if (pTestInstance == nullptr)
+    {
+        UT_LOG_ERROR("Invalid test configuration handle (null) for module=%s group=%s test=%s",
+                     module ? module : "<null>",
+                     testGroup ? testGroup : "<null>",
+                     testName ? testName : "<null>");
+        return UT_STATUS_FAILURE;
+    }
     ut_kvp_instance_t* kvpTestInstance = (ut_kvp_instance_t*)pTestInstance;
     string testList = string(module) + "." + string(testGroup) + "." + string(testName);
     string mapList = testList + "." + "Inputs" + "." + "mapping";

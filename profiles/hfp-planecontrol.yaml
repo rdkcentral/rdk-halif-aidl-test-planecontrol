@@ -37,7 +37,7 @@ planecontrol:                   # Component object begins
           - SDR
           - HLG
           - HDR10
-          - HDR10PLUS
+          - HDR10_PLUS
           - DOLBY_VISION
         colorDepth: 12
         maxFrameRate: 60
@@ -72,5 +72,5 @@ planecontrol:                   # Component object begins
         colorDepth: 8
         maxFrameRate: 60
         supportsAlpha: true
-        supportsZOrder: false
+        supportsZOrder: true
         vsyncDisplayLatency: 1

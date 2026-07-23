@@ -53,13 +53,12 @@ INC_DIRS += $(ROOT_DIR)/build/planecontrol_gen/current/h
 INC_DIRS += $(ROOT_DIR)/build/usr/include
 INC_DIRS += $(ROOT_DIR)/mockservice/avbufferhelper
 INC_DIRS += $(ROOT_DIR)/src
-INC_DIRS += $(ROOT_DIR)/src
 
 XLDFLAGS := -L$(ROOT_DIR)/build/usr/lib
 XLDFLAGS += -Wl,-rpath-link=$(ROOT_DIR)/build/usr/lib -Wl,--export-dynamic
 XLDFLAGS += -laudiodecoderaidl -lavbufferaidl -lvideodecoderaidl -lvideosinkaidl -lplanecontrolaidl
 XLDFLAGS += -lhal_logger -lavbufferhelper
-XLDFLAGS += -lEGL -lGLESv2 -lpthread
+XLDFLAGS += -lpthread
 
 # required for std::optional
 CXXFLAGS += -std=c++17
@@ -74,12 +73,18 @@ export INC_DIRS
 export XLDFLAGS
 export CXXFLAGS
 
-.PHONY: all clean
+.PHONY: all build_mock clean_mock clean
 
 all: $(TARGET_EXEC)
 
 $(TARGET_EXEC):
-	make -C ${UT_CORE_DIR} -j $(shell nproc) TARGET=$(TARGET) VARIANT=$(VARIANT)
+	make -C $(UT_CORE_DIR) -j $(shell nproc) TARGET=$(TARGET) VARIANT=$(VARIANT)
+
+build_mock:
+	$(ROOT_DIR)/build.sh mock
+
+clean_mock:
+	make -C $(ROOT_DIR)/mockservice clean
 
 clean:
-	make -C ${UT_CORE_DIR} -j TARGET=$(TARGET) VARIANT=$(VARIANT) clean
+	make -C $(UT_CORE_DIR) -j TARGET=$(TARGET) VARIANT=$(VARIANT) clean

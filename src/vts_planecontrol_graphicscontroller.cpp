@@ -19,8 +19,18 @@
  */
 
 #include "vts_planecontrol_graphicscontroller.h"
+#include "vts_planecontrol.h"
 #include <iostream>
 #include <chrono>
+#include <unistd.h>
+
+#include <binder/Status.h>
+#include <binder/ProcessState.h>
+#include <binder/ParcelFileDescriptor.h>
+
+#ifdef Status
+#undef Status
+#endif
 
 PlaneControlGraphicsController::PlaneControlGraphicsController() {}
 
@@ -28,6 +38,20 @@ PlaneControlGraphicsController::~PlaneControlGraphicsController() {
     stopRender();
     destroyGLES();
     destroyEGL();
+    disconnectPlaneControlProvider();
+}
+
+PlaneControlGraphicsController::GraphicsFbProviderListener::GraphicsFbProviderListener(PlaneControlGraphicsController* owner)
+    : owner_(owner) {}
+
+::android::binder::Status PlaneControlGraphicsController::GraphicsFbProviderListener::onGraphicsFbReleased(
+    int32_t oldGraphicsFbId, int64_t elapsedRealtimeNanos)
+{
+    if (owner_ != nullptr)
+    {
+        owner_->onGraphicsFbReleased(oldGraphicsFbId, elapsedRealtimeNanos);
+    }
+    return ::android::binder::Status::ok();
 }
 
 bool PlaneControlGraphicsController::setWindowHandle(void* nativeWindowHandle) {
@@ -57,6 +81,148 @@ void PlaneControlGraphicsController::stopRender() {
     running_ = false;
     if (renderThread_.joinable())
         renderThread_.join();
+}
+
+bool PlaneControlGraphicsController::connectPlaneControlProvider(int32_t planeResourceIndex)
+{
+    if (graphicsFbProvider_ != nullptr)
+    {
+        return true;
+    }
+
+    if (getPlaneControlService() != UT_STATUS_OK || gPlaneControlservice == nullptr)
+    {
+        std::cerr << "PlaneControl service not available\n";
+        return false;
+    }
+
+    planeControl_ = gPlaneControlservice;
+
+    android::ProcessState::self()->startThreadPool();
+
+    graphicsListener_ = new GraphicsFbProviderListener(this);
+    ::android::binder::Status binderStatus = planeControl_->getGraphicsFbProvider(planeResourceIndex, graphicsListener_, &graphicsFbProvider_);
+    if (!binderStatus.isOk() || graphicsFbProvider_ == nullptr)
+    {
+        std::cerr << "getGraphicsFbProvider failed: " << binderStatus.toString8().c_str() << "\n";
+        graphicsFbProvider_.clear();
+        graphicsListener_.clear();
+        planeControl_.clear();
+        return false;
+    }
+
+    return true;
+}
+
+void PlaneControlGraphicsController::disconnectPlaneControlProvider()
+{
+    graphicsFbProvider_.clear();
+    graphicsListener_.clear();
+    planeControl_.clear();
+
+    {
+        std::lock_guard<std::mutex> lock(releaseMutex_);
+        std::queue<std::pair<int32_t, int64_t>> empty;
+        std::swap(releasedFbEvents_, empty);
+    }
+    releaseCv_.notify_all();
+}
+
+bool PlaneControlGraphicsController::createGraphicsFbBuffer(int32_t width, int32_t height, GraphicsFbClientBuffer& outBuffer)
+{
+    if (graphicsFbProvider_ == nullptr)
+    {
+        return false;
+    }
+
+    com::rdk::hal::planecontrol::GraphicsFbInfo info;
+    ::android::os::ParcelFileDescriptor pfd;
+    ::android::binder::Status binderStatus = graphicsFbProvider_->createGraphicsFb(width, height, &info, &pfd);
+    if (!binderStatus.isOk())
+    {
+        std::cerr << "createGraphicsFb failed: " << binderStatus.toString8().c_str() << "\n";
+        return false;
+    }
+
+    const int dupFd = dup(pfd.get());
+    if (dupFd < 0)
+    {
+        std::cerr << "dup for graphics fb fd failed\n";
+        (void)graphicsFbProvider_->destroyGraphicsFb(info.graphicsFbId);
+        return false;
+    }
+
+    outBuffer.graphicsFbId = info.graphicsFbId;
+    outBuffer.width = info.pixelWidth;
+    outBuffer.height = info.pixelHeight;
+    outBuffer.stride = info.stride;
+    outBuffer.offset = info.offset;
+    outBuffer.format = 0;
+    outBuffer.fd = dupFd;
+    return true;
+}
+
+bool PlaneControlGraphicsController::commitGraphicsFbBuffer(int32_t graphicsFbId, bool& accepted)
+{
+    if (graphicsFbProvider_ == nullptr)
+    {
+        return false;
+    }
+
+    accepted = false;
+    ::android::binder::Status binderStatus = graphicsFbProvider_->commitGraphicsFb(graphicsFbId, &accepted);
+    if (!binderStatus.isOk())
+    {
+        std::cerr << "commitGraphicsFb failed: " << binderStatus.toString8().c_str() << "\n";
+        return false;
+    }
+    return true;
+}
+
+bool PlaneControlGraphicsController::waitForReleasedGraphicsFb(
+    int32_t& oldGraphicsFbId, int64_t& elapsedRealtimeNanos, int timeoutMs)
+{
+    std::unique_lock<std::mutex> lock(releaseMutex_);
+    const bool ready = releaseCv_.wait_for(
+        lock,
+        std::chrono::milliseconds(timeoutMs),
+        [this]() { return !releasedFbEvents_.empty(); });
+
+    if (!ready)
+    {
+        return false;
+    }
+
+    const auto event = releasedFbEvents_.front();
+    releasedFbEvents_.pop();
+    oldGraphicsFbId = event.first;
+    elapsedRealtimeNanos = event.second;
+    return true;
+}
+
+bool PlaneControlGraphicsController::destroyGraphicsFbBuffer(int32_t graphicsFbId)
+{
+    if (graphicsFbProvider_ == nullptr)
+    {
+        return false;
+    }
+
+    ::android::binder::Status binderStatus = graphicsFbProvider_->destroyGraphicsFb(graphicsFbId);
+    if (!binderStatus.isOk())
+    {
+        std::cerr << "destroyGraphicsFb failed: " << binderStatus.toString8().c_str() << "\n";
+        return false;
+    }
+    return true;
+}
+
+void PlaneControlGraphicsController::onGraphicsFbReleased(int32_t oldGraphicsFbId, int64_t elapsedRealtimeNanos)
+{
+    {
+        std::lock_guard<std::mutex> lock(releaseMutex_);
+        releasedFbEvents_.push({oldGraphicsFbId, elapsedRealtimeNanos});
+    }
+    releaseCv_.notify_one();
 }
 
 bool PlaneControlGraphicsController::initializeEGL() {
