@@ -64,6 +64,7 @@
 #include "vts_videosink.h"
 #include "vts_videodecoder.h"
 #include "vts_planecontrol.h"
+#include "vts_planecontrol_test.h"
 #include <algorithm>
 #include <condition_variable>
 #include <mutex>
@@ -93,51 +94,10 @@ static IAVBufferHelper* gAVbufferHelper;
 
 static const char *kPlanecontrolGraphicsplaneClient = "Planecontrol_Graphicsplane_Client";
 
-static std::vector<int> videoPlaneIndex;
-static std::vector<int> graphicsPlaneIndex;
-static std::vector<com::rdk::hal::planecontrol::SourcePlaneMapping> planeMapping;
-
-
-
-class RecordingGraphicsFbProviderListenerL3 : public BnGraphicsFbProviderListener {
-public:
-    ::android::binder::Status onGraphicsFbReleased(int32_t oldGraphicsFbId, int64_t elapsedRealtimeNanos) override {
-        std::lock_guard<std::mutex> lock(mMutex);
-        mCallbackReceived = true;
-        mOldGraphicsFbId = oldGraphicsFbId;
-        mElapsedRealtimeNanos = elapsedRealtimeNanos;
-        mCondition.notify_all();
-        return ::android::binder::Status::ok();
-    }
-
-    bool waitForCallback(int32_t& oldGraphicsFbId, int64_t& elapsedRealtimeNanos, int timeoutMs = 1200) {
-        std::unique_lock<std::mutex> lock(mMutex);
-        const bool ready = mCondition.wait_for(lock, std::chrono::milliseconds(timeoutMs), [this]() {
-            return mCallbackReceived;
-        });
-        if (!ready) {
-            return false;
-        }
-
-        oldGraphicsFbId = mOldGraphicsFbId;
-        elapsedRealtimeNanos = mElapsedRealtimeNanos;
-        return true;
-    }
-
-    void reset() {
-        std::lock_guard<std::mutex> lock(mMutex);
-        mCallbackReceived = false;
-        mOldGraphicsFbId = -1;
-        mElapsedRealtimeNanos = -1;
-    }
-
-private:
-    std::mutex mMutex;
-    std::condition_variable mCondition;
-    bool mCallbackReceived = false;
-    int32_t mOldGraphicsFbId = -1;
-    int64_t mElapsedRealtimeNanos = -1;
-};
+// videoPlaneIndex, graphicsPlaneIndex and planeMapping are defined in vts_planecontrol_test.cpp
+extern std::vector<int> videoPlaneIndex;
+extern std::vector<int> graphicsPlaneIndex;
+extern std::vector<com::rdk::hal::planecontrol::SourcePlaneMapping> planeMapping;
 
 static sp<IAVBuffer> vts_avbuffer_getService()
 {
@@ -149,70 +109,10 @@ static sp<IAVBuffer> vts_avbuffer_getService()
         );
 }
 
-class PlaneControlTest
-{
-public:
-    PlaneControlTest(planeControlTestConfig_t planeConfig);
-    void run ();
+// PlaneControlTest constructor, checkPlaneMappings and PlaneControlTest::run()
+// are implemented in vts_planecontrol_test.cpp
 
-
-private:
-    IVideoSink::Id mSinkId;
-    planeControlTestConfig_t mPlaneConfig;
-
-};
-
-PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
-                        :mPlaneConfig(planeConfig)
-{
-    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
-    videoPlaneIndex.clear();
-    graphicsPlaneIndex.clear();
-    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
-    for (const auto& plane : capabilities) {
-        if(plane.type == com::rdk::hal::planecontrol::PlaneType::VIDEO)
-            videoPlaneIndex.push_back(plane.planeIndex);
-        if(plane.type == com::rdk::hal::planecontrol::PlaneType::GRAPHICS)
-            graphicsPlaneIndex.push_back(plane.planeIndex);
-    }
-
-}
-
-static void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> planeMapping)
-{
-    std::vector<SourcePlaneMapping> retrievedMappings;
-    UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
-    auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
-    UT_LOG_INFO("Result getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[], status:[isOK:%s, exception:%s])",
-                UT_Control_GetMapString(bool_mapTable, status.isOk()),
-                UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
-    UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_EQUAL(retrievedMappings.size(), planeMapping.size());
-    for (size_t i = 0; i < planeMapping.size(); ++i) {
-        const auto& expected = planeMapping[i];
-        const auto& actual = retrievedMappings[i];
-        UT_ASSERT_EQUAL(expected.sourceIndex, actual.sourceIndex);
-        UT_ASSERT_EQUAL(expected.destinationPlaneIndex, actual.destinationPlaneIndex);
-    }
-}
-
-
-void PlaneControlTest::run ()
-{
-    if (isGraphicsPlaneTestName(mPlaneConfig.testName) && graphicsPlaneIndex.empty())
-    {
-        UT_LOG_INFO("Skipping %s because no GRAPHICS plane is advertised by the platform HFP/capabilities",
-                    mPlaneConfig.testName.c_str());
-        return;
-    }
-
-    bool aidl_return = false;
-    if (!isGraphicsPlaneTestName(mPlaneConfig.testName))
-    {
-        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
-        checkPlaneMappings(mPlaneConfig.planeMappings);
-        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
-    }
+#if 0  /* DEAD CODE: moved to vts_planecontrol_test.cpp — delete this block */
     if (mPlaneConfig.testName == "Planecontrol_Swapping")
     {
         // Swap planes
@@ -790,15 +690,15 @@ void PlaneControlTest::run ()
                 UT_LOG_INFO("EGL info for plane %d: nativeDisplayHandle=%" PRId64 " eglPlatformType=0x%x",
                             index, nativeDisplayHandle, eglPlatformType);
             }
-#endif
+#endif  /* IGraphicsFbProvider #if 0 block */
         }
     }
 
-    if (mPlaneConfig.testName == "Planecontrol_Vsync")
-    {
-    //Vsync ToDo
-    }
 }
+#endif  /* end of DEAD CODE block moved to vts_planecontrol_test.cpp */
+
+// PlaneControlTest constructor, checkPlaneMappings and PlaneControlTest::run()
+// are implemented in vts_planecontrol_test.cpp
 
 class VTS_L3_PlaneControl : public UTCore
 {
