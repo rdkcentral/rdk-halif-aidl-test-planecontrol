@@ -809,6 +809,7 @@ public:
 
     vector<tuple<IVideoSink::Id, sp<IVideoSink>, sp<VideoSinkControllerListener>, sp<VideoSinkEventListener>>> mVideoSinkList;
     vector<tuple<IVideoDecoder::Id, sp<IVideoDecoder>, sp<VideoDecoderControllerListener>, sp<VideoDecoderEventListener>, videodecoder::Capabilities*>> mVideoDecoderList;
+    vector<IAVClock::Id> mAvailableClockIds;
     sp<IAVBuffer> mAVBufferManager;
     sp<ValidPlaneControlListener> mPlaneControlListener;
     bool aidlReturn = false;
@@ -838,6 +839,11 @@ public:
 
         if (gPlaneControlTestConfiguration == nullptr) {
             UT_FAIL_FATAL("PlaneControl test configuration handle is null. Ensure vts_l3_PlaneControl_test_config.yaml is available from the test runtime working directory.");
+        }
+
+        /* Get the available AVClock IDs from the live AVClockManager, if present */
+        if (gAVClockManagerService != nullptr) {
+            AVCLOCK_MANAGER_GETAVCLOCKIDS(mAvailableClockIds);
         }
 
         vector<IVideoSink::Id> sinkIds;
@@ -1023,9 +1029,9 @@ public:
 
 
                     IAVClock::Id clockId;
-                    if (!gVideosinks_hfp.availableClocks_hfp.empty())
+                    if (!mAvailableClockIds.empty())
                     {
-                        clockId.value = gVideosinks_hfp.availableClocks_hfp[0];
+                        clockId = mAvailableClockIds.front();
                     }
                     else
                     {
