@@ -933,7 +933,7 @@ public:
                     }
 
                     VideoSinkTest sinkTest(sinkId, sinkHandle, sinkControlListener, sinkEventListener,
-                                           decoderControlListener, mAVBufferManager, decoderId, clockId, sinkConfig, false);
+                                           decoderControlListener, mAVBufferManager, decoderId, clockId, testConfig, false);
 
                     sinkThread = std::make_unique<std::thread>(&VideoSinkTest::run, &sinkTest, true);
                     bool isSinkAttached = (sinkHandle != nullptr);
@@ -975,19 +975,16 @@ public:
         vector<videoDecoderTestConfiguration_t> decoderConfigs;
         vector<videoDecoderTestConfiguration_t> sinkConfigs;
         vector<planeControlTestConfig_t> planeConfigs;
+
         const bool graphicsOnlyTest = isGraphicsPlaneTestName(testName != nullptr ? testName : "");
 
         UT_status_t planeConfigStatus =
-            vts_planecontrol_parse_testconfig(gPlaneControlTestConfiguration, gModuleName, gTestGroup, testName, planeConfigs);
-        if (planeConfigStatus != UT_STATUS_OK)
-        {
-            planeConfigs.clear();
-            planeConfigStatus =
                 vts_planecontrol_parse_testconfig(gPlaneControlTestConfiguration, PLANE_CONTROL_MGR, gTestGroup, testName, planeConfigs);
-        }
-        UT_ASSERT_EQUAL(UT_STATUS_OK, planeConfigStatus) << "Failed to parse plane control test config";
-        if (planeConfigStatus != UT_STATUS_OK)
+
+        if (planeConfigs.empty())
         {
+            std::string errorMsg = std::string("No valid plane control test configurations found - missing test streams or invalid configuration for test: ") + testName;
+            UT_FAIL_FATAL(errorMsg.c_str());
             return;
         }
 
@@ -998,14 +995,33 @@ public:
                 UT_LOG_INFO("Skipping %s because no GRAPHICS planes are advertised in the HFP/capabilities", testName);
                 return;
             }
-            for (auto& planeConfig : planeConfigs)
-            {
-                PlaneControlTest planeControlTest(planeConfig);
-                planeControlTest.run();
-            }
-            return;
         }
 
+        UT_LOG_INFO("vts_planecontrol_parse_testconfig for testName=%s, gTestGroup=%s, gVideoDecoderModuleName=%s", testName, gTestGroup, gVideoDecoderModuleName);
+        vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, PLANE_CONTROL_MGR, gTestGroup, testName, decoderConfigs);
+
+        UT_LOG_INFO("vts_videodecoder_parse_testconfig for testName=%s, gTestGroup=%s, gVideoSinkModuleName=%s", testName, gTestGroup, VIDEOSINKMGR);
+        vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, VIDEOSINKMGR, gTestGroup, "Sink_Decode", sinkConfigs);
+
+
+        UT_LOG_INFO("decoderConfigs.size()=%zu, sinkConfigs.size()=%zu, planeConfigs.size()=%zu", decoderConfigs.size(), sinkConfigs.size(), planeConfigs.size());
+        for (size_t i = 0; i < decoderConfigs.size(); ++i)
+        {
+            auto& decoderConfig = decoderConfigs[i];
+            if(sinkConfigs.size() == 0)
+            {
+                UT_LOG_INFO("No Sink Configurations defined in the test configurations");
+                break;
+            }
+            auto& sinkConfig = sinkConfigs[0];
+            for (size_t j = 0; j < planeConfigs.size(); ++j)
+            {
+                auto& planeConfig = planeConfigs[j];
+                runPlaneControlTest(decoderConfig, sinkConfig,planeConfig);
+            }
+        }
+
+        #if 0
         UT_LOG_INFO("vts_planecontrol_parse_testconfig for testName=%s, gTestGroup=%s, gVideoDecoderModuleName=%s", testName, gTestGroup, gVideoDecoderModuleName);
         vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, gVideoDecoderModuleName, gTestGroup, testName, decoderConfigs);
 
@@ -1028,6 +1044,7 @@ public:
                 runPlaneControlTest(decoderConfig, sinkConfig,planeConfig);
             }
         }
+        #endif
     }
 
     void TearDown() override

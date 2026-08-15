@@ -29,6 +29,8 @@ planecontrol:                   # Component object begins
         type: VIDEO
         pixelFormats:
           - NATIVE
+        sourceTypes:  # Supported source types for this plane (enum SourceType)
+          - VIDEO_SINK
         maxWidth: 3840
         maxHeight: 2160
         frameWidth: 3840
@@ -48,6 +50,8 @@ planecontrol:                   # Component object begins
         type: VIDEO
         pixelFormats:
           - NATIVE
+        sourceTypes:  # Supported source types for this plane (enum SourceType)
+          - VIDEO_SINK
         maxWidth: 3840
         maxHeight: 2160
         frameWidth: 3840
@@ -63,6 +67,8 @@ planecontrol:                   # Component object begins
         type: GRAPHICS
         pixelFormats:
           - RGB
+        sourceTypes:  # Supported source types for this plane (enum SourceType)
+          - VIDEO_SINK
         maxWidth: 1920
         maxHeight: 1080
         frameWidth: 1920
