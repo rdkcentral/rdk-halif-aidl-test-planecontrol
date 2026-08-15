@@ -76,6 +76,10 @@ static ::com::rdk::hal::planecontrol::SourceType stringToSourceType(const std::s
 }
 UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *module, const char *testGroup, const char *testName,std::vector<planeControlTestConfig_t>& testConfig)
 {
+    UT_LOG_INFO("Parsing test configuration for module=%s group=%s test=%s",
+                module ? module : "<null>",
+                testGroup ? testGroup : "<null>",
+                testName ? testName : "<null>");
     ut_kvp_status_t status;
     if (pTestInstance == nullptr)
     {

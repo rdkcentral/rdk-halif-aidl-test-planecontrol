@@ -87,8 +87,8 @@ using namespace std;
 /* Test class registration with UT_Core */
 UT_ADD_TEST_TO_GROUP(VTS_L3_PlaneControl, UT_TESTS_L3)
 
-static const char *gModuleName = "IPlaneControl";
-static const char *gVideoDecoderModuleName = "IVideoDecoderManager";
+static const char *gModuleName = "planecontrol";
+static const char *gVideoDecoderModuleName = "videodecoder";
 static const char *gTestGroup = "L3";
 static IAVBufferHelper* gAVbufferHelper;
 
@@ -1006,9 +1006,11 @@ public:
             return;
         }
 
+        UT_LOG_INFO("vts_planecontrol_parse_testconfig for testName=%s, gTestGroup=%s, gVideoDecoderModuleName=%s", testName, gTestGroup, gVideoDecoderModuleName);
         vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, gVideoDecoderModuleName, gTestGroup, testName, decoderConfigs);
 
-        vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, VIDEOSINKMGR, gTestGroup, "Sink_QueueDepth", sinkConfigs);
+        UT_LOG_INFO("vts_videodecoder_parse_testconfig for testName=%s, gTestGroup=%s, gVideoSinkModuleName=%s", testName, gTestGroup, VIDEOSINKMGR);
+        vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, VIDEOSINKMGR, gTestGroup, "Sink_Decode", sinkConfigs);
 
 
         for (size_t i = 0; i < decoderConfigs.size(); ++i)

@@ -104,6 +104,9 @@ using namespace ::com::rdk::hal::planecontrol;
 #define PLANE_CONTROL_MGR "planecontrol"
 #define PLANE_CONTROL_MGR_PLANES (std::string(PLANE_CONTROL_MGR) + ".planes")
 
+#define PLANE_CONTROL_TEST_CONFIG_PATH "./planecontrol_test_configuration/vts_l3_PlaneControl_test_config.yaml"
+
+
 #define UT_KVP_MAX_KEY_SIZE 128
 
 typedef struct Capabilities {
