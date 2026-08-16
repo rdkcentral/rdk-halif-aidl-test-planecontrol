@@ -130,7 +130,13 @@ void PlaneControlTest::run()
     }
 
     bool aidl_return = false;
-    if (!isGraphicsPlaneTestName(mPlaneConfig.testName))
+    if (mPlaneConfig.testName == "Planecontrol_Mapping")
+    {
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
+        checkPlaneMappings(mPlaneConfig.planeMappings);
+        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+    }
+    else if (!isGraphicsPlaneTestName(mPlaneConfig.testName))
     {
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
