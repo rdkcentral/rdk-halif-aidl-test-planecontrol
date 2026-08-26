@@ -130,14 +130,12 @@ void PlaneControlTest::run()
     }
 
     bool aidl_return = false;
-    if (mPlaneConfig.testName == "Planecontrol_Mapping")
+    const bool skipPreMapping = isGraphicsPlaneClientTest(mPlaneConfig.testName);
+    if (!skipPreMapping)
     {
-        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
-        checkPlaneMappings(mPlaneConfig.planeMappings);
-        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
-    }
-    else if (!isGraphicsPlaneTestName(mPlaneConfig.testName))
-    {
+        UT_ASSERT_TRUE(!mPlaneConfig.planeMappings.empty())
+            << "Test requires at least one source-to-destination mapping: "
+            << mPlaneConfig.testName;
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
         std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
