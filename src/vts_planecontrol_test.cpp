@@ -64,6 +64,7 @@
 #include <unistd.h>
 #include <cerrno>
 #include <cinttypes>
+#include <stdexcept>
 
 using namespace std;
 
@@ -104,15 +105,52 @@ PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
     : mPlaneConfig(planeConfig)
 {
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> videoCapabilities;
     videoPlaneIndex.clear();
     graphicsPlaneIndex.clear();
     PLANE_CONTROL_GET_CAPABILITIES(capabilities);
     for (const auto& plane : capabilities)
     {
         if (plane.type == com::rdk::hal::planecontrol::PlaneType::VIDEO)
+        {
             videoPlaneIndex.push_back(plane.planeIndex);
+            videoCapabilities.push_back(plane);
+        }
         if (plane.type == com::rdk::hal::planecontrol::PlaneType::GRAPHICS)
             graphicsPlaneIndex.push_back(plane.planeIndex);
+    }
+
+    if (!isGraphicsPlaneTestName(mPlaneConfig.testName))
+    {
+        if (mPlaneConfig.planeMappings.size() > videoCapabilities.size())
+        {
+            const std::string errorMessage =
+                "Test requests " + std::to_string(mPlaneConfig.planeMappings.size()) +
+                " mappings but only " + std::to_string(videoCapabilities.size()) +
+                " VIDEO planes are advertised";
+            throw std::runtime_error(errorMessage);
+        }
+
+        for (size_t mappingIndex = 0; mappingIndex < mPlaneConfig.planeMappings.size(); ++mappingIndex)
+        {
+            const auto& capability = videoCapabilities[mappingIndex];
+            const auto& sourceTypes = capability.sourceTypes;
+            const auto& configuredMapping = mPlaneConfig.planeMappings[mappingIndex];
+            const bool sourceSupported = std::find(sourceTypes.begin(), sourceTypes.end(),
+                                                   configuredMapping.sourceType) != sourceTypes.end();
+            if (!sourceSupported)
+            {
+                const std::string errorMessage =
+                    "VIDEO plane " + std::to_string(capability.planeIndex) +
+                    " does not support configured source type " +
+                    std::to_string(static_cast<int>(configuredMapping.sourceType));
+                throw std::runtime_error(errorMessage);
+            }
+
+            mPlaneConfig.planeMappings[mappingIndex].destinationPlaneIndex = capability.planeIndex;
+            UT_LOG_INFO("Using advertised VIDEO planeIndex=%d for mapping %zu",
+                        capability.planeIndex, mappingIndex);
+        }
     }
 }
 
@@ -136,6 +174,14 @@ void PlaneControlTest::run()
         UT_ASSERT_TRUE(!mPlaneConfig.planeMappings.empty())
             << "Test requires at least one source-to-destination mapping: "
             << mPlaneConfig.testName;
+        UT_LOG_INFO("Applying %zu source-to-destination plane mapping(s) for %s",
+                    mPlaneConfig.planeMappings.size(), mPlaneConfig.testName.c_str());
+        for (const auto& mapping : mPlaneConfig.planeMappings)
+        {
+            UT_LOG_INFO("SourcePlaneMapping: sourceType=%d, sourceIndex=%d, destinationPlaneIndex=%d",
+                        static_cast<int>(mapping.sourceType), mapping.sourceIndex,
+                        mapping.destinationPlaneIndex);
+        }
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
         std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));

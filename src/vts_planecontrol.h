@@ -210,6 +210,28 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
                     capabilities_var.size(), \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
+        if (status.isOk()) { \
+            for (const auto& capability : capabilities_var) { \
+                UT_LOG_INFO("PlaneCapabilities: planeIndex=%d type=%d maxWidth=%d maxHeight=%d frameWidth=%d frameHeight=%d colorDepth=%d maxFrameRate=%d supportsAlpha=%d supportsZOrder=%d vsyncDisplayLatency=%d", \
+                            capability.planeIndex, static_cast<int>(capability.type), \
+                            capability.maxWidth, capability.maxHeight, capability.frameWidth, \
+                            capability.frameHeight, capability.colorDepth, capability.maxFrameRate, \
+                            capability.supportsAlpha, capability.supportsZOrder, \
+                            capability.vsyncDisplayLatency); \
+                for (const auto& pixelFormat : capability.pixelFormats) { \
+                    UT_LOG_INFO("PlaneCapabilities: planeIndex=%d pixelFormat=%d", \
+                                capability.planeIndex, static_cast<int>(pixelFormat)); \
+                } \
+                for (const auto& sourceType : capability.sourceTypes) { \
+                    UT_LOG_INFO("PlaneCapabilities: planeIndex=%d sourceType=%d", \
+                                capability.planeIndex, static_cast<int>(sourceType)); \
+                } \
+                for (const auto& dynamicRange : capability.supportedDynamicRanges) { \
+                    UT_LOG_INFO("PlaneCapabilities: planeIndex=%d supportedDynamicRange=%d", \
+                                capability.planeIndex, static_cast<int>(dynamicRange)); \
+                } \
+            } \
+        } \
         UT_ASSERT_TRUE(status.isOk()) << "getCapabilities status not OK"; \
         UT_ASSERT_FALSE(capabilities_var.empty()) << "PlaneCapabilities list is empty"; \
         UT_ASSERT_EQUAL(capabilities_var.size(), gPlaneControl_hfp.size()) << "PlaneCapabilities size mismatch with HFP"; \

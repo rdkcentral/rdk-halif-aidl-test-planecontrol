@@ -26,9 +26,25 @@ planecontrol:                   # Component object begins
   interfaceVersion: current
   planes:                   # Resource list
     - 0:                    # Resource object begins
+        type: GRAPHICS
+        pixelFormats:
+          - RGB
+        sourceTypes: []
+        maxWidth: 3840
+        maxHeight: 2160
+        frameWidth: 3840
+        frameHeight: 2160
+        supportedDynamicRanges:
+          - SDR
+        colorDepth: 0
+        maxFrameRate: 60
+        supportsAlpha: false
+        supportsZOrder: false
+        vsyncDisplayLatency: 1
+    - 1:                    # Resource object begins
         type: VIDEO
         pixelFormats:
-          - NATIVE
+          - YCBCR420
         sourceTypes:  # Supported source types for this plane (enum SourceType)
           - VIDEO_SINK
         maxWidth: 3840
@@ -41,42 +57,8 @@ planecontrol:                   # Component object begins
           - HDR10
           - HDR10_PLUS
           - DOLBY_VISION
-        colorDepth: 12
+        colorDepth: 0
         maxFrameRate: 60
-        supportsAlpha: true
-        supportsZOrder: true
+        supportsAlpha: false
+        supportsZOrder: false
         vsyncDisplayLatency: 3
-    - 1:                    # Resource object begins
-        type: VIDEO
-        pixelFormats:
-          - NATIVE
-        sourceTypes:  # Supported source types for this plane (enum SourceType)
-          - VIDEO_SINK
-        maxWidth: 3840
-        maxHeight: 2160
-        frameWidth: 3840
-        frameHeight: 2160
-        supportedDynamicRanges:
-          - SDR
-        colorDepth: 10
-        maxFrameRate: 60
-        supportsAlpha: true
-        supportsZOrder: true
-        vsyncDisplayLatency: 3
-    - 2:                    # Resource object begins
-        type: GRAPHICS
-        pixelFormats:
-          - RGB
-        sourceTypes:  # Supported source types for this plane (enum SourceType)
-          - VIDEO_SINK
-        maxWidth: 1920
-        maxHeight: 1080
-        frameWidth: 1920
-        frameHeight: 1080
-        supportedDynamicRanges:
-          - SDR
-        colorDepth: 8
-        maxFrameRate: 60
-        supportsAlpha: true
-        supportsZOrder: true
-        vsyncDisplayLatency: 1
