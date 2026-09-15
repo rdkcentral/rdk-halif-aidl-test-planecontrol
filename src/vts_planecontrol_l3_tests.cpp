@@ -68,6 +68,7 @@
 #include <algorithm>
 #include <condition_variable>
 #include <mutex>
+#include <set>
 #include <thread>
 #include <vector>
 #include <cstring>
@@ -381,11 +382,12 @@ public:
                                            decoderEventListener, mAVBufferManager, effectiveSecureDecode,
                                            effectiveTunnel, testConfig, mAVbufferHelper, isSinkAttached);
 
+                    decoderControlListener->resetQueues();
                     sinkThread = std::make_unique<std::thread>(&VideoSinkTest::run, sinkTest.get(), effectiveTunnel);
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     decoderThread= std::make_unique<std::thread>(&videoDecoderTest::run, decodeTest.get(), true);
 
-                    #if 1
+                    #if 0
                     const bool firstFrameQueued = sinkTest->waitForFirstFrameQueued(std::chrono::seconds(10));
                     if (!firstFrameQueued)
                     {
@@ -437,6 +439,27 @@ public:
                 {
                     decodeTest->closeDecoderSession();
                 }
+                if (foundSink)
+                {
+                    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> unmapMappings;
+                    for (const auto& mapping : planeConfig.planeMappings)
+                    {
+                        if (mapping.sourceType ==
+                            ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK)
+                        {
+                            auto unmap = mapping;
+                            unmap.destinationPlaneIndex = -1;
+                            unmapMappings.push_back(unmap);
+                        }
+                    }
+                    if (!unmapMappings.empty())
+                    {
+                        bool unmapResult = false;
+                        UT_LOG_INFO("Unmapping %zu VIDEO_SINK source(s) after stream %s",
+                                    unmapMappings.size(), testConfig.streamName.c_str());
+                        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(unmapMappings, unmapResult);
+                    }
+                }
             }
         }
         catch (const std::exception &ex)
@@ -454,7 +477,6 @@ public:
     void runSingleProcessTest(const char *testName, bool secureDecode = false, bool isTunnel = false)
     {
         vector<videoDecoderTestConfiguration_t> decoderConfigs;
-        vector<videoDecoderTestConfiguration_t> sinkConfigs;
         vector<planeControlTestConfig_t> planeConfigs;
 
         const bool graphicsOnlyTest = isGraphicsPlaneTestName(testName != nullptr ? testName : "");
@@ -483,29 +505,68 @@ public:
         vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, PLANE_CONTROL_MGR,
                           gTestGroup, testName, decoderConfigs);
 
-        UT_LOG_INFO("vts_videodecoder_parse_testconfig for testName=%s, gTestGroup=%s, gVideoSinkModuleName=%s", testName, gTestGroup, VIDEOSINKMGR);
-        vts_videodecoder_parse_testconfig(gPlaneControlTestConfiguration, VIDEOSINKMGR, gTestGroup, "Sink_Decode", sinkConfigs);
-
-
-        UT_LOG_INFO("decoderConfigs.size()=%zu, sinkConfigs.size()=%zu, planeConfigs.size()=%zu", decoderConfigs.size(), sinkConfigs.size(), planeConfigs.size());
+        UT_LOG_INFO("decoderConfigs.size()=%zu, planeConfigs.size()=%zu", decoderConfigs.size(), planeConfigs.size());
         if (decoderConfigs.empty())
         {
             UT_FAIL_FATAL("No decoder configurations found for Plane Control test");
             return;
         }
+        if (std::strcmp(testName, "Planecontrol_Mapping") == 0)
+        {
+            std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+            PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+            planeConfigs.erase(
+                std::remove_if(planeConfigs.begin(), planeConfigs.end(),
+                    [&capabilities](const auto& planeConfig)
+                    {
+                        for (const auto& mapping : planeConfig.planeMappings)
+                        {
+                            const bool sourceSupported = std::any_of(
+                                capabilities.begin(), capabilities.end(),
+                                [&mapping](const auto& capability)
+                                {
+                                    return capability.type ==
+                                               ::com::rdk::hal::planecontrol::PlaneType::VIDEO &&
+                                           std::find(capability.sourceTypes.begin(),
+                                                     capability.sourceTypes.end(),
+                                                     mapping.sourceType) != capability.sourceTypes.end();
+                                });
+                            if (!sourceSupported)
+                            {
+                                UT_LOG_INFO("Skipping unsupported mapping sourceType=%d, sourceIndex=%d",
+                                            static_cast<int>(mapping.sourceType), mapping.sourceIndex);
+                                return true;
+                            }
+                        }
+                        return false;
+                    }),
+                planeConfigs.end());
+        }
         for (size_t i = 0; i < decoderConfigs.size(); ++i)
         {
+            std::set<std::tuple<int32_t, int32_t, uint32_t>> streamVideoMappings;
             auto& decoderConfig = decoderConfigs[i];
-            if(sinkConfigs.size() == 0)
-            {
-                UT_LOG_INFO("No Sink Configurations defined in the test configurations");
-                break;
-            }
-            auto& sinkConfig = sinkConfigs[0];
             for (size_t j = 0; j < planeConfigs.size(); ++j)
             {
                 auto& planeConfig = planeConfigs[j];
-                runPlaneControlTest(decoderConfig, sinkConfig, planeConfig, secureDecode, isTunnel);
+                if (std::strcmp(testName, "Planecontrol_Mapping") == 0 &&
+                    planeConfig.planeMappings.size() == 1 &&
+                    planeConfig.decoderIds.size() == 1 &&
+                    planeConfig.planeMappings[0].sourceType ==
+                        ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK)
+                {
+                    const auto& mapping = planeConfig.planeMappings[0];
+                    const auto mappingKey = std::make_tuple(
+                        static_cast<int32_t>(mapping.sourceType), mapping.sourceIndex,
+                        planeConfig.decoderIds[0]);
+                    if (!streamVideoMappings.insert(mappingKey).second)
+                    {
+                        UT_LOG_INFO("Skipping duplicate VIDEO_SINK mapping for sourceIndex=%d, decoderId=%u",
+                                    mapping.sourceIndex, planeConfig.decoderIds[0]);
+                        continue;
+                    }
+                }
+                runPlaneControlTest(decoderConfig, decoderConfig, planeConfig, secureDecode, isTunnel);
             }
         }
     }
