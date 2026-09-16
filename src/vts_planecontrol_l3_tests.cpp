@@ -493,10 +493,18 @@ public:
 
         if (graphicsOnlyTest)
         {
-            if (gNoGraphicsTypePlanes == 0)
+            std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+            PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+            const bool hasGraphicsPlane = std::any_of(
+                capabilities.begin(), capabilities.end(),
+                [](const auto& capability)
+                {
+                    return capability.type ==
+                           ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS;
+                });
+            if (!hasGraphicsPlane)
             {
-                UT_LOG_INFO("Skipping %s because no GRAPHICS planes are advertised in the HFP/capabilities", testName);
-                return;
+                UT_IGNORE_TEST() << "No GRAPHICS plane is advertised in the capabilities";
             }
         }
 

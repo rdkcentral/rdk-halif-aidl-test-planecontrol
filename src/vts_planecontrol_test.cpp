@@ -184,7 +184,10 @@ void PlaneControlTest::run()
         }
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
-        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+        if (mPlaneConfig.testName != "Planecontrol_Mapping")
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+        }
     }
     if (mPlaneConfig.testName == "Planecontrol_Swapping")
     {
