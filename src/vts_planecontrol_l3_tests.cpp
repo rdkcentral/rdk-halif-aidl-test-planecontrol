@@ -505,6 +505,7 @@ public:
             if (!hasGraphicsPlane)
             {
                 UT_IGNORE_TEST() << "No GRAPHICS plane is advertised in the capabilities";
+                return;
             }
         }
 
@@ -719,9 +720,9 @@ UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Position)
  * **Test Group ID:** 003@n
  * **Test Case ID:** 009@n
  */
-UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_Size)
+UT_ADD_TEST(VTS_L3_PlaneControl, Planecontrol_WindowSize)
 {
-    const char *testName = "Planecontrol_Size";
+    const char *testName = "Planecontrol_WindowSize";
 
     runSingleProcessTest(testName);
 }

@@ -112,7 +112,7 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
         int32_t stepCount = ut_kvp_getListCount(kvpTestInstance, stepList.c_str());
         // === Only parse Control Parameters ===
         testDetails.testName = std::string(testName ? testName : "");
-        testDetails.stepDelay = _stepDelay;
+        testDetails.delay_between_steps = _stepDelay;
         for(int32_t j=0;j<stepCount;j++)
         {
             ::com::rdk::hal::planecontrol::SourcePlaneMapping map;

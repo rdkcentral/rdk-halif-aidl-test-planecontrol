@@ -791,11 +791,11 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
     do { \
         UT_LOG_INFO("Calling setProperty(IN:planeResourceIndex:[%d], IN:property:[%s], IN:propertyValue:[%s], OUT:aidl_return)", \
                     plane_index, PropertyToString(property), \
-                    property_value.value.has_value() ? "valid" : "null"); \
+                    property_value.value.has_value() ? std::to_string(property_value.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>()).c_str() : "null"); \
         ::android::binder::Status status = gPlaneControlservice->setProperty(plane_index, property, property_value, &aidl_return); \
         UT_LOG_INFO("Result setProperty(IN:planeResourceIndex:[%d], IN:property:[%s], IN:propertyValue:[%s], OUT:aidl_return:[%s], status:[isOK:%s, exception:%s])", \
                     plane_index, PropertyToString(property), \
-                    property_value.value.has_value() ? "valid" : "null", \
+                    property_value.value.has_value() ? std::to_string(property_value.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>()).c_str() : "null", \
                     aidl_return ? "true" : "false", \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \

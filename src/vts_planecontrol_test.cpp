@@ -186,7 +186,7 @@ void PlaneControlTest::run()
         checkPlaneMappings(mPlaneConfig.planeMappings);
         if (mPlaneConfig.testName != "Planecontrol_Mapping")
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
         }
     }
     if (mPlaneConfig.testName == "Planecontrol_Swapping")
@@ -204,7 +204,7 @@ void PlaneControlTest::run()
         }
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
-        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
         char prompt[256];
         snprintf(prompt, sizeof(prompt),
                  "Validate %s: Did the planes get swapped ?",
@@ -231,7 +231,7 @@ void PlaneControlTest::run()
                     static_cast<uint32_t>(aspectRatio));
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,
                     ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO, propertyValue, aidl_return);
-                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
                          "Validate %s: did AspectRatio changed ?",
@@ -254,7 +254,7 @@ void PlaneControlTest::run()
                     ::com::rdk::hal::PropertyValue::Value::intValue>(zorder);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,
                     ::com::rdk::hal::planecontrol::Property::ZORDER, propertyValue, aidl_return);
-                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
                          "Validate %s: did Zorder of the plane changed?",
@@ -281,7 +281,7 @@ void PlaneControlTest::run()
                     ::com::rdk::hal::PropertyValue::Value::intValue>(visibility);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,
                     ::com::rdk::hal::planecontrol::Property::VISIBLE, propertyValue, aidl_return);
-                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
                          "Validate %s: did plane visibility changed?",
@@ -308,7 +308,7 @@ void PlaneControlTest::run()
                     ::com::rdk::hal::PropertyValue::Value::intValue>(overscan);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,
                     ::com::rdk::hal::planecontrol::Property::OVERSCAN, propertyValue, aidl_return);
-                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
                          "Validate %s: did plane overscan changed ?",
@@ -329,13 +329,13 @@ void PlaneControlTest::run()
         for (const auto& map : mPlaneConfig.planeMappings)
         {
             ::com::rdk::hal::PropertyValue propertyValue;
-            for (uint32_t alpha = 1; alpha <= 256; alpha <<= 1)
+            for (uint32_t alpha = 0; alpha <= 250; alpha += 50)
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<
-                    ::com::rdk::hal::PropertyValue::Value::intValue>((alpha - 1));
+                    ::com::rdk::hal::PropertyValue::Value::intValue>(alpha);
                 PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,
                     ::com::rdk::hal::planecontrol::Property::ALPHA, propertyValue, aidl_return);
-                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
                          "Validate %s: did plane alpha changed ?",
@@ -392,7 +392,7 @@ void PlaneControlTest::run()
                 ::com::rdk::hal::PropertyValue::Value::intValue>(position.second);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,
                 ::com::rdk::hal::planecontrol::Property::Y, propertyValue, aidl_return);
-            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
             char prompt[256];
             snprintf(prompt, sizeof(prompt),
                      "Validate %s: did plane position change ?",
@@ -402,7 +402,7 @@ void PlaneControlTest::run()
         }
     }
     // Size
-    if (mPlaneConfig.testName == "Planecontrol_Size")
+    if (mPlaneConfig.testName == "Planecontrol_WindowSize")
     {
         aidl_return = false;
         for (size_t i = 0; i < mPlaneConfig.planeMappings.size(); i++)
@@ -422,7 +422,7 @@ void PlaneControlTest::run()
                 ::com::rdk::hal::PropertyValue::Value::intValue>(size.second);
             PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,
                 ::com::rdk::hal::planecontrol::Property::WIDTH, propertyValue, aidl_return);
-            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+            std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
             char prompt[256];
             snprintf(prompt, sizeof(prompt),
                      "Validate %s: did plane Size change ?",
@@ -548,7 +548,7 @@ void PlaneControlTest::run()
                     bool accepted = false;
                     UT_ASSERT_TRUE(graphicsClient.commitGraphicsFbBuffer(fb1.graphicsFbId, accepted));
                     UT_ASSERT_TRUE(accepted) << "commitGraphicsFbBuffer interactive pattern failed for plane: " << index;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
 
                     char prompt[256];
                     snprintf(prompt, sizeof(prompt),
@@ -559,7 +559,7 @@ void PlaneControlTest::run()
                     {
                         UT_LOG_INFO("Waiting for user confirmation. Keeping %s on plane %d...",
                                     getGraphicsClientPatternLabel(patternToShow), index);
-                        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                        std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
                     }
                 }
 
@@ -626,7 +626,7 @@ void PlaneControlTest::run()
                 PLANE_CONTROL_GRAPHICS_FB_PROVIDER_COMMIT_FB_POS(provider, fbInfo.graphicsFbId, commitResult, index);
                 UT_ASSERT_TRUE(commitResult)
                     << "commitGraphicsFb (orange triangle) returned false for plane: " << index;
-                std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.stepDelay));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
 
                 if (!isGraphicsPlaneAutoTest(mPlaneConfig.testName))
                 {

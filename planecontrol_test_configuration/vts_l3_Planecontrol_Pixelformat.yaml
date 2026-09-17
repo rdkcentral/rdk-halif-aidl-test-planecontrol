@@ -5,7 +5,7 @@ planecontrol:
   L3:
     Planecontrol_Pixelformat:
       Controls:
-        delay_between_steps: 10000 # Insert delay in msec between each step
+        delay_between_steps: 1000 # Insert delay in msec between each step
       Inputs:
         Streams:
           - codec: H264_AVC
