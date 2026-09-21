@@ -383,27 +383,41 @@ public:
                                            effectiveTunnel, testConfig, mAVbufferHelper, isSinkAttached);
 
                     decoderControlListener->resetQueues();
-                    sinkThread = std::make_unique<std::thread>(&VideoSinkTest::run, sinkTest.get(), effectiveTunnel);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    decoderThread= std::make_unique<std::thread>(&videoDecoderTest::run, decodeTest.get(), true);
+                    sinkControlListener->resetFirstFrameRendered();
+                    sinkEventListener->resetFirstFrameRendered();
 
-                    #if 0
-                    const bool firstFrameQueued = sinkTest->waitForFirstFrameQueued(std::chrono::seconds(10));
-                    if (!firstFrameQueued)
+                    sinkThread = std::make_unique<std::thread>(&VideoSinkTest::run, sinkTest.get(), effectiveTunnel);
+                    decoderThread = std::make_unique<std::thread>(&videoDecoderTest::run, decodeTest.get(), true);
+
+                    const bool firstFrameRendered =
+                        sinkControlListener->waitForFFR(std::chrono::seconds(10)) ||
+                        sinkEventListener->waitForFFR(std::chrono::seconds(10));
+                    if (!firstFrameRendered)
                     {
-                        UT_FAIL("PlaneControl controls require a successful queueVideoFrame");
-                        if (sinkThread->joinable())
+                        const std::string failMessage =
+                            "PlaneControl media path did not reach first-frame-rendered within timeout for decoder=" +
+                            std::to_string(decoderId.value) + " sink=" + std::to_string(sinkId.value) +
+                            " test=" + std::string(testConfig.streamName);
+
+                        if (sinkThread != nullptr && sinkThread->joinable())
                         {
                             sinkThread->join();
                         }
-                        if (decoderThread->joinable())
+                        if (decoderThread != nullptr && decoderThread->joinable())
                         {
                             decoderThread->join();
                         }
-                        decodeTest->closeDecoderSession();
-                        continue;
+                        if (decodeTest != nullptr)
+                        {
+                            decodeTest->closeDecoderSession();
+                        }
+
+                        UT_FAIL_FATAL(failMessage.c_str());
+                        return;
                     }
-                    #endif
+
+                    UT_LOG_INFO("First frame rendered for decoder=%d sink=%d; applying %s properties",
+                                decoderId.value, sinkId.value, planeConfig.testName.c_str());
 
                 }
                 try
@@ -520,6 +534,20 @@ public:
             UT_FAIL_FATAL("No decoder configurations found for Plane Control test");
             return;
         }
+        if (std::strcmp(testName, "Planecontrol_WindowSize") == 0 &&
+            planeConfigs.size() > 1)
+        {
+            auto combinedConfig = planeConfigs.front();
+            for (size_t configIndex = 1; configIndex < planeConfigs.size(); ++configIndex)
+            {
+                combinedConfig.size.insert(combinedConfig.size.end(),
+                                           planeConfigs[configIndex].size.begin(),
+                                           planeConfigs[configIndex].size.end());
+            }
+            UT_LOG_INFO("Combined %zu WindowSize configurations into one media session with %zu size steps",
+                        planeConfigs.size(), combinedConfig.size.size());
+            planeConfigs.assign(1, std::move(combinedConfig));
+        }
         if (std::strcmp(testName, "Planecontrol_Mapping") == 0)
         {
             std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
@@ -542,8 +570,10 @@ public:
                                 });
                             if (!sourceSupported)
                             {
-                                UT_LOG_INFO("Skipping unsupported mapping sourceType=%d, sourceIndex=%d",
-                                            static_cast<int>(mapping.sourceType), mapping.sourceIndex);
+                                const std::string sourceTypeName =
+                                    sourceTypeToString(mapping.sourceType);
+                                UT_LOG_INFO("Skipping unsupported mapping sourceType=%s, sourceIndex=%d",
+                                            sourceTypeName.c_str(), mapping.sourceIndex);
                                 return true;
                             }
                         }

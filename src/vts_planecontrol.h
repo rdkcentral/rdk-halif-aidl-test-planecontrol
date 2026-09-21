@@ -154,6 +154,7 @@ enum class GraphicsClientPattern
 // Function to parse the PlaneControl HFP profile
 UT_status_t vts_planecontrol_parsePlaneControlHFP();
 UT_status_t getPlaneControlService();
+std::string sourceTypeToString(::com::rdk::hal::planecontrol::SourceType type);
 bool askUserYesNo(const std::string& question);
 bool isGraphicsPlaneTestName(const std::string& testName);
 bool isGraphicsPlaneAutoTest(const std::string& testName);
@@ -356,10 +357,13 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
 #define PLANE_CONTROL_SET_PROPERTY_MULTI_ATOMIC(plane_index, prop_list) \
     do { \
         bool aidl_return = false; \
-        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "], IN:propertyKVList[]"; \
+        UT_LOG_INFO("Calling setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[size:%zu], OUT:_aidl_return)", \
+                    plane_index, prop_list.size()); \
         ::android::binder::Status status = gPlaneControlservice->setPropertyMultiAtomic(plane_index, prop_list, &aidl_return); \
-        std::string output_params = "OUT:_aidl_return:[" + std::string(aidl_return ? "true" : "false") + "]"; \
-        PLANE_CONTROL_LOG_API_CALL("setPropertyMultiAtomic", input_params, output_params, status, aidl_return); \
+        UT_LOG_INFO("Result setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[size:%zu], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]", \
+                    plane_index, prop_list.size(), aidl_return ? "true" : "false", \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
         UT_ASSERT_TRUE(status.isOk()) << "setPropertyMultiAtomic failed for plane index " << plane_index; \
         UT_ASSERT_TRUE(aidl_return) << "setPropertyMultiAtomic returned false for plane index " << plane_index; \
     } while (0)
