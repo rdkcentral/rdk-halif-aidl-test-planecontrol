@@ -72,16 +72,14 @@
 #include "vts_videosink_parse_hfp.h"
 #include "vts_planecontrol.h"
 
-#define PLANE_CONTROL_TEST_CONFIG_PATH "./planecontrol_test_configuration/vts_l3_PlaneControl_test_config.yaml"
-
-
 struct planeControlTestConfig_t{
     std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> planeMappings;
     std::vector<uint32_t> decoderIds;
     std::vector<std::pair<uint32_t,uint32_t>> positions;
     std::vector<std::pair<uint32_t,uint32_t>> size;
+    std::vector<::com::rdk::hal::planecontrol::AspectRatio> aspectRatios;
     std::string testName;
-    uint32_t stepDelay;
+    uint32_t delay_between_steps;
 };
 
 /**

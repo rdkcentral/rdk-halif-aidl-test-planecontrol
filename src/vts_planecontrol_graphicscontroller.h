@@ -29,8 +29,13 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
+// EGL/egl.h drags in X11/Xlib.h on Linux, which #defines these as macros
+// and breaks unrelated identifiers of the same name in gtest/Android headers.
 #ifdef Status
 #undef Status
+#endif
+#ifdef None
+#undef None
 #endif
 
 #include <utils/StrongPointer.h>
@@ -64,9 +69,13 @@ public:
     bool connectPlaneControlProvider(int32_t planeResourceIndex = 0);
     void disconnectPlaneControlProvider();
     bool createGraphicsFbBuffer(int32_t width, int32_t height, GraphicsFbClientBuffer& outBuffer);
+    bool createAndCommitSolidColorBuffer(
+        int32_t width, int32_t height, uint8_t r, uint8_t g, uint8_t b,
+        GraphicsFbClientBuffer& outBuffer);
     bool commitGraphicsFbBuffer(int32_t graphicsFbId, bool& accepted);
     bool waitForReleasedGraphicsFb(int32_t& oldGraphicsFbId, int64_t& elapsedRealtimeNanos, int timeoutMs = 1200);
     bool destroyGraphicsFbBuffer(int32_t graphicsFbId);
+    bool destroyGraphicsFbBuffer(GraphicsFbClientBuffer& buffer);
 
 private:
     class GraphicsFbProviderListener final : public com::rdk::hal::planecontrol::BnGraphicsFbProviderListener {
