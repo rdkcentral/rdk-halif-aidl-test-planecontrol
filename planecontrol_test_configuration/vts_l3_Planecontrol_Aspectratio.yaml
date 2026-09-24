@@ -7,6 +7,10 @@ planecontrol:
       Controls:
         delay_between_steps: 1000 # Insert delay in msec between each step
       Inputs:
+        aspectRatios:
+          - FULL_WITH_ASPECT
+          - FULL_STRETCH
+          - ZOOM_WITH_ASPECT
         Streams:
           - codec: H264_AVC
             Name: H264_HIGH_1920x1080_DR_SDR_DR_BT709_60p_PIXEL_FORMAT_YCBCR420_734_GOP

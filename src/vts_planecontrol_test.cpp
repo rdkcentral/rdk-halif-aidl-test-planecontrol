@@ -216,16 +216,26 @@ void PlaneControlTest::run()
     // Aspect Ratio
     if (mPlaneConfig.testName == "Planecontrol_Aspectratio")
     {
-        std::vector<::com::rdk::hal::planecontrol::AspectRatio> aspectRatios = {
-            ::com::rdk::hal::planecontrol::AspectRatio::FULL_WITH_ASPECT,
-            ::com::rdk::hal::planecontrol::AspectRatio::FULL_STRETCH,
-            ::com::rdk::hal::planecontrol::AspectRatio::ZOOM_WITH_ASPECT
-        };
+        UT_ASSERT_TRUE(!mPlaneConfig.aspectRatios.empty())
+            << "Planecontrol_Aspectratio requires Inputs.aspectRatios";
         aidl_return = false;
         for (const auto& map : mPlaneConfig.planeMappings)
         {
-            for (const auto& aspectRatio : aspectRatios)
+            for (const auto& aspectRatio : mPlaneConfig.aspectRatios)
             {
+                const char* aspectRatioName = "UNKNOWN";
+                switch (aspectRatio)
+                {
+                case ::com::rdk::hal::planecontrol::AspectRatio::ZOOM_WITH_ASPECT:
+                    aspectRatioName = "ZOOM_WITH_ASPECT";
+                    break;
+                case ::com::rdk::hal::planecontrol::AspectRatio::FULL_STRETCH:
+                    aspectRatioName = "FULL_STRETCH";
+                    break;
+                case ::com::rdk::hal::planecontrol::AspectRatio::FULL_WITH_ASPECT:
+                    aspectRatioName = "FULL_WITH_ASPECT";
+                    break;
+                }
                 ::com::rdk::hal::PropertyValue propertyValue;
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<
                     ::com::rdk::hal::PropertyValue::Value::intValue>(
@@ -235,8 +245,8 @@ void PlaneControlTest::run()
                 std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
-                         "Validate %s: did AspectRatio changed ?",
-                         mPlaneConfig.testName.c_str());
+                         "Validate %s: is %s displayed correctly?",
+                         mPlaneConfig.testName.c_str(), aspectRatioName);
                 bool result = askUserYesNo(prompt);
                 UT_ASSERT_TRUE(result);
             }

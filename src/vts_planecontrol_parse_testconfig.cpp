@@ -74,6 +74,14 @@ static ::com::rdk::hal::planecontrol::SourceType stringToSourceType(const std::s
     if (typeStr == "COMPOSITE") return ::com::rdk::hal::planecontrol::SourceType::COMPOSITE;
     throw std::invalid_argument("Unknown source type: " + typeStr);
 }
+
+static ::com::rdk::hal::planecontrol::AspectRatio stringToAspectRatio(const std::string& ratioStr) {
+    if (ratioStr == "FULL_WITH_ASPECT") return ::com::rdk::hal::planecontrol::AspectRatio::FULL_WITH_ASPECT;
+    if (ratioStr == "FULL_STRETCH") return ::com::rdk::hal::planecontrol::AspectRatio::FULL_STRETCH;
+    if (ratioStr == "ZOOM_WITH_ASPECT") return ::com::rdk::hal::planecontrol::AspectRatio::ZOOM_WITH_ASPECT;
+    throw std::invalid_argument("Unknown aspect ratio mode: " + ratioStr);
+}
+
 UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *module, const char *testGroup, const char *testName,std::vector<planeControlTestConfig_t>& testConfig)
 {
     UT_LOG_INFO("Parsing test configuration for module=%s group=%s test=%s",
@@ -113,6 +121,23 @@ UT_status_t vts_planecontrol_parse_testconfig(void* pTestInstance, const char *m
         // === Only parse Control Parameters ===
         testDetails.testName = std::string(testName ? testName : "");
         testDetails.delay_between_steps = _stepDelay;
+        if (testDetails.testName == "Planecontrol_Aspectratio")
+        {
+            const string aspectRatioList = testList + ".Inputs.aspectRatios";
+            const int32_t aspectRatioCount = ut_kvp_getListCount(
+                kvpTestInstance, aspectRatioList.c_str());
+            for (int32_t ratioIndex = 0; ratioIndex < aspectRatioCount; ++ratioIndex)
+            {
+                char ratioBuffer[UT_KVP_MAX_ELEMENT_SIZE] = {0};
+                const string ratioPath = aspectRatioList + "." + to_string(ratioIndex);
+                status = ut_kvp_getStringField(kvpTestInstance, ratioPath.c_str(),
+                                               ratioBuffer, UT_KVP_MAX_ELEMENT_SIZE);
+                if (status == UT_KVP_STATUS_SUCCESS)
+                {
+                    testDetails.aspectRatios.push_back(stringToAspectRatio(ratioBuffer));
+                }
+            }
+        }
         for(int32_t j=0;j<stepCount;j++)
         {
             ::com::rdk::hal::planecontrol::SourcePlaneMapping map;

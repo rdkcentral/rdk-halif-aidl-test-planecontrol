@@ -77,6 +77,7 @@ struct planeControlTestConfig_t{
     std::vector<uint32_t> decoderIds;
     std::vector<std::pair<uint32_t,uint32_t>> positions;
     std::vector<std::pair<uint32_t,uint32_t>> size;
+    std::vector<::com::rdk::hal::planecontrol::AspectRatio> aspectRatios;
     std::string testName;
     uint32_t delay_between_steps;
 };
