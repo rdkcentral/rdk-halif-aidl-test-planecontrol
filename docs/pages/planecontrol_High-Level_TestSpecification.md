@@ -28,7 +28,7 @@
 
 This document provides an overview of the testing requirements for the Plane Control module. It outlines the scope of testing, objectives, testing levels and approaches, specific test requirements.
 
-Plane Control Interface Definitions - [Plane Control HAL](https://github.com/rdkcentral/rdk-halif-aidl/tree/0.7.0/planecontrol/current)
+Plane Control Interface Definitions - [Plane Control HAL](https://github.com/rdkcentral/rdk-halif-aidl/tree/0.22.0/planecontrol/0.2.0.0/com/rdk/hal/planecontrol)
 
 ## Module Description
 
@@ -119,7 +119,7 @@ columns 1
 ```
 
 #### Graphics Render
-To Render graphics object to the display we can use graphics plane available in plane control module. We can get the graphics window handle from the plane control to provide graphics data to the module.
+To render graphics objects to the display, use the GRAPHICS-type plane available in the plane control module. Obtain an `IGraphicsFbProvider` via `IPlaneControl.getGraphicsFbProvider(planeResourceIndex, listener)` and use its DMA-buf API (`createGraphicsFb`, `commitGraphicsFb`, `destroyGraphicsFb`) to submit graphics frames to the plane.
 
 ```mermaid
 block-beta
@@ -143,17 +143,18 @@ The following table outlines the core features validated in the L3 test phase
 |7|Alpha| To set and verify the transparency (Alpha) value for the planes. Set different alpha values and verify manually from display|
 |8|Plane position|To set and verify the positioning of the planes. Set different position for the planes as per `Video Plane Geometry Specification` table and verify it manually  |
 |9|Plane size|To set and Verify the plane Size.Set different position for the planes as per `Video Plane Geometry Specification` table and verify it manually |
-|10|Dynamic Range|To set the Supported Dynamic range property for the planes.Play Different video frames with all the Dynamic rage supported in capabilities and validate the plane renders the frames properly |
-|11|pixel format|To set and verify the pixel resolution supported by the plane to display the video frame properly. Play Different video frames with all the Resolution (Pixel Format) supported in capabilities and validate the plane renders the frames properly|
-|12|graphics Window Handle| To get the Graphics window handle to set graphical element to display. Validate by rendering simple graphics to the plane using any |
-|13|vsyncDisplayLatency|the display latency is measured from the moment a change is made to plane. Play video frames and measure the vsync delay and verify it matches as per the capabilities.|
+|10|Dynamic Range|Read `PlaneCapabilities.supportedDynamicRanges[]` to obtain the list of dynamic ranges supported by each plane. Play video frames encoded in each supported dynamic range format and validate the plane renders the frames properly. Note: `DYNAMIC_RANGE` is not a settable `Property` in the 0.22.0 AIDL; dynamic range handling is determined by the video stream content and reported as a read-only capability.|
+|11|Pixel Format|Read `PlaneCapabilities.pixelFormats[]` to obtain the list of pixel formats supported by each plane. Play video frames encoded in each supported pixel format and validate the plane renders the frames properly. Note: `PIXEL_FORMAT` is not a settable `Property` in the 0.22.0 AIDL; pixel format is determined by the video stream content and reported as a read-only capability.|
+|12|Graphics Frame Buffer Provider|Obtain an `IGraphicsFbProvider` for a GRAPHICS-type plane via `getGraphicsFbProvider(planeResourceIndex, listener)`. Get capabilities using `IGraphicsFbProvider.getCapabilities()`. Create a DMA-buf backed frame buffer using `createGraphicsFb(width, height, outInfo)`. Render a simple graphics shape (e.g. a solid-colour triangle) to the returned DMA-buf file descriptor. Commit the frame for display using `commitGraphicsFb(graphicsFbId)`. Validate the graphics are rendered on the plane via manual inspection. Verify the `IGraphicsFbProviderListener.onGraphicsFbReleased()` callback is received with a valid `timestampNs` after the commit. Clean up via `destroyGraphicsFb(graphicsFbId)`.|
+|13|Graphics and Video Blending|Map a VIDEO plane and a GRAPHICS plane with overlapping geometry. Set the GRAPHICS plane's `ALPHA` property to a semi-transparent value (e.g., 128 out of 255). Render a graphics shape on the GRAPHICS plane and play video on the VIDEO plane. Validate via manual inspection that the graphics shape is semi-transparent and the video underneath is visible through it, demonstrating proper alpha blending and Z-order composition.|
+|14|vsyncDisplayLatency|The display latency is measured from the moment a change is made to the plane (e.g. a video frame presented) to the moment it appears on the output display. Read `PlaneCapabilities.vsyncDisplayLatency` (measured in vsync periods) and play video frames to verify that the measured latency matches the value reported in capabilities.|
 
 ### Test Cases
 
 The table below summarizes the L3 test cases executed using various audio stream formats and configurations. These tests are also executed in a multi-process environment:
 
-|#|Test|Mapping|Swapping|Aspect Ratio|Z Order|Visibility|over scan|Alpha|Plane Position|Plane Size|Dynamic Range|Pixel Format|Graphics Window|vsync Latency|
-|-|----|------|------|-------------|----|-------------|---|-----|----------|-----------|-----|-----|----|----|
+|#|Test|Mapping|Swapping|Aspect Ratio|Z Order|Visibility|over scan|Alpha|Plane Position|Plane Size|Dynamic Range|Pixel Format|Graphics Window|Graphics+Video Blending|vsync Latency|
+|-|----|------|------|-------------|----|-------------|---|-----|----------|-----------|-----|-----|----|----|-----|
 |1| Planecontrol_Mapping |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
 |2| Planecontrol_Swapping |✔|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
 |3| Planecontrol_Aspectratio|✔|✘|✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|
@@ -162,9 +163,9 @@ The table below summarizes the L3 test cases executed using various audio stream
 |6| Planecontrol_Overscan|✔|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|✘|
 |7| Planecontrol_Alpha |✔|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|✘|
 |8| Planecontrol_Position |✔|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|✘|
-|9| Planecontrol_Size |✔|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|
+|9| Planecontrol_WindowSize |✔|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|
 |10| Planecontrol_Dynamicrange |✔|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|✘|
 |11| Planecontrol_Pixelformat |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|
-|12| Planecontrol_Graphicsplane |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|
-|13| Planecontrol_Vsync |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|
-
+|12| Planecontrol_Graphicsplane_Client |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|✘|✘|
+|13| Planecontrol_GraphicsVideoBlending |✔|✘|✘|✘|✘|✘|✔|✘|✘|✘|✘|✔|✔|✘|
+|14| Planecontrol_Vsync |✔|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✘|✔|

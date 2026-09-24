@@ -104,6 +104,9 @@ using namespace ::com::rdk::hal::planecontrol;
 #define PLANE_CONTROL_MGR "planecontrol"
 #define PLANE_CONTROL_MGR_PLANES (std::string(PLANE_CONTROL_MGR) + ".planes")
 
+#define PLANE_CONTROL_TEST_CONFIG_PATH "./planecontrol_test_configuration/vts_l3_PlaneControl_test_config.yaml"
+
+
 #define UT_KVP_MAX_KEY_SIZE 128
 
 typedef struct Capabilities {
@@ -151,6 +154,7 @@ enum class GraphicsClientPattern
 // Function to parse the PlaneControl HFP profile
 UT_status_t vts_planecontrol_parsePlaneControlHFP();
 UT_status_t getPlaneControlService();
+std::string sourceTypeToString(::com::rdk::hal::planecontrol::SourceType type);
 bool askUserYesNo(const std::string& question);
 bool isGraphicsPlaneTestName(const std::string& testName);
 bool isGraphicsPlaneAutoTest(const std::string& testName);
@@ -207,6 +211,28 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
                     capabilities_var.size(), \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
+        if (status.isOk()) { \
+            for (const auto& capability : capabilities_var) { \
+                UT_LOG_INFO("PlaneCapabilities: planeIndex=%d type=%d maxWidth=%d maxHeight=%d frameWidth=%d frameHeight=%d colorDepth=%d maxFrameRate=%d supportsAlpha=%d supportsZOrder=%d vsyncDisplayLatency=%d", \
+                            capability.planeIndex, static_cast<int>(capability.type), \
+                            capability.maxWidth, capability.maxHeight, capability.frameWidth, \
+                            capability.frameHeight, capability.colorDepth, capability.maxFrameRate, \
+                            capability.supportsAlpha, capability.supportsZOrder, \
+                            capability.vsyncDisplayLatency); \
+                for (const auto& pixelFormat : capability.pixelFormats) { \
+                    UT_LOG_INFO("PlaneCapabilities: planeIndex=%d pixelFormat=%d", \
+                                capability.planeIndex, static_cast<int>(pixelFormat)); \
+                } \
+                for (const auto& sourceType : capability.sourceTypes) { \
+                    UT_LOG_INFO("PlaneCapabilities: planeIndex=%d sourceType=%d", \
+                                capability.planeIndex, static_cast<int>(sourceType)); \
+                } \
+                for (const auto& dynamicRange : capability.supportedDynamicRanges) { \
+                    UT_LOG_INFO("PlaneCapabilities: planeIndex=%d supportedDynamicRange=%d", \
+                                capability.planeIndex, static_cast<int>(dynamicRange)); \
+                } \
+            } \
+        } \
         UT_ASSERT_TRUE(status.isOk()) << "getCapabilities status not OK"; \
         UT_ASSERT_FALSE(capabilities_var.empty()) << "PlaneCapabilities list is empty"; \
         UT_ASSERT_EQUAL(capabilities_var.size(), gPlaneControl_hfp.size()) << "PlaneCapabilities size mismatch with HFP"; \
@@ -331,10 +357,13 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
 #define PLANE_CONTROL_SET_PROPERTY_MULTI_ATOMIC(plane_index, prop_list) \
     do { \
         bool aidl_return = false; \
-        std::string input_params = "IN:planeResourceIndex:[" + std::to_string(plane_index) + "], IN:propertyKVList[]"; \
+        UT_LOG_INFO("Calling setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[size:%zu], OUT:_aidl_return)", \
+                    plane_index, prop_list.size()); \
         ::android::binder::Status status = gPlaneControlservice->setPropertyMultiAtomic(plane_index, prop_list, &aidl_return); \
-        std::string output_params = "OUT:_aidl_return:[" + std::string(aidl_return ? "true" : "false") + "]"; \
-        PLANE_CONTROL_LOG_API_CALL("setPropertyMultiAtomic", input_params, output_params, status, aidl_return); \
+        UT_LOG_INFO("Result setPropertyMultiAtomic(IN:planeResourceIndex:[%d], IN:propertyKVList[size:%zu], OUT:_aidl_return:[%s]), status:[isOK:%s, exception:%s]", \
+                    plane_index, prop_list.size(), aidl_return ? "true" : "false", \
+                    UT_Control_GetMapString(bool_mapTable, status.isOk()), \
+                    UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \
         UT_ASSERT_TRUE(status.isOk()) << "setPropertyMultiAtomic failed for plane index " << plane_index; \
         UT_ASSERT_TRUE(aidl_return) << "setPropertyMultiAtomic returned false for plane index " << plane_index; \
     } while (0)
@@ -766,11 +795,11 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
     do { \
         UT_LOG_INFO("Calling setProperty(IN:planeResourceIndex:[%d], IN:property:[%s], IN:propertyValue:[%s], OUT:aidl_return)", \
                     plane_index, PropertyToString(property), \
-                    property_value.value.has_value() ? "valid" : "null"); \
+                    property_value.value.has_value() ? std::to_string(property_value.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>()).c_str() : "null"); \
         ::android::binder::Status status = gPlaneControlservice->setProperty(plane_index, property, property_value, &aidl_return); \
         UT_LOG_INFO("Result setProperty(IN:planeResourceIndex:[%d], IN:property:[%s], IN:propertyValue:[%s], OUT:aidl_return:[%s], status:[isOK:%s, exception:%s])", \
                     plane_index, PropertyToString(property), \
-                    property_value.value.has_value() ? "valid" : "null", \
+                    property_value.value.has_value() ? std::to_string(property_value.value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>()).c_str() : "null", \
                     aidl_return ? "true" : "false", \
                     UT_Control_GetMapString(bool_mapTable, status.isOk()), \
                     UT_Control_GetMapString(statusException_mapTable, status.exceptionCode())); \

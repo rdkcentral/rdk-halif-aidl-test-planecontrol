@@ -27,6 +27,7 @@
 #include <binder/Status.h>
 #include <binder/ProcessState.h>
 #include <binder/ParcelFileDescriptor.h>
+#include <sys/mman.h>
 
 #ifdef Status
 #undef Status
@@ -162,6 +163,40 @@ bool PlaneControlGraphicsController::createGraphicsFbBuffer(int32_t width, int32
     return true;
 }
 
+bool PlaneControlGraphicsController::createAndCommitSolidColorBuffer(
+    int32_t width, int32_t height, uint8_t r, uint8_t g, uint8_t b,
+    GraphicsFbClientBuffer& outBuffer)
+{
+    if (!createGraphicsFbBuffer(width, height, outBuffer))
+    {
+        return false;
+    }
+
+    const size_t mapLength = static_cast<size_t>(outBuffer.offset) +
+        static_cast<size_t>(outBuffer.stride) * static_cast<size_t>(outBuffer.height);
+    void* mapped = mmap(nullptr, mapLength, PROT_READ | PROT_WRITE,
+                        MAP_SHARED, outBuffer.fd, 0);
+    if (mapped == MAP_FAILED)
+    {
+        destroyGraphicsFbBuffer(outBuffer);
+        return false;
+    }
+
+    fillSolidColorToDmaBuf(static_cast<uint8_t*>(mapped), outBuffer.stride,
+                           outBuffer.width, outBuffer.height, outBuffer.offset,
+                           r, g, b);
+    munmap(mapped, mapLength);
+
+    bool accepted = false;
+    if (!commitGraphicsFbBuffer(outBuffer.graphicsFbId, accepted) || !accepted)
+    {
+        destroyGraphicsFbBuffer(outBuffer);
+        return false;
+    }
+
+    return true;
+}
+
 bool PlaneControlGraphicsController::commitGraphicsFbBuffer(int32_t graphicsFbId, bool& accepted)
 {
     if (graphicsFbProvider_ == nullptr)
@@ -214,6 +249,18 @@ bool PlaneControlGraphicsController::destroyGraphicsFbBuffer(int32_t graphicsFbI
         return false;
     }
     return true;
+}
+
+bool PlaneControlGraphicsController::destroyGraphicsFbBuffer(GraphicsFbClientBuffer& buffer)
+{
+    const bool destroyed = buffer.graphicsFbId < 0 ||
+        destroyGraphicsFbBuffer(buffer.graphicsFbId);
+    if (buffer.fd >= 0)
+    {
+        close(buffer.fd);
+    }
+    buffer = GraphicsFbClientBuffer{};
+    return destroyed;
 }
 
 void PlaneControlGraphicsController::onGraphicsFbReleased(int32_t oldGraphicsFbId, int64_t elapsedRealtimeNanos)

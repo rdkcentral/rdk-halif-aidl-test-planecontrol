@@ -1,17 +1,20 @@
-IPlaneControl:
+planecontrol:
   stream_download_path: "" #`URL` path to download the video test streams
   input_streams_path: "assets/streams/input" #Target path where input streams are stored
   reference_streams_path: "assets/streams/reference/" #Target path for reference decoded streams
   L3:
     Planecontrol_Visibility:
       Controls:
-        delay_between_steps: 10000 # Insert delay in msec between each `decodeBuffer()` call
+        delay_between_steps: 1000 # Insert delay in msec between each `decodeBuffer()` call
       Inputs:
         Streams:
-          - Codec: H264
-            Name: H264_HD_30_YUV420
+          - codec: H264_AVC
+            Name: H264_HIGH_1920x1080_DR_SDR_DR_BT709_60p_PIXEL_FORMAT_YCBCR420_734_GOP
             rms_diff_threshold: 0.5
             decode_time_threshold: 10000000
+            sink_backpressure: false # Enable backpressure to the sink
+            sink_discardFramesUntilPts: -1
+            sink_underflow_pts: -1
         mapping:
           - step:
             - plane_index: 0

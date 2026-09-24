@@ -70,25 +70,6 @@ UT_status_t VTS_PlaneControl_init()
     }
     gPlaneControlTestConfiguration = vts_kvp_create_instance(PLANE_CONTROL_TEST_CONFIG_PATH);
 
-    if (gPlaneControlTestConfiguration == nullptr)
-    {
-        // Fallbacks for running tests from repo root or component source dir.
-        const std::array<const char*, 2> fallbackPaths = {
-            "./build/bin/planecontrol_test_configuration/vts_l3_PlaneControl_test_config.yaml",
-            "./vts_hal_test_components/planecontrol/planecontrol_test_configuration/vts_l3_PlaneControl_test_config.yaml"
-        };
-
-        for (const auto* path : fallbackPaths)
-        {
-            gPlaneControlTestConfiguration = vts_kvp_create_instance(const_cast<char*>(path));
-            if (gPlaneControlTestConfiguration != nullptr)
-            {
-                UT_LOG_INFO("Loaded Plane Control test configuration from fallback path: %s", path);
-                break;
-            }
-        }
-    }
-
     if (gPlaneControlTestConfiguration == nullptr) {
         UT_LOG_ERROR("Failed to create Plane Control Test Configuration instance. Tried default and fallback paths.");
         return UT_STATUS_FAILURE;

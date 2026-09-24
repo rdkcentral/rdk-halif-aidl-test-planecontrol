@@ -915,8 +915,7 @@ UT_status_t vts_planecontrol_parsePlaneControlHFP() {
             }
         }
         if (cap.supportedDynamicRanges.empty()) {
-            UT_LOG_WARNING("Plane %d has no valid dynamic ranges, skipping", i);
-            continue;
+            UT_LOG_INFO("Plane %d: No supportedDynamicRanges defined in profile", i);
         }
 
         // Read maxWidth, maxHeight, frameWidth, frameHeight
@@ -977,7 +976,7 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
     std::sort(expected_pixel_formats.begin(), expected_pixel_formats.end());
     std::sort(actual_pixel_formats.begin(), actual_pixel_formats.end());
     UT_ASSERT_EQUAL(expected_pixel_formats.size(), actual_pixel_formats.size()) << "Pixel format count mismatch";
-    bool pixel_formats_match = std::equal(expected_pixel_formats.begin(), expected_pixel_formats.end(), actual_pixel_formats.begin());
+    bool pixel_formats_match = (expected_pixel_formats == actual_pixel_formats);
     if (!pixel_formats_match) {
     std::string expected_str, actual_str;
     for (const auto& pf : expected_pixel_formats) expected_str += pixelFormatToString(pf) + ",";
@@ -993,7 +992,7 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
     std::sort(expected_source_types.begin(), expected_source_types.end());
     std::sort(actual_source_types.begin(), actual_source_types.end());
     UT_ASSERT_EQUAL(expected_source_types.size(), actual_source_types.size()) << "Source type count mismatch";
-    bool source_types_match = std::equal(expected_source_types.begin(), expected_source_types.end(), actual_source_types.begin());
+    bool source_types_match = (expected_source_types == actual_source_types);
     if (!source_types_match) {
         std::string expected_str, actual_str;
         for (const auto& st : expected_source_types) expected_str += sourceTypeToString(st) + ",";
@@ -1009,7 +1008,7 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
     std::sort(expected_dynamic_ranges.begin(), expected_dynamic_ranges.end());
     std::sort(actual_dynamic_ranges.begin(), actual_dynamic_ranges.end());
     UT_ASSERT_EQUAL(expected_dynamic_ranges.size(), actual_dynamic_ranges.size()) << "Dynamic range count mismatch";
-    bool dynamic_ranges_match = std::equal(expected_dynamic_ranges.begin(), expected_dynamic_ranges.end(), actual_dynamic_ranges.begin());
+    bool dynamic_ranges_match = (expected_dynamic_ranges == actual_dynamic_ranges);
     if (!dynamic_ranges_match) {
     std::string expected_str, actual_str;
     for (const auto& dr : expected_dynamic_ranges) expected_str += dynamicRangeToString(dr) + ",";
