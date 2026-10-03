@@ -113,8 +113,13 @@ void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlaneMapping
 // PlaneControlTest constructor
 // ---------------------------------------------------------------------------
 
-PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
-    : mPlaneConfig(planeConfig)
+PlaneControlTest::PlaneControlTest(
+    planeControlTestConfig_t planeConfig,
+    const std::vector<PlaneControlHDMIInputEntry>& hdmiInputList,
+    const std::vector<PlaneControlCompositeInputEntry>& compositeInputList)
+    : mPlaneConfig(std::move(planeConfig)),
+      mHDMIInputList(hdmiInputList),
+      mCompositeInputList(compositeInputList)
 {
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> videoCapabilities;
@@ -166,6 +171,134 @@ PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
     }
 }
 
+PlaneControlTest::~PlaneControlTest()
+{
+    stopInputSources();
+}
+
+void PlaneControlTest::startInputSources()
+{
+    for (const auto& mapping : mPlaneConfig.planeMappings)
+    {
+        if (mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::HDMI)
+        {
+            if (std::find(mStartedHDMIInputs.begin(), mStartedHDMIInputs.end(),
+                          mapping.sourceIndex) != mStartedHDMIInputs.end())
+            {
+                continue;
+            }
+
+            if (startHdmiInputPath(mapping.sourceIndex))
+            {
+                mStartedHDMIInputs.push_back(mapping.sourceIndex);
+            }
+        }
+        else if (mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::COMPOSITE)
+        {
+            if (std::find(mStartedCompositeInputs.begin(), mStartedCompositeInputs.end(),
+                          mapping.sourceIndex) != mStartedCompositeInputs.end())
+            {
+                continue;
+            }
+
+            if (startCompositeInputPath(mapping.sourceIndex))
+            {
+                mStartedCompositeInputs.push_back(mapping.sourceIndex);
+            }
+        }
+    }
+}
+
+void PlaneControlTest::stopInputSources()
+{
+    for (const auto sourceIndex : mStartedHDMIInputs)
+    {
+        stopHdmiInputPath(sourceIndex);
+    }
+    mStartedHDMIInputs.clear();
+
+    for (const auto sourceIndex : mStartedCompositeInputs)
+    {
+        stopCompositeInputPath(sourceIndex);
+    }
+    mStartedCompositeInputs.clear();
+}
+
+bool PlaneControlTest::startHdmiInputPath(int32_t hdmiInputIndex)
+{
+    const auto input = std::find_if(
+        mHDMIInputList.begin(), mHDMIInputList.end(),
+        [hdmiInputIndex](const auto& entry) { return entry.id.value == hdmiInputIndex; });
+    UT_ASSERT_TRUE(input != mHDMIInputList.end())
+        << "No opened HDMI input found for source index " << hdmiInputIndex;
+    if (input == mHDMIInputList.end())
+    {
+        return false;
+    }
+
+    bool connectionState = false;
+    HDMIINPUT_GETCONNECTIONSTATE(input->controller, connectionState);
+    UT_ASSERT_TRUE(connectionState)
+        << "HDMI input is not connected for source index " << hdmiInputIndex;
+    if (!connectionState)
+    {
+        return false;
+    }
+
+    hdmiinput::HDCPStatus hdcpStatus;
+    HDMIINPUT_GETHDCPSTATUS(input->input, hdcpStatus);
+    if (hdcpStatus == hdmiinput::HDCPStatus::AUTHENTICATION_FAILURE)
+    {
+        UT_ASSERT_TRUE(false) << "HDCP authentication failed for HDMI input " << hdmiInputIndex;
+        return false;
+    }
+    if (hdcpStatus == hdmiinput::HDCPStatus::AUTHENTICATION_IN_PROGRESS)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
+
+    HDMIINPUT_START_SUCCESS(input->input, input->controller, true);
+    return true;
+}
+
+void PlaneControlTest::stopHdmiInputPath(int32_t hdmiInputIndex)
+{
+    const auto input = std::find_if(
+        mHDMIInputList.begin(), mHDMIInputList.end(),
+        [hdmiInputIndex](const auto& entry) { return entry.id.value == hdmiInputIndex; });
+    if (input != mHDMIInputList.end())
+    {
+        HDMIINPUT_STOP_SUCCESS(input->input, input->controller, true);
+    }
+}
+
+bool PlaneControlTest::startCompositeInputPath(int32_t compositeInputIndex)
+{
+    const auto input = std::find_if(
+        mCompositeInputList.begin(), mCompositeInputList.end(),
+        [compositeInputIndex](const auto& entry) { return entry.portId == compositeInputIndex; });
+    UT_ASSERT_TRUE(input != mCompositeInputList.end())
+        << "No opened composite input found for source index " << compositeInputIndex;
+    if (input == mCompositeInputList.end())
+    {
+        return false;
+    }
+
+    COMPOSITEINPUT_START(input->controller);
+    return true;
+}
+
+void PlaneControlTest::stopCompositeInputPath(int32_t compositeInputIndex)
+{
+    const auto input = std::find_if(
+        mCompositeInputList.begin(), mCompositeInputList.end(),
+        [compositeInputIndex](const auto& entry) { return entry.portId == compositeInputIndex; });
+    if (input != mCompositeInputList.end())
+    {
+        COMPOSITEINPUT_STOP(input->controller);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // PlaneControlTest::run
 // ---------------------------------------------------------------------------
@@ -178,6 +311,8 @@ void PlaneControlTest::run()
                     mPlaneConfig.testName.c_str());
         return;
     }
+
+    startInputSources();
 
     bool aidl_return = false;
     const bool skipPreMapping = isGraphicsPlaneClientTest(mPlaneConfig.testName);
@@ -668,6 +803,8 @@ void PlaneControlTest::run()
     {
         // Vsync ToDo
     }
+
+    stopInputSources();
 }
 
 /** @} */ // End of Plane_Control_Halif_Test_TestClass

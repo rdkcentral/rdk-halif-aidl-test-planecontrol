@@ -62,6 +62,25 @@
 #include "vts_planecontrol_graphicscontroller.h"
 #include "vts_videosink.h"
 
+struct PlaneControlHDMIInputEntry
+{
+    hdmiinput::IHDMIInput::Id id;
+    android::sp<hdmiinput::IHDMIInput> input;
+    android::sp<HDMIInputControllerListener> controlListener;
+    android::sp<HDMIInputEventListener> eventListener;
+    android::sp<hdmiinput::IHDMIInputController> controller;
+    hdmiinput::Capabilities capabilities;
+};
+
+struct PlaneControlCompositeInputEntry
+{
+    int32_t portId;
+    android::sp<compositeinput::ICompositeInputPort> inputPort;
+    android::sp<CompositeInputControllerListener> controlListener;
+    android::sp<CompositeInputEventListener> eventListener;
+    android::sp<ICompositeInputController> controller;
+};
+
 /**
  * @brief Thread-safe listener that records IGraphicsFbProviderListener callbacks.
  *
@@ -165,7 +184,11 @@ public:
      *
      * @param[in] planeConfig   Test configuration parsed from the YAML file.
      */
-    explicit PlaneControlTest(planeControlTestConfig_t planeConfig);
+    PlaneControlTest(
+        planeControlTestConfig_t planeConfig,
+        const std::vector<PlaneControlHDMIInputEntry>& hdmiInputList,
+        const std::vector<PlaneControlCompositeInputEntry>& compositeInputList);
+    ~PlaneControlTest();
 
     /**
      * @brief Execute the test scenario described by the config passed at
@@ -177,8 +200,19 @@ public:
     void run();
 
 private:
+    void startInputSources();
+    void stopInputSources();
+    bool startHdmiInputPath(int32_t hdmiInputIndex);
+    void stopHdmiInputPath(int32_t hdmiInputIndex);
+    bool startCompositeInputPath(int32_t compositeInputIndex);
+    void stopCompositeInputPath(int32_t compositeInputIndex);
+
     ::com::rdk::hal::videosink::IVideoSink::Id mSinkId;
     planeControlTestConfig_t                   mPlaneConfig;
+    const std::vector<PlaneControlHDMIInputEntry>& mHDMIInputList;
+    const std::vector<PlaneControlCompositeInputEntry>& mCompositeInputList;
+    std::vector<int32_t> mStartedHDMIInputs;
+    std::vector<int32_t> mStartedCompositeInputs;
 };
 
 #endif // __VTS_PLANECONTROL_TEST_H__
