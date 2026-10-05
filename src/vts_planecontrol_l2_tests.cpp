@@ -196,21 +196,6 @@ std::vector<uint32_t> VTS_L2_PlaneControl::sVideoPlaneIndices;
 std::vector<uint32_t> VTS_L2_PlaneControl::sGraphicsPlaneIndices;
 std::vector<::com::rdk::hal::planecontrol::SourceType> VTS_L2_PlaneControl::sAllSourceTypes;
 
-static void setAndVerifyIntProperty(int32_t planeIndex,
-                                    ::com::rdk::hal::planecontrol::Property property,
-                                    int32_t value)
-{
-    ::com::rdk::hal::PropertyValue propertyValue;
-    propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(value);
-    bool aidl_return = false;
-    PLANE_CONTROL_SET_PROPERTY_POS(planeIndex, property, propertyValue, aidl_return);
-
-    std::optional<::com::rdk::hal::PropertyValue> readBack;
-    PLANE_CONTROL_GET_PROPERTY_POS(planeIndex, property, readBack);
-    UT_ASSERT_EQUAL(readBack->value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>(), value)
-        << "Value mismatch for property " << PropertyToString(property) << " on plane " << planeIndex;
-}
-
 /**
  * @brief Test the functionality of getting and setting properties for plane control
  *
@@ -234,14 +219,14 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetProperty) {
         setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::Y, 0);
 
         // ALPHA requires supportsAlpha (Property.aidl)
-        if (capability.supportsAlpha) {
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::ALPHA)) {
             setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::ALPHA, 255);
         } else {
             UT_LOG_INFO("Skipping ALPHA for plane %d: supportsAlpha is false", planeIndex);
         }
 
         // ZORDER is optional and is always false for the primary graphics plane (PlaneCapabilities.aidl)
-        if (capability.supportsZOrder) {
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::ZORDER)) {
             setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::ZORDER, planeIndex);
         } else {
             UT_LOG_INFO("Skipping ZORDER for plane %d: supportsZOrder is false", planeIndex);
@@ -250,7 +235,7 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetProperty) {
         setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::VISIBLE, 1);
 
         // OVERSCAN/ASPECT_RATIO only apply to VIDEO planes
-        if (capability.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::OVERSCAN)) {
             setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::OVERSCAN, 0);
             setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO, 1);
         }
@@ -292,13 +277,13 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
         propertyKVList.push_back(kvPair);
 
-        if (capability.supportsAlpha) {
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::ALPHA)) {
             kvPair.property = ::com::rdk::hal::planecontrol::Property::ALPHA;
             kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             propertyKVList.push_back(kvPair);
         }
 
-        if (capability.supportsZOrder) {
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::ZORDER)) {
             kvPair.property = ::com::rdk::hal::planecontrol::Property::ZORDER;
             kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
             propertyKVList.push_back(kvPair);
@@ -308,7 +293,7 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
         propertyKVList.push_back(kvPair);
 
-        if (capability.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::OVERSCAN)) {
             kvPair.property = ::com::rdk::hal::planecontrol::Property::OVERSCAN;
             kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             propertyKVList.push_back(kvPair);

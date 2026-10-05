@@ -187,6 +187,32 @@ bool ValidatePropertyList(uint32_t planeIndex, const std::vector<::com::rdk::hal
 void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilities& actual,
     const planeControl_Cap& expected);
 
+// Full property list per plane type, before capability filtering.
+extern const std::vector<::com::rdk::hal::planecontrol::Property> videoProperties;
+extern const std::vector<::com::rdk::hal::planecontrol::Property> graphicProperties;
+
+// Geometry kept within the maxWidth/maxHeight/frameWidth/frameHeight limits reported by the plane.
+struct PlaneTestGeometry {
+    int32_t x;
+    int32_t y;
+    int32_t width;
+    int32_t height;
+};
+
+bool isPrimaryGraphicsPlane(const std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>& capabilities,
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane);
+bool planeSupportsProperty(const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane,
+    ::com::rdk::hal::planecontrol::Property property);
+bool planeSupportsProperty(const std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>& capabilities,
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane,
+    ::com::rdk::hal::planecontrol::Property property);
+std::vector<::com::rdk::hal::planecontrol::Property> getTestableProperties(
+    const std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>& capabilities,
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane);
+PlaneTestGeometry getTestGeometry(const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane);
+void setAndVerifyIntProperty(int32_t planeIndex,
+    ::com::rdk::hal::planecontrol::Property property, int32_t value);
+
 // Macro to iterate over all planes and filter by type (VIDEO or GRAPHICS)
 #define PLANE_CONTROL_FOREACH_PLANE_BY_TYPE(planeCount, planeTypeEnum, desiredType, planeIndexVar, body) \
     do { \
