@@ -785,6 +785,8 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
         case ::com::rdk::hal::planecontrol::Property::HEIGHT: return "HEIGHT";
         case ::com::rdk::hal::planecontrol::Property::ZORDER: return "ZORDER";
         case ::com::rdk::hal::planecontrol::Property::ALPHA: return "ALPHA";
+        case ::com::rdk::hal::planecontrol::Property::VISIBLE: return "VISIBLE";
+        case ::com::rdk::hal::planecontrol::Property::OVERSCAN: return "OVERSCAN";
         case ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO: return "ASPECT_RATIO";
         default: return "UNKNOWN";
     }
