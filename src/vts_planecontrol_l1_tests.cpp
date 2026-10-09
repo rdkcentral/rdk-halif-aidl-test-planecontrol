@@ -66,32 +66,6 @@
 
 #include "vts_planecontrol.h"
 
-// Common property lists for VIDEO and GRAPHICS planes
-// Properties to test
-const std::vector<::com::rdk::hal::planecontrol::Property> videoProperties = {
-    ::com::rdk::hal::planecontrol::Property::RESOURCE_ID,
-    ::com::rdk::hal::planecontrol::Property::X,
-    ::com::rdk::hal::planecontrol::Property::Y,
-    ::com::rdk::hal::planecontrol::Property::WIDTH,
-    ::com::rdk::hal::planecontrol::Property::HEIGHT,
-    ::com::rdk::hal::planecontrol::Property::ALPHA,
-    ::com::rdk::hal::planecontrol::Property::ZORDER,
-    ::com::rdk::hal::planecontrol::Property::VISIBLE,
-    ::com::rdk::hal::planecontrol::Property::OVERSCAN,
-    ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO
-};
-
-const std::vector<::com::rdk::hal::planecontrol::Property> graphicProperties = {
-    ::com::rdk::hal::planecontrol::Property::RESOURCE_ID,
-    ::com::rdk::hal::planecontrol::Property::X,
-    ::com::rdk::hal::planecontrol::Property::Y,
-    ::com::rdk::hal::planecontrol::Property::WIDTH,
-    ::com::rdk::hal::planecontrol::Property::HEIGHT,
-    ::com::rdk::hal::planecontrol::Property::ALPHA,
-    ::com::rdk::hal::planecontrol::Property::ZORDER,
-    ::com::rdk::hal::planecontrol::Property::VISIBLE
-};
-
 extern std::vector<planeControl_Cap> gPlaneControl_hfp;
 
 class VTS_L1_PlaneControl : public virtual UTCore
@@ -164,6 +138,7 @@ static bool GetFirstGraphicsProvider(
  * | 08 | Verify the pixelFormats of each capability. | cap.pixelFormats = expected formats | Assertion passes | Should Pass |
  * | 09 | Verify the supportedDynamicRanges of each capability. | cap.supportedDynamicRanges = expected ranges | Assertion passes | Should Pass |
  * | 10 | Verify other fields like maxWidth, maxHeight, etc. | cap fields = expected values | Assertion passes | Should Pass |
+ * | 11 | Verify the primary GRAPHICS plane reports supportsZOrder = false. | primary graphics plane = lowest GRAPHICS planeIndex | supportsZOrder = false | Should Pass |
  */
 
 UT_ADD_TEST(VTS_L1_PlaneControl, getCapabilities_pos) {
@@ -180,6 +155,24 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getCapabilities_pos) {
         } else {
             validateCapabilityMatch(cap, *it);
         }
+    }
+
+    // PlaneCapabilities.aidl mandates supportsZOrder = false on the primary graphics plane,
+    // which is the lowest indexed GRAPHICS plane since graphics planes are listed after video planes.
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities* primaryGraphicsPlane = nullptr;
+    for (const auto& cap : capabilities) {
+        if (cap.type != ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+            continue;
+        }
+        if (primaryGraphicsPlane == nullptr || cap.planeIndex < primaryGraphicsPlane->planeIndex) {
+            primaryGraphicsPlane = &cap;
+        }
+    }
+
+    if (primaryGraphicsPlane != nullptr) {
+        UT_ASSERT_FALSE(primaryGraphicsPlane->supportsZOrder)
+            << "Primary graphics plane " << primaryGraphicsPlane->planeIndex
+            << " must report supportsZOrder = false";
     }
 }
 
@@ -505,23 +498,23 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_pos) {
     uint32_t planeCount = capabilities.size();
     UT_LOG_INFO("Retrieved %u planes from capabilities", planeCount);
 
-    // Steps 3–5: Iterate over VIDEO planes and properties
+    // Steps 3–8: Iterate over planes and their supported properties
     uint32_t video_plane_count = 0;
-    PLANE_CONTROL_FOREACH_VIDEO_PLANE(video_plane_count, planeIndex, {
-        for (const auto& property : videoProperties) {
-            std::optional<::com::rdk::hal::PropertyValue> propertyValue;
-            PLANE_CONTROL_GET_PROPERTY_POS(planeIndex, property, propertyValue);
-        }
-    });
-
-    // Steps 6–8: Iterate over GRAPHICS planes and properties
     uint32_t graphics_plane_count = 0;
-    PLANE_CONTROL_FOREACH_GRAPHICS_PLANE(graphics_plane_count, planeIndex, {
-        for (const auto& property : graphicProperties) {
-            std::optional<::com::rdk::hal::PropertyValue> propertyValue;
-            PLANE_CONTROL_GET_PROPERTY_POS(planeIndex, property, propertyValue);
+    for (const auto& plane : capabilities) {
+        if (plane.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+            video_plane_count++;
+        } else if (plane.type == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+            graphics_plane_count++;
+        } else {
+            continue;
         }
-    });
+
+        for (const auto& property : getTestableProperties(capabilities, plane)) {
+            std::optional<::com::rdk::hal::PropertyValue> propertyValue;
+            PLANE_CONTROL_GET_PROPERTY_POS(plane.planeIndex, property, propertyValue);
+        }
+    }
 
     // Ensure at least one plane was tested
     UT_ASSERT_TRUE(video_plane_count > 0 || graphics_plane_count > 0) << "No VIDEO or GRAPHICS planes found";
@@ -600,8 +593,10 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getProperty_neg) {
  * | 3 | Loop through each VIDEO plane resource index | planeResourceIndex | Should be successful | |
  * | 4 | Set VIDEO-specific integer properties (OVERSCAN, ASPECT_RATIO) | planeResourceIndex, Property::OVERSCAN = 10, Property::ASPECT_RATIO = 1 | status.isOk() = true, aidl_return = true | Should Pass |
  * | 5 | Loop through each plane resource index (VIDEO and GRAPHICS) | planeResourceIndex | Should be successful | |
- * | 6 | Set integer properties (X, Y, WIDTH, HEIGHT, Z_ORDER, ALPHA) | planeResourceIndex, Property::X = 123, Property::Y = 5, Property::WIDTH = 50, Property::HEIGHT = 60, Property::ALPHA = 254, Property::Z_ORDER = 1 | status.isOk() = true, aidl_return = true | Should Pass |
- * | 7 | Set boolean property (VISIBLE) | planeResourceIndex, Property::VISIBLE = true | status.isOk() = true, aidl_return = true | Should Pass |
+ * | 6 | Set geometry properties clamped to the reported capabilities | Property::WIDTH <= maxWidth, Property::HEIGHT <= maxHeight, Property::X + WIDTH <= frameWidth, Property::Y + HEIGHT <= frameHeight | status.isOk() = true, aidl_return = true | Should Pass |
+ * | 7 | Set ALPHA only on planes reporting supportsAlpha = true | planeResourceIndex, Property::ALPHA = 254 | status.isOk() = true, aidl_return = true | Skipped when supportsAlpha = false |
+ * | 8 | Set ZORDER only on planes reporting supportsZOrder = true | planeResourceIndex, Property::ZORDER = 1 | status.isOk() = true, aidl_return = true | Skipped when supportsZOrder = false |
+ * | 9 | Set boolean property (VISIBLE) | planeResourceIndex, Property::VISIBLE = true | status.isOk() = true, aidl_return = true | Should Pass |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_pos) {
     // Step 1: Ensure service is available
@@ -626,35 +621,40 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_pos) {
         PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO, propertyValue, aidl_return);
     });
 
-    // Steps 5–7: Set common properties for all planes
+    // Steps 5–9: Set common properties for all planes
     for (const auto& plane : capabilities) {
-        uint32_t planeResourceIndex = plane.planeIndex;
+        int32_t planeResourceIndex = plane.planeIndex;
+        const PlaneTestGeometry geometry = getTestGeometry(plane);
         ::com::rdk::hal::PropertyValue propertyValue;
         bool aidl_return;
 
         // Set X
-        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(123);
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(geometry.x);
         PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::X, propertyValue, aidl_return);
 
         // Set Y
-        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(5);
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(geometry.y);
         PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::Y, propertyValue, aidl_return);
 
         // Set WIDTH
-        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(50);
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(geometry.width);
         PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::WIDTH, propertyValue, aidl_return);
 
         // Set HEIGHT
-        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(60);
+        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(geometry.height);
         PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::HEIGHT, propertyValue, aidl_return);
 
-        // Set ALPHA
-        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(254);
-        PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::ALPHA, propertyValue, aidl_return);
+        // Set ALPHA only when the plane reports alpha support
+        if (planeSupportsProperty(capabilities, plane, ::com::rdk::hal::planecontrol::Property::ALPHA)) {
+            propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(254);
+            PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::ALPHA, propertyValue, aidl_return);
+        }
 
-        // Set Z_ORDER
-        propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
-        PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::ZORDER, propertyValue, aidl_return);
+        // Set Z_ORDER only when the plane reports Z-order support and is not the primary graphics plane
+        if (planeSupportsProperty(capabilities, plane, ::com::rdk::hal::planecontrol::Property::ZORDER)) {
+            propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
+            PLANE_CONTROL_SET_PROPERTY_POS(planeResourceIndex, ::com::rdk::hal::planecontrol::Property::ZORDER, propertyValue, aidl_return);
+        }
 
         // Set VISIBLE (boolean)
         propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
@@ -688,6 +688,9 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_pos) {
  * | 05 | Get a valid plane resource index | validPlaneResourceIndex = first plane index | Should be retrieved | Should be successful |
  * | 06 | Call setProperty with invalid property using PLANE_CONTROL_SET_PROPERTY_NEG | planeResourceIndex = validPlaneResourceIndex, property = ASPECT_RATIO + 1, propertyValue = intValue:100 | aidl_return = false | Should Fail |
  * | 07 | Call setProperty with invalid property value type using PLANE_CONTROL_SET_PROPERTY_NEG | planeResourceIndex = validPlaneResourceIndex, property = HEIGHT, propertyValue = stringValue:'InvalidType' | aidl_return = false | Should Fail |
+ * | 08 | Call setProperty for properties not supported by the plane capabilities (ALPHA, ZORDER, OVERSCAN, ASPECT_RATIO) | planeResourceIndex = each plane, property = unsupported property | aidl_return = false, exception = EX_ILLEGAL_ARGUMENT | Should Fail |
+ * | 09 | Call setProperty with geometry exceeding the reported limits | WIDTH = maxWidth + 1, HEIGHT = maxHeight + 1, X = frameWidth, Y = frameHeight | aidl_return = false, exception = EX_ILLEGAL_ARGUMENT | Should Fail |
+ * | 10 | Call setProperty on the read-only RESOURCE_ID property | planeResourceIndex = each plane, property = RESOURCE_ID | aidl_return = false, exception = EX_UNSUPPORTED_OPERATION | Should Fail |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_neg) {
     // Step 1: Ensure service is available
@@ -728,6 +731,48 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_neg) {
     ::com::rdk::hal::PropertyValue invalidTypeValue;
     invalidTypeValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::stringValue>(::android::String16("InvalidType"));
     PLANE_CONTROL_SET_PROPERTY_NEG(validPlaneResourceIndex, ::com::rdk::hal::planecontrol::Property::HEIGHT, invalidTypeValue, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+
+    // Step 8: Test properties and values rejected by the reported capabilities
+    for (const auto& plane : capabilities) {
+        ::com::rdk::hal::PropertyValue value;
+
+        if (!planeSupportsProperty(capabilities, plane, ::com::rdk::hal::planecontrol::Property::ALPHA)) {
+            value.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(254);
+            PLANE_CONTROL_SET_PROPERTY_NEG(plane.planeIndex, ::com::rdk::hal::planecontrol::Property::ALPHA, value, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+        }
+
+        if (!planeSupportsProperty(capabilities, plane, ::com::rdk::hal::planecontrol::Property::ZORDER)) {
+            value.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
+            PLANE_CONTROL_SET_PROPERTY_NEG(plane.planeIndex, ::com::rdk::hal::planecontrol::Property::ZORDER, value, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+        }
+
+        if (!planeSupportsProperty(capabilities, plane, ::com::rdk::hal::planecontrol::Property::OVERSCAN)) {
+            value.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(10);
+            PLANE_CONTROL_SET_PROPERTY_NEG(plane.planeIndex, ::com::rdk::hal::planecontrol::Property::OVERSCAN, value, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+        }
+
+        if (!planeSupportsProperty(capabilities, plane, ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO)) {
+            value.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
+            PLANE_CONTROL_SET_PROPERTY_NEG(plane.planeIndex, ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO, value, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+        }
+
+        // Geometry beyond the reported maxWidth/maxHeight/frameWidth/frameHeight limits
+        value.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(plane.maxWidth + 1);
+        PLANE_CONTROL_SET_PROPERTY_NEG(plane.planeIndex, ::com::rdk::hal::planecontrol::Property::WIDTH, value, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+
+        value.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(plane.maxHeight + 1);
+        PLANE_CONTROL_SET_PROPERTY_NEG(plane.planeIndex, ::com::rdk::hal::planecontrol::Property::HEIGHT, value, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+
+        value.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(plane.frameWidth);
+        PLANE_CONTROL_SET_PROPERTY_NEG(plane.planeIndex, ::com::rdk::hal::planecontrol::Property::X, value, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+
+        value.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(plane.frameHeight);
+        PLANE_CONTROL_SET_PROPERTY_NEG(plane.planeIndex, ::com::rdk::hal::planecontrol::Property::Y, value, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
+
+        // RESOURCE_ID is read-only
+        value.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(plane.planeIndex);
+        PLANE_CONTROL_SET_PROPERTY_NEG(plane.planeIndex, ::com::rdk::hal::planecontrol::Property::RESOURCE_ID, value, aidl_return, ::android::binder::Status::EX_UNSUPPORTED_OPERATION);
+    }
 }
 
 /**
@@ -768,11 +813,12 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getPropertyMulti_pos) {
         ::com::rdk::hal::planecontrol::PlaneType planeType = plane.type;
         std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
 
-        // Step 1: Prepare inputs - use property enum lists
+        // Step 1: Prepare inputs - use property enum lists filtered by plane capabilities
+        std::vector<::com::rdk::hal::planecontrol::Property> testableProperties = getTestableProperties(capabilities, plane);
         if (planeType == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
-            PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, videoProperties, propertyKVList, "VIDEO");
+            PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, testableProperties, propertyKVList, "VIDEO");
         } else if (planeType == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
-            PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, graphicProperties, propertyKVList, "GRAPHICS");
+            PLANE_CONTROL_VALIDATE_GET_PROPERTY_MULTI(planeResourceIndex, testableProperties, propertyKVList, "GRAPHICS");
         } else {
             continue; // Skip unsupported plane types
         }
@@ -889,13 +935,20 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setPropertyMultiAtomic_pos) {
             continue; // Skip unsupported plane types
         }
 
-        // Add common properties
-        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::X, 123);
-        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::Y, 6);
-        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::WIDTH, 40);
-        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::HEIGHT, 70);
-        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ALPHA, 254);
-        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ZORDER, 1);
+        // Add common properties within the limits reported by the plane
+        const PlaneTestGeometry geometry = getTestGeometry(plane);
+        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::X, geometry.x);
+        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::Y, geometry.y);
+        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::WIDTH, geometry.width);
+        PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::HEIGHT, geometry.height);
+        if (planeSupportsProperty(capabilities, plane, ::com::rdk::hal::planecontrol::Property::ALPHA)) {
+            PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ALPHA, 254);
+        }
+        if (planeSupportsProperty(capabilities, plane, ::com::rdk::hal::planecontrol::Property::ZORDER)) {
+            PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::ZORDER, 1);
+        } else {
+            UT_LOG_INFO("Skipping ZORDER for plane %u: supportsZOrder is false", planeResourceIndex);
+        }
         PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::VISIBLE, 1);
 
         // Steps 3-6: Log, call, log result, and verify

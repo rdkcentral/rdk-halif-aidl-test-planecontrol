@@ -24,6 +24,7 @@
  */
 
 #include "PlaneControl.h"
+#include <algorithm>
 #include <chrono>
 #include <fcntl.h>
 #include <time.h>
@@ -157,8 +158,11 @@ namespace com {
                     defaults[::com::rdk::hal::planecontrol::Property::Y] = makeIntValue(0);
                     defaults[::com::rdk::hal::planecontrol::Property::WIDTH] = makeIntValue(capabilities.maxWidth);
                     defaults[::com::rdk::hal::planecontrol::Property::HEIGHT] = makeIntValue(capabilities.maxHeight);
-                    defaults[::com::rdk::hal::planecontrol::Property::ALPHA] = makeIntValue(255);
                     defaults[::com::rdk::hal::planecontrol::Property::VISIBLE] = makeIntValue(0);
+
+                    if (capabilities.supportsAlpha) {
+                        defaults[::com::rdk::hal::planecontrol::Property::ALPHA] = makeIntValue(255);
+                    }
 
                     if (capabilities.supportsZOrder) {
                         defaults[::com::rdk::hal::planecontrol::Property::ZORDER] = makeIntValue(capabilities.planeIndex);
@@ -193,7 +197,7 @@ namespace com {
                     const std::vector<PlaneData> planes = {
                         {0, ::com::rdk::hal::planecontrol::PlaneType::VIDEO, {::com::rdk::hal::videodecoder::PixelFormat::NATIVE}, 3840, 2160, 3840, 2160, {::com::rdk::hal::videodecoder::DynamicRange::SDR, ::com::rdk::hal::videodecoder::DynamicRange::HLG, ::com::rdk::hal::videodecoder::DynamicRange::HDR10, ::com::rdk::hal::videodecoder::DynamicRange::HDR10_PLUS, ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION}, 12, 60, true, true, 3},
                         {1, ::com::rdk::hal::planecontrol::PlaneType::VIDEO, {::com::rdk::hal::videodecoder::PixelFormat::NATIVE}, 3840, 2160, 3840, 2160, {::com::rdk::hal::videodecoder::DynamicRange::SDR}, 10, 60, true, true, 3},
-                        {2, ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS, {::com::rdk::hal::videodecoder::PixelFormat::RGB}, 1920, 1080, 1920, 1080, {::com::rdk::hal::videodecoder::DynamicRange::SDR}, 8, 60, true, true, 1}
+                        {2, ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS, {::com::rdk::hal::videodecoder::PixelFormat::RGB}, 1920, 1080, 1920, 1080, {::com::rdk::hal::videodecoder::DynamicRange::SDR}, 8, 60, true, false, 1}
                     };
 
                     int videoPlaneCount = 0;
@@ -410,6 +414,29 @@ namespace com {
                     return android::binder::Status::ok();
                 }
 
+                // Property value limits derived from PlaneCapabilities.
+                static bool isPropertyValueInRange(
+                    const std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>& capabilities,
+                    int32_t planeResourceIndex,
+                    ::com::rdk::hal::planecontrol::Property property,
+                    int32_t value)
+                {
+                    auto it = std::find_if(capabilities.begin(), capabilities.end(),
+                                           [planeResourceIndex](const auto& cap) { return cap.planeIndex == planeResourceIndex; });
+                    if (it == capabilities.end()) {
+                        return false;
+                    }
+
+                    switch (property) {
+                        case Property::X:      return value >= 0 && value < it->frameWidth;
+                        case Property::Y:      return value >= 0 && value < it->frameHeight;
+                        case Property::WIDTH:  return value > 0 && value <= it->maxWidth;
+                        case Property::HEIGHT: return value > 0 && value <= it->maxHeight;
+                        case Property::ALPHA:  return value >= 0 && value <= 255;
+                        default:               return true;
+                    }
+                }
+
                 android::binder::Status PlaneControl::getProperty(int32_t planeResourceIndex, com::rdk::hal::planecontrol::Property property, ::std::optional<::com::rdk::hal::PropertyValue>* _aidl_return) {
                     // Validate plane index
                     if (planeResourceIndex < 0 || planeResourceIndex >= (mVideoPlaneCount + mGraphicsPlaneCount)) {
@@ -457,6 +484,8 @@ namespace com {
 
                     switch (property) {
                         case ::com::rdk::hal::planecontrol::Property::RESOURCE_ID:
+                            *_aidl_return = false;
+                            return android::binder::Status::fromExceptionCode(android::binder::Status::EX_UNSUPPORTED_OPERATION);
                         case ::com::rdk::hal::planecontrol::Property::X:
                         case ::com::rdk::hal::planecontrol::Property::Y:
                         case ::com::rdk::hal::planecontrol::Property::WIDTH:
@@ -473,6 +502,14 @@ namespace com {
                     }
                     if (propertyValue.value.has_value() && propertyValue.value->getTag() != PropertyValue::Value::Tag::intValue) {
                         *_aidl_return = false;
+                        return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                    }
+
+                    if (propertyValue.value.has_value() &&
+                        !isPropertyValueInRange(mCapabilities, planeResourceIndex, property,
+                                                propertyValue.value->get<PropertyValue::Value::Tag::intValue>())) {
+                        *_aidl_return = false;
+                        std::cout << "[SERVICE] Property value out of range for plane " << planeResourceIndex << std::endl;
                         return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
                     }
 
@@ -573,6 +610,14 @@ namespace com {
                         }
 
                         if (val.value.has_value() && val.value->getTag() != PropertyValue::Value::Tag::intValue)
+                        {
+                            *_aidl_return = false;
+                            return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);
+                        }
+
+                        if (val.value.has_value() &&
+                            !isPropertyValueInRange(mCapabilities, planeResourceIndex, prop,
+                                                    val.value->get<PropertyValue::Value::Tag::intValue>()))
                         {
                             *_aidl_return = false;
                             return android::binder::Status::fromExceptionCode(android::binder::Status::EX_ILLEGAL_ARGUMENT);

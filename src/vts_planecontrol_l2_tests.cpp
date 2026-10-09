@@ -205,44 +205,39 @@ std::vector<::com::rdk::hal::planecontrol::SourceType> VTS_L2_PlaneControl::sAll
 UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetProperty) {
     UT_LOG_INFO("Starting TestGetSetProperty");
 
-    for (const auto& capability : sCapabilities) {
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+
+    for (const auto& capability : capabilities) {
         int32_t planeIndex = capability.planeIndex;
 
-        std::string propPath_width = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".frameWidth";
-        uint32_t value_width = UT_KVP_PROFILE_GET_UINT32(propPath_width.c_str());
-        PLANE_CONTROL_SET_CONFIG_UINT32_PROPERTY(planeIndex, WIDTH, WIDTH, frameWidth);
-        PLANE_CONTROL_GET_CONFIG_UINT32_PROPERTY(planeIndex, WIDTH, WIDTH, value_width);
+        // WIDTH/HEIGHT are bounded by maxWidth/maxHeight, which are <= frameWidth/frameHeight
+        setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::WIDTH, capability.maxWidth);
+        setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::HEIGHT, capability.maxHeight);
 
-        std::string propPath_height = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".frameHeight";
-        uint32_t value_height = UT_KVP_PROFILE_GET_UINT32(propPath_height.c_str());
-        PLANE_CONTROL_SET_CONFIG_UINT32_PROPERTY(planeIndex, HEIGHT, HEIGHT, frameHeight);
-        PLANE_CONTROL_GET_CONFIG_UINT32_PROPERTY(planeIndex, HEIGHT, HEIGHT, value_height);
+        setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::X, 0);
+        setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::Y, 0);
 
-        PLANE_CONTROL_SET_INT_ZERO_PROPERTY(planeIndex, X, X);
-        PLANE_CONTROL_GET_INT_ZERO_PROPERTY(planeIndex, X, X);
+        // ALPHA requires supportsAlpha (Property.aidl)
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::ALPHA)) {
+            setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::ALPHA, 255);
+        } else {
+            UT_LOG_INFO("Skipping ALPHA for plane %d: supportsAlpha is false", planeIndex);
+        }
 
-        PLANE_CONTROL_SET_INT_ZERO_PROPERTY(planeIndex, Y, Y);
-        PLANE_CONTROL_GET_INT_ZERO_PROPERTY(planeIndex, Y, Y);
+        // ZORDER is optional and is always false for the primary graphics plane (PlaneCapabilities.aidl)
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::ZORDER)) {
+            setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::ZORDER, planeIndex);
+        } else {
+            UT_LOG_INFO("Skipping ZORDER for plane %d: supportsZOrder is false", planeIndex);
+        }
 
-        PLANE_CONTROL_SET_GET_CONFIG_BOOL_PROPERTY(planeIndex, ALPHA, ALPHA, supportsAlpha);
+        setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::VISIBLE, 1);
 
-        PLANE_CONTROL_SET_GET_CONFIG_BOOL_PROPERTY(planeIndex, ZORDER, ZORDER, supportsZOrder);
-
-        // VISIBLE
-        PLANE_CONTROL_SET_INT_ONE_PROPERTY(planeIndex, VISIBLE, VISIBLE);
-        PLANE_CONTROL_GET_INT_ONE_PROPERTY(planeIndex, VISIBLE, VISIBLE);
-
-
-        std::string planeTypePath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".type";
-        char planeTypeString[256];
-        UT_KVP_PROFILE_GET_STRING(planeTypePath.c_str(), planeTypeString);
-        if (std::string(planeTypeString) == "VIDEO") {
-
-            PLANE_CONTROL_SET_INT_ZERO_PROPERTY(planeIndex, OVERSCAN, OVERSCAN);
-            PLANE_CONTROL_GET_INT_ZERO_PROPERTY(planeIndex, OVERSCAN, OVERSCAN);
-
-            PLANE_CONTROL_SET_INT_ONE_PROPERTY(planeIndex, ASPECT_RATIO, ASPECT_RATIO);
-            PLANE_CONTROL_GET_INT_ONE_PROPERTY(planeIndex, ASPECT_RATIO, ASPECT_RATIO);
+        // OVERSCAN/ASPECT_RATIO only apply to VIDEO planes
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::OVERSCAN)) {
+            setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::OVERSCAN, 0);
+            setAndVerifyIntProperty(planeIndex, ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO, 1);
         }
     }
 }
@@ -254,7 +249,12 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetProperty) {
  * **Test Case ID:** 002@n
  */
 UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
-    for (const auto& capability : sCapabilities) {
+    UT_LOG_INFO("Starting TestGetSetPropertyMultiAtomic");
+
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+
+    for (const auto& capability : capabilities) {
         int32_t planeIndex = capability.planeIndex;
 
         // Prepare Key value pair of the available properties
@@ -262,15 +262,11 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         ::com::rdk::hal::planecontrol::PropertyKVPair kvPair;
 
         kvPair.property = com::rdk::hal::planecontrol::Property::WIDTH;
-        std::string frameWidthPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".frameWidth";
-        uint32_t frame_width = UT_KVP_PROFILE_GET_UINT32(frameWidthPath.c_str());
-        kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(frame_width);
+        kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(capability.maxWidth);
         propertyKVList.push_back(kvPair);
 
         kvPair.property = com::rdk::hal::planecontrol::Property::HEIGHT;
-        std::string frameHeightPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".frameHeight";
-        uint32_t frame_height = UT_KVP_PROFILE_GET_UINT32(frameHeightPath.c_str());
-        kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(frame_height);
+        kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(capability.maxHeight);
         propertyKVList.push_back(kvPair);
 
         kvPair.property = ::com::rdk::hal::planecontrol::Property::X;
@@ -281,17 +277,13 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
         propertyKVList.push_back(kvPair);
 
-        std::string supportsAlphaPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".supportsAlpha";
-        bool supportsAlpha = UT_KVP_PROFILE_GET_BOOL(supportsAlphaPath.c_str());
-        if (supportsAlpha) {
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::ALPHA)) {
             kvPair.property = ::com::rdk::hal::planecontrol::Property::ALPHA;
             kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             propertyKVList.push_back(kvPair);
         }
 
-        std::string supportsZOrderPath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".supportsZOrder";
-        bool supportsZOrder = UT_KVP_PROFILE_GET_BOOL(supportsZOrderPath.c_str());
-        if (supportsZOrder) {
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::ZORDER)) {
             kvPair.property = ::com::rdk::hal::planecontrol::Property::ZORDER;
             kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
             propertyKVList.push_back(kvPair);
@@ -301,10 +293,7 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
         kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(1);
         propertyKVList.push_back(kvPair);
 
-        std::string planeTypePath = PLANE_CONTROL_MGR_PLANES + "."  + std::to_string(planeIndex) + ".type";
-        char planeTypeString[256];
-        UT_KVP_PROFILE_GET_STRING(planeTypePath.c_str(), planeTypeString);
-        if (std::string(planeTypeString) == "VIDEO") {
+        if (planeSupportsProperty(capabilities, capability, ::com::rdk::hal::planecontrol::Property::OVERSCAN)) {
             kvPair.property = ::com::rdk::hal::planecontrol::Property::OVERSCAN;
             kvPair.propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(0);
             propertyKVList.push_back(kvPair);

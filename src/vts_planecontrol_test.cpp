@@ -74,6 +74,18 @@ std::vector<int> videoPlaneIndex;
 std::vector<int> graphicsPlaneIndex;
 std::vector<com::rdk::hal::planecontrol::SourcePlaneMapping> planeMapping;
 
+static const planeControl_Cap* findPlaneProfile(int32_t planeIndex)
+{
+    for (const auto& cap : gPlaneControl_hfp)
+    {
+        if (cap.planeIndex == planeIndex)
+        {
+            return &cap;
+        }
+    }
+    return nullptr;
+}
+
 // ---------------------------------------------------------------------------
 // checkPlaneMappings
 // ---------------------------------------------------------------------------
@@ -258,6 +270,15 @@ void PlaneControlTest::run()
         aidl_return = false;
         for (const auto& map : mPlaneConfig.planeMappings)
         {
+            const planeControl_Cap* cap = findPlaneProfile(map.destinationPlaneIndex);
+            if (cap == nullptr || !cap->supportsZOrder)
+            {
+                UT_LOG_INFO("Skipping ZORDER for plane %d: supportsZOrder is false",
+                            map.destinationPlaneIndex);
+                GTEST_SKIP() << "Skipping ZORDER for plane " << map.destinationPlaneIndex << ": supportsZOrder is false";
+                continue;
+            }
+
             ::com::rdk::hal::PropertyValue propertyValue;
             for (uint32_t zorder = 0; zorder < mPlaneConfig.planeMappings.size(); zorder++)
             {
@@ -389,6 +410,15 @@ void PlaneControlTest::run()
             }
 
             ::com::rdk::hal::PropertyValue propertyValue;
+            const planeControl_Cap* cap = findPlaneProfile(map.destinationPlaneIndex);
+            if (cap == nullptr || !cap->supportsAlpha)
+            {
+                UT_LOG_INFO("Skipping ALPHA for plane %d: supportsAlpha is false",
+                            map.destinationPlaneIndex);
+                GTEST_SKIP() << "Skipping ALPHA for plane " << map.destinationPlaneIndex << ": supportsAlpha is false";
+                continue;
+            }
+
             for (const uint32_t alpha : alphaLevels)
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<

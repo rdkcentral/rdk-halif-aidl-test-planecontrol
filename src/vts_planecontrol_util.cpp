@@ -1030,6 +1030,122 @@ void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilit
     UT_ASSERT_EQUAL(actual.vsyncDisplayLatency, expected.vsyncDisplayLatency) << "vsyncDisplayLatency mismatch";
 }
 
+const std::vector<::com::rdk::hal::planecontrol::Property> videoProperties = {
+    ::com::rdk::hal::planecontrol::Property::RESOURCE_ID,
+    ::com::rdk::hal::planecontrol::Property::X,
+    ::com::rdk::hal::planecontrol::Property::Y,
+    ::com::rdk::hal::planecontrol::Property::WIDTH,
+    ::com::rdk::hal::planecontrol::Property::HEIGHT,
+    ::com::rdk::hal::planecontrol::Property::ALPHA,
+    ::com::rdk::hal::planecontrol::Property::ZORDER,
+    ::com::rdk::hal::planecontrol::Property::VISIBLE,
+    ::com::rdk::hal::planecontrol::Property::OVERSCAN,
+    ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO
+};
+
+const std::vector<::com::rdk::hal::planecontrol::Property> graphicProperties = {
+    ::com::rdk::hal::planecontrol::Property::RESOURCE_ID,
+    ::com::rdk::hal::planecontrol::Property::X,
+    ::com::rdk::hal::planecontrol::Property::Y,
+    ::com::rdk::hal::planecontrol::Property::WIDTH,
+    ::com::rdk::hal::planecontrol::Property::HEIGHT,
+    ::com::rdk::hal::planecontrol::Property::ALPHA,
+    ::com::rdk::hal::planecontrol::Property::ZORDER,
+    ::com::rdk::hal::planecontrol::Property::VISIBLE
+};
+
+bool isPrimaryGraphicsPlane(
+    const std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>& capabilities,
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane)
+{
+    if (plane.type != ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS) {
+        return false;
+    }
+
+    // Graphics planes are listed after video planes, so the lowest graphics index is the primary one.
+    for (const auto& cap : capabilities) {
+        if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS &&
+            cap.planeIndex < plane.planeIndex) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool planeSupportsProperty(
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane,
+    ::com::rdk::hal::planecontrol::Property property)
+{
+    switch (property) {
+        case ::com::rdk::hal::planecontrol::Property::ALPHA:
+            return plane.supportsAlpha;
+        case ::com::rdk::hal::planecontrol::Property::ZORDER:
+            return plane.supportsZOrder;
+        case ::com::rdk::hal::planecontrol::Property::OVERSCAN:
+        case ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO:
+            return plane.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
+        default:
+            return true;
+    }
+}
+
+bool planeSupportsProperty(
+    const std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>& capabilities,
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane,
+    ::com::rdk::hal::planecontrol::Property property)
+{
+    // PlaneCapabilities.aidl mandates supportsZOrder = false on the primary graphics plane.
+    if (property == ::com::rdk::hal::planecontrol::Property::ZORDER &&
+        isPrimaryGraphicsPlane(capabilities, plane)) {
+        return false;
+    }
+    return planeSupportsProperty(plane, property);
+}
+
+std::vector<::com::rdk::hal::planecontrol::Property> getTestableProperties(
+    const std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>& capabilities,
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane)
+{
+    const std::vector<::com::rdk::hal::planecontrol::Property>& baseProperties =
+        (plane.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) ? videoProperties : graphicProperties;
+
+    std::vector<::com::rdk::hal::planecontrol::Property> properties;
+    for (const auto& property : baseProperties) {
+        if (planeSupportsProperty(capabilities, plane, property)) {
+            properties.push_back(property);
+        } else {
+            UT_LOG_INFO("Skipping unsupported property %s on plane %d",
+                        PropertyToString(property), plane.planeIndex);
+        }
+    }
+    return properties;
+}
+
+PlaneTestGeometry getTestGeometry(const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane)
+{
+    PlaneTestGeometry geometry;
+    geometry.width = std::min<int32_t>(50, plane.maxWidth);
+    geometry.height = std::min<int32_t>(60, plane.maxHeight);
+    geometry.x = std::max<int32_t>(0, std::min<int32_t>(123, plane.frameWidth - geometry.width));
+    geometry.y = std::max<int32_t>(0, std::min<int32_t>(5, plane.frameHeight - geometry.height));
+    return geometry;
+}
+
+void setAndVerifyIntProperty(int32_t planeIndex,
+                             ::com::rdk::hal::planecontrol::Property property,
+                             int32_t value)
+{
+    ::com::rdk::hal::PropertyValue propertyValue;
+    propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::intValue>(value);
+    bool aidl_return = false;
+    PLANE_CONTROL_SET_PROPERTY_POS(planeIndex, property, propertyValue, aidl_return);
+
+    std::optional<::com::rdk::hal::PropertyValue> readBack;
+    PLANE_CONTROL_GET_PROPERTY_POS(planeIndex, property, readBack);
+    UT_ASSERT_EQUAL(readBack->value->get<::com::rdk::hal::PropertyValue::Value::Tag::intValue>(), value)
+        << "Value mismatch for property " << PropertyToString(property) << " on plane " << planeIndex;
+}
+
 
 /** @} */ // End of Plane_Control_Halif_Test_Util
 /** @} */ // End of Plane_Control_Halif_Test
