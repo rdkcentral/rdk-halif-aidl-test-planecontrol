@@ -90,7 +90,11 @@
 #include "com/rdk/hal/planecontrol/BnGraphicsFbProviderListener.h"
 #include "com/rdk/hal/planecontrol/AspectRatio.h"
 #include "com/rdk/hal/planecontrol/BnPlaneControlListener.h"
+
+#include "vts_hdmiinput.h"
+#include "vts_compositeinput.h"
 #include "vts_helper_functions.h"
+
 
 using android::sp;
 using android::String16;

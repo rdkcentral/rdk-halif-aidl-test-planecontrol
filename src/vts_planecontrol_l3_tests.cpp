@@ -123,6 +123,8 @@ public:
 
     vector<tuple<IVideoSink::Id, sp<IVideoSink>, sp<VideoSinkControllerListener>, sp<VideoSinkEventListener>>> mVideoSinkList;
     vector<tuple<IVideoDecoder::Id, sp<IVideoDecoder>, sp<VideoDecoderControllerListener>, sp<VideoDecoderEventListener>, videodecoder::Capabilities*>> mVideoDecoderList;
+    vector<PlaneControlHDMIInputEntry> mHDMIInputList;
+    vector<PlaneControlCompositeInputEntry> mCompositeInputList;
     sp<IAVBuffer> mAVBufferManager;
     sp<ValidPlaneControlListener> mPlaneControlListener;
     bool aidlReturn = false;
@@ -154,9 +156,19 @@ public:
         if (gPlaneControlTestConfiguration == nullptr) {
             UT_FAIL_FATAL("PlaneControl test configuration handle is null. Ensure vts_l3_PlaneControl_test_config.yaml is available from the test runtime working directory.");
         }
+        if(gHdmiInputManager == NULL)
+        {
+            UT_LOG_WARNING("HDMI Input Manager Service not available");
+        }
+        if(gCOMPOSITEINPUTHandle == NULL)
+        {
+            UT_LOG_WARNING("Composite Input Manager Service not available");
+        }
 
         vector<IVideoSink::Id> sinkIds;
         vector<IVideoDecoder::Id> videoDecoderIds;
+        vector<hdmiinput::IHDMIInput::Id> hdmiInputIds;
+        vector<int32_t> compositeInputPortIds;
 
         mAVbufferHelper = getAVBufferHelperInstance();
 
@@ -237,6 +249,70 @@ public:
 
             mVideoSinkList.push_back({_sinkId, videoSink, videoSinkControlListener, videoSinkEventListener});
         }
+
+        if(gHdmiInputManager != NULL)
+        {
+            /* Get the HDMI INPUT IDs */
+            HDMIINPUT_MANAGER_GETHDMIINPUTIDS(hdmiInputIds);
+            UT_LOG_INFO("HDMI Inputs Found: %d", static_cast<int>(hdmiInputIds.size()));
+            for (const auto& id : hdmiInputIds)
+            {
+                android::sp<hdmiinput::IHDMIInput> hdmiInput;
+
+                HDMIINPUT_MANAGER_GETHDMIINPUT_SUCCESS(id, hdmiInput);
+
+                sp<HDMIInputControllerListener> controllerListener = new HDMIInputControllerListener();
+                sp<HDMIInputEventListener> eventListener = new HDMIInputEventListener();
+                hdmiinput::Capabilities capabilities;
+                android::sp<hdmiinput::IHDMIInputController> controller;
+
+                HDMIINPUT_GET_CAPABILITIES(hdmiInput, &capabilities);
+
+                // Register an event listener
+                HDMIINPUT_REGISTEREVENT_SUCCESS(hdmiInput, eventListener);
+
+                // Open the HDMI input port
+                HDMIINPUT_OPEN_SUCCESS(hdmiInput, controllerListener, controller, true);
+
+                PlaneControlHDMIInputEntry entry;
+                entry.id = id;
+                entry.input = hdmiInput;
+                entry.controlListener = controllerListener;
+                entry.eventListener = eventListener;
+                entry.controller = controller;
+                entry.capabilities = capabilities;
+                mHDMIInputList.push_back(std::move(entry));
+            }
+        }
+
+        if(gCOMPOSITEINPUTHandle != NULL)
+        {
+            /* Get the Composite Input Port IDs */
+            COMPOSITEINPUT_GET_PORT_IDS(gCOMPOSITEINPUTHandle, compositeInputPortIds);
+            UT_LOG_INFO("Composite Input Ports Found: %d", static_cast<int>(compositeInputPortIds.size()));
+            for (const auto& id : compositeInputPortIds)
+            {
+                android::sp<compositeinput::ICompositeInputPort> compositeInputport;
+                auto controllerListener = android::sp<CompositeInputControllerListener>::make();
+                auto eventListener      = android::sp<CompositeInputEventListener>::make();
+                android::sp<ICompositeInputController> controller;
+
+                COMPOSITEINPUT_GET_PORT(gCOMPOSITEINPUTHandle, id, compositeInputport);
+
+                COMPOSITEINPUT_REGISTER_EVENT_LISTENER(compositeInputport, eventListener);
+
+                COMPOSITEINPUT_OPEN(compositeInputport, controllerListener, controller);
+
+                PlaneControlCompositeInputEntry entry;
+                entry.portId = id;
+                entry.inputPort = compositeInputport;
+                entry.controlListener = controllerListener;
+                entry.eventListener = eventListener;
+                entry.controller = controller;
+                mCompositeInputList.push_back(std::move(entry));
+            }
+        }
+
 
         ::android::binder::Status planeListenerStatus =
             gPlaneControlservice->registerListener(mPlaneControlListener, &aidlReturn);
@@ -422,7 +498,8 @@ public:
                 }
                 try
                 {
-                    PlaneControlTest planeControlTest(planeConfig);
+                    PlaneControlTest planeControlTest(
+                        planeConfig, mHDMIInputList, mCompositeInputList);
                     planeControlTest.run();
                 }
                 catch (...)
@@ -453,13 +530,13 @@ public:
                 {
                     decodeTest->closeDecoderSession();
                 }
-                if (foundSink)
+                if (!planeConfig.planeMappings.empty())
                 {
                     std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> unmapMappings;
                     for (const auto& mapping : planeConfig.planeMappings)
                     {
-                        if (mapping.sourceType ==
-                            ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK)
+                        if (mapping.sourceType !=
+                            ::com::rdk::hal::planecontrol::SourceType::NONE)
                         {
                             auto unmap = mapping;
                             unmap.destinationPlaneIndex = -1;
@@ -469,7 +546,7 @@ public:
                     if (!unmapMappings.empty())
                     {
                         bool unmapResult = false;
-                        UT_LOG_INFO("Unmapping %zu VIDEO_SINK source(s) after stream %s",
+                        UT_LOG_INFO("Unmapping %zu source(s) after stream %s",
                                     unmapMappings.size(), testConfig.streamName.c_str());
                         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(unmapMappings, unmapResult);
                     }
@@ -621,6 +698,21 @@ public:
         {
             VIDEODECODER_UNREGISTER_EVENT_SUCCESS(videoDecoder,videoDecoderEventListener);
         }
+        for (auto& entry : mHDMIInputList)
+        {
+            HDMIINPUT_CLOSE_SUCCESS(entry.input, entry.controller, true);
+            HDMIINPUT_UNREGISTEREVENT_SUCCESS(entry.input, entry.eventListener);
+        }
+        mHDMIInputList.clear();
+
+        for (auto& entry : mCompositeInputList)
+        {
+            bool closed = false;
+            COMPOSITEINPUT_CLOSE(entry.inputPort, entry.controller, closed);
+            COMPOSITEINPUT_UNREGISTER_EVENT_LISTENER(entry.inputPort, entry.eventListener);
+        }
+        mCompositeInputList.clear();
+
         if (mPlaneControlListener != nullptr)
         {
             bool unregisterResult = false;

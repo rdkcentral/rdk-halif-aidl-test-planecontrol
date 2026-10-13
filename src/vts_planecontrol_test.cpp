@@ -113,8 +113,13 @@ void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlaneMapping
 // PlaneControlTest constructor
 // ---------------------------------------------------------------------------
 
-PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
-    : mPlaneConfig(planeConfig)
+PlaneControlTest::PlaneControlTest(
+    planeControlTestConfig_t planeConfig,
+    const std::vector<PlaneControlHDMIInputEntry>& hdmiInputList,
+    const std::vector<PlaneControlCompositeInputEntry>& compositeInputList)
+    : mPlaneConfig(std::move(planeConfig)),
+      mHDMIInputList(hdmiInputList),
+      mCompositeInputList(compositeInputList)
 {
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> videoCapabilities;
@@ -166,6 +171,59 @@ PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
     }
 }
 
+PlaneControlTest::~PlaneControlTest()
+{
+    stopInputSources();
+}
+
+void PlaneControlTest::startInputSources()
+{
+    for (const auto& mapping : mPlaneConfig.planeMappings)
+    {
+        if (mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::HDMI)
+        {
+            if (std::find(mStartedHDMIInputs.begin(), mStartedHDMIInputs.end(),
+                          mapping.sourceIndex) != mStartedHDMIInputs.end())
+            {
+                continue;
+            }
+
+            if (startHdmiInputPath(mapping.sourceIndex))
+            {
+                mStartedHDMIInputs.push_back(mapping.sourceIndex);
+            }
+        }
+        else if (mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::COMPOSITE)
+        {
+            if (std::find(mStartedCompositeInputs.begin(), mStartedCompositeInputs.end(),
+                          mapping.sourceIndex) != mStartedCompositeInputs.end())
+            {
+                continue;
+            }
+
+            if (startCompositeInputPath(mapping.sourceIndex))
+            {
+                mStartedCompositeInputs.push_back(mapping.sourceIndex);
+            }
+        }
+    }
+}
+
+void PlaneControlTest::stopInputSources()
+{
+    for (const auto sourceIndex : mStartedHDMIInputs)
+    {
+        stopHdmiInputPath(sourceIndex);
+    }
+    mStartedHDMIInputs.clear();
+
+    for (const auto sourceIndex : mStartedCompositeInputs)
+    {
+        stopCompositeInputPath(sourceIndex);
+    }
+    mStartedCompositeInputs.clear();
+}
+
 // ---------------------------------------------------------------------------
 // PlaneControlTest::run
 // ---------------------------------------------------------------------------
@@ -178,6 +236,8 @@ void PlaneControlTest::run()
                     mPlaneConfig.testName.c_str());
         return;
     }
+
+    startInputSources();
 
     bool aidl_return = false;
     const bool skipPreMapping = isGraphicsPlaneClientTest(mPlaneConfig.testName);
@@ -668,6 +728,8 @@ void PlaneControlTest::run()
     {
         // Vsync ToDo
     }
+
+    stopInputSources();
 }
 
 /** @} */ // End of Plane_Control_Halif_Test_TestClass
