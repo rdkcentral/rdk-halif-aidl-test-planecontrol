@@ -352,11 +352,57 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetPropertyMultiAtomic) {
  */
 UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetVideoSourceDestinationPlaneMapping) {
     UT_LOG_INFO("Starting TestGetSetVideoSourceDestinationPlaneMapping");
-    UT_ASSERT_GREATER_EQUAL(sVideoPlaneIndices.size(), 2) << "Need at least 2 video planes, found " << sVideoPlaneIndices.size();
+    UT_ASSERT_FALSE(sVideoPlaneIndices.empty()) << "No VIDEO planes found";
 
+    const auto firstVideoCapability = std::find_if(
+        sCapabilities.begin(), sCapabilities.end(), [](const auto& capability) {
+            return capability.planeIndex == static_cast<int32_t>(sVideoPlaneIndices[0]);
+        });
+    UT_ASSERT_NOT_EQUAL(firstVideoCapability, sCapabilities.end());
+
+    bool testedSupportedSourceType = false;
     for (const auto& sourceType : sAllSourceTypes) {
-        PLANE_CONTROL_SET_MAPPING(sourceType, sVideoPlaneIndices[0], sVideoPlaneIndices[1]);
-        PLANE_CONTROL_GET_MAPPING(sourceType, sVideoPlaneIndices[0], sVideoPlaneIndices[1]);
+        if (!PlaneSupportsSourceType(*firstVideoCapability, sourceType)) {
+            UT_LOG_INFO("Skipping sourceType %d because it is not supported by VIDEO plane %u",
+                        static_cast<int>(sourceType), sVideoPlaneIndices[0]);
+            continue;
+        }
+
+        std::vector<SourcePlaneMapping> mappings;
+        SourcePlaneMapping mapping;
+        mapping.sourceType = sourceType;
+        mapping.sourceIndex = 0;
+        mapping.destinationPlaneIndex = sVideoPlaneIndices[0];
+        mappings.push_back(mapping);
+
+        bool mappingResult = false;
+        auto status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(mappings, &mappingResult);
+        PLANE_CONTROL_ASSERT_STATUS(setVideoSourceDestinationPlaneMapping, status, mappingResult, -1, sourceType);
+
+        std::vector<SourcePlaneMapping> retrievedMappings;
+        status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
+        UT_ASSERT_TRUE(status.isOk()) << "Failed to get mappings for sourceType "
+                                      << static_cast<int>(sourceType);
+        const auto retrievedMapping = std::find_if(
+            retrievedMappings.begin(), retrievedMappings.end(), [&mapping](const auto& retrieved) {
+                return retrieved.destinationPlaneIndex == mapping.destinationPlaneIndex;
+            });
+        UT_ASSERT_NOT_EQUAL(retrievedMapping, retrievedMappings.end());
+        UT_ASSERT_EQUAL(retrievedMapping->sourceType, mapping.sourceType);
+        UT_ASSERT_EQUAL(retrievedMapping->sourceIndex, mapping.sourceIndex);
+
+        SourcePlaneMapping unmap;
+        unmap.sourceType = sourceType;
+        unmap.sourceIndex = 0;
+        unmap.destinationPlaneIndex = -1;
+        mappings.assign(1, unmap);
+        status = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(mappings, &mappingResult);
+        PLANE_CONTROL_ASSERT_STATUS(setVideoSourceDestinationPlaneMapping, status, mappingResult, -1, unmap);
+
+        testedSupportedSourceType = true;
+    }
+    if (!testedSupportedSourceType) {
+        GTEST_SKIP() << "The selected VIDEO plane does not advertise a mappable source type";
     }
 }
 

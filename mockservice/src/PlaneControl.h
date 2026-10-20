@@ -99,6 +99,7 @@ namespace com {
                             int frameWidth,
                             int frameHeight,
                             std::vector<::com::rdk::hal::videodecoder::DynamicRange> dynamicRanges,
+                            std::vector<::com::rdk::hal::planecontrol::SourceType> sourceTypes,
                             int colorDepth,
                             int maxFrameRate,
                             bool supportsAlpha,

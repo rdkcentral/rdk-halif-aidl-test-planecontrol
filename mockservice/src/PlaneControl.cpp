@@ -119,6 +119,7 @@ namespace com {
                     int frameWidth,
                     int frameHeight,
                     std::vector<::com::rdk::hal::videodecoder::DynamicRange> supportedDynamicRanges,
+                    std::vector<::com::rdk::hal::planecontrol::SourceType> sourceTypes,
                     int colorDepth,
                     int maxFrameRate,
                     bool supportsAlpha,
@@ -134,6 +135,7 @@ namespace com {
                     cap.maxHeight = maxHeight;
                     cap.frameWidth = frameWidth;
                     cap.frameHeight = frameHeight;
+                    cap.sourceTypes = std::move(sourceTypes);
                     cap.supportedDynamicRanges = supportedDynamicRanges;
                     cap.colorDepth = colorDepth;
                     cap.maxFrameRate = maxFrameRate;
@@ -187,6 +189,7 @@ namespace com {
                         int frameWidth;
                         int frameHeight;
                         std::vector<::com::rdk::hal::videodecoder::DynamicRange> dynamicRanges;
+                        std::vector<::com::rdk::hal::planecontrol::SourceType> sourceTypes;
                         int colorDepth;
                         int maxFrameRate;
                         bool supportsAlpha;
@@ -195,9 +198,9 @@ namespace com {
                     };
 
                     const std::vector<PlaneData> planes = {
-                        {0, ::com::rdk::hal::planecontrol::PlaneType::VIDEO, {::com::rdk::hal::videodecoder::PixelFormat::NATIVE}, 3840, 2160, 3840, 2160, {::com::rdk::hal::videodecoder::DynamicRange::SDR, ::com::rdk::hal::videodecoder::DynamicRange::HLG, ::com::rdk::hal::videodecoder::DynamicRange::HDR10, ::com::rdk::hal::videodecoder::DynamicRange::HDR10_PLUS, ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION}, 12, 60, true, true, 3},
-                        {1, ::com::rdk::hal::planecontrol::PlaneType::VIDEO, {::com::rdk::hal::videodecoder::PixelFormat::NATIVE}, 3840, 2160, 3840, 2160, {::com::rdk::hal::videodecoder::DynamicRange::SDR}, 10, 60, true, true, 3},
-                        {2, ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS, {::com::rdk::hal::videodecoder::PixelFormat::RGB}, 1920, 1080, 1920, 1080, {::com::rdk::hal::videodecoder::DynamicRange::SDR}, 8, 60, true, false, 1}
+                        {0, ::com::rdk::hal::planecontrol::PlaneType::VIDEO, {::com::rdk::hal::videodecoder::PixelFormat::NATIVE}, 3840, 2160, 3840, 2160, {::com::rdk::hal::videodecoder::DynamicRange::SDR, ::com::rdk::hal::videodecoder::DynamicRange::HLG, ::com::rdk::hal::videodecoder::DynamicRange::HDR10, ::com::rdk::hal::videodecoder::DynamicRange::HDR10_PLUS, ::com::rdk::hal::videodecoder::DynamicRange::DOLBY_VISION}, {SourceType::VIDEO_SINK, SourceType::HDMI, SourceType::COMPOSITE}, 12, 60, true, true, 3},
+                        {1, ::com::rdk::hal::planecontrol::PlaneType::VIDEO, {::com::rdk::hal::videodecoder::PixelFormat::NATIVE}, 3840, 2160, 3840, 2160, {::com::rdk::hal::videodecoder::DynamicRange::SDR}, {SourceType::VIDEO_SINK, SourceType::HDMI, SourceType::COMPOSITE}, 10, 60, true, true, 3},
+                        {2, ::com::rdk::hal::planecontrol::PlaneType::GRAPHICS, {::com::rdk::hal::videodecoder::PixelFormat::RGB}, 1920, 1080, 1920, 1080, {::com::rdk::hal::videodecoder::DynamicRange::SDR}, {}, 8, 60, true, false, 1}
                     };
 
                     int videoPlaneCount = 0;
@@ -255,6 +258,7 @@ namespace com {
                             plane.frameWidth,
                             plane.frameHeight,
                             plane.dynamicRanges,
+                            plane.sourceTypes,
                             plane.colorDepth,
                             plane.maxFrameRate,
                             plane.supportsAlpha,
@@ -336,6 +340,23 @@ namespace com {
                             *_aidl_return = false;
                             std::cout << "[SERVICE] video plane doesnt exist " << mapping.destinationPlaneIndex << std::endl;
                             return android::binder::Status::ok();
+                        }
+                        if (mapping.destinationPlaneIndex != -1) {
+                            const auto capability = std::find_if(
+                                mCapabilities.begin(), mCapabilities.end(),
+                                [&mapping](const auto& cap) {
+                                    return cap.planeIndex == mapping.destinationPlaneIndex;
+                                });
+                            if (capability == mCapabilities.end() ||
+                                std::find(capability->sourceTypes.begin(), capability->sourceTypes.end(),
+                                          mapping.sourceType) == capability->sourceTypes.end()) {
+                                *_aidl_return = false;
+                                std::cout << "[SERVICE] unsupported source type "
+                                          << static_cast<int>(mapping.sourceType) << " for plane "
+                                          << mapping.destinationPlaneIndex << std::endl;
+                                return android::binder::Status::fromExceptionCode(
+                                    android::binder::Status::EX_UNSUPPORTED_OPERATION);
+                            }
                         }
                         if (mapping.destinationPlaneIndex != -1) {
                             if (!seenPlanes.insert(mapping.destinationPlaneIndex).second) {
@@ -684,4 +705,3 @@ namespace com {
         }
     }
 }
-
