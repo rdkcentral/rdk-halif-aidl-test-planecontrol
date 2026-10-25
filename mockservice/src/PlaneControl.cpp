@@ -354,8 +354,7 @@ namespace com {
                                 std::cout << "[SERVICE] unsupported source type "
                                           << static_cast<int>(mapping.sourceType) << " for plane "
                                           << mapping.destinationPlaneIndex << std::endl;
-                                return android::binder::Status::fromExceptionCode(
-                                    android::binder::Status::EX_UNSUPPORTED_OPERATION);
+                                return android::binder::Status::ok();
                             }
                         }
                         if (mapping.destinationPlaneIndex != -1) {

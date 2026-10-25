@@ -276,7 +276,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_pos) {
  * | :----: | --------- | ---------- |-------------- | ----- |
  * | 01 | Retrieve plane capabilities. | capabilities | Should be successful | Should be successful |
  * | 02 | Find a source type not supported by the first VIDEO plane. | capability.sourceTypes | Should be successful | Skip if all defined types are supported |
- * | 03 | Call setVideoSourceDestinationPlaneMapping with the unsupported source type. | destinationPlaneIndex = i | status.exceptionCode() = EX_UNSUPPORTED_OPERATION | Should Fail |
+ * | 03 | Call setVideoSourceDestinationPlaneMapping with the unsupported source type. | destinationPlaneIndex = i | _aidl_return = false, status.exceptionCode() = EX_NONE | Should Fail |
  * | 04 | Find a source type supported by the first VIDEO plane. | capability.sourceTypes | Should be successful | Should be successful |
  * | 05 | Call setVideoSourceDestinationPlaneMapping with duplicate SourceType and SourceIndex when a second VIDEO plane supports it. | listSourcePlaneMapping1 = duplicate sources | _aidl_return = false | Skip if unavailable |
  * | 06 | Call setVideoSourceDestinationPlaneMapping with duplicate DestinationPlaneIndex. | listSourcePlaneMapping2 = duplicate plane | _aidl_return = false | Should Fail |
@@ -320,8 +320,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_neg) {
         std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> mappings;
         bool aidl_return = false;
         PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, *unsupportedSource, 0, planeIndices[0]);
-        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG_WITH_EXCEPTION(
-            mappings, aidl_return, ::android::binder::Status::EX_UNSUPPORTED_OPERATION);
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG(mappings, aidl_return);
     } else {
         UT_LOG_INFO("All defined source types are supported by VIDEO plane %u; "
                     "skipping unsupported-source scenario", planeIndices[0]);
