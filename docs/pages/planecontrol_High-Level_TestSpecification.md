@@ -134,11 +134,11 @@ The following table outlines the core features validated in the L3 test phase
 
 |#|Testing Feature|Description|
 |-|---------------|-----------|
-|1|Plane Mapping|Map the source with the available planes for rendering on to the display. Vrify the mapping is done properly by calling `getVideoSourceDestinationPlaneMapping` and checking the video playback on the planes.|
+|1|Plane Mapping|Map the source with the available planes for rendering on to the display. Verify the mapping by calling `getVideoSourceDestinationPlaneMapping`, explicitly setting the mapped plane visible, and checking video playback on the plane. The getter returns one entry for every advertised VIDEO plane, including unmapped planes.|
 |2|Plane Swapping|Swap the source provided in planes to check all the planes rendered can be mapped with different sources. verify the video playing in the display is swapping |
 |3|Aspect Ratio| To set the aspect ratio of the pane to render the video frames in its proper format . Validate with manual inspection  |
 |4|Z order| Plane Z order in which the planes are rendered in to the display. Validate with manual inspection that the plane display order is changing.|
-|5|Visibility| To set and verify the Visibility of the plane rendered. Manually inspect and verify the visibility of each plane |
+|5|Visibility|Set `VISIBLE` to 0 and 1, read back each value, and ask the operator whether the plane is currently visible. The expected answers are no and yes, respectively.|
 |6|Over scan| To Set the zoom mode for the plane rendering the video frame. set different zoom modes and verify manually|
 |7|Alpha| To set and verify the transparency (Alpha) value for the planes. Set different alpha values and verify manually from display|
 |8|Plane position|To set and verify the positioning of the planes. Set different position for the planes as per `Video Plane Geometry Specification` table and verify it manually  |

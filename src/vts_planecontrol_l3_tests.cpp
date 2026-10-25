@@ -67,6 +67,7 @@
 #include "vts_planecontrol_test.h"
 #include <algorithm>
 #include <condition_variable>
+#include <iterator>
 #include <mutex>
 #include <set>
 #include <thread>
@@ -599,6 +600,23 @@ public:
                 return;
             }
         }
+        if (std::strcmp(testName, "Planecontrol_Swapping") == 0)
+        {
+            std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+            PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+            const auto videoPlaneCount = std::count_if(
+                capabilities.begin(), capabilities.end(), [](const auto& capability) {
+                    return capability.type ==
+                           ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
+                });
+            if (videoPlaneCount < 2)
+            {
+                UT_IGNORE_TEST()
+                    << "Planecontrol_Swapping requires at least two VIDEO planes; platform advertises "
+                    << videoPlaneCount;
+                return;
+            }
+        }
 
         UT_LOG_INFO("vts_videodecoder_parse_testconfig for testName=%s, gTestGroup=%s, gVideoDecoderModuleName=%s",
                 testName, gTestGroup, gVideoDecoderModuleName);
@@ -629,28 +647,43 @@ public:
         {
             std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
             PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+            std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> videoCapabilities;
+            std::copy_if(
+                capabilities.begin(), capabilities.end(),
+                std::back_inserter(videoCapabilities), [](const auto& capability) {
+                    return capability.type ==
+                           ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
+                });
             planeConfigs.erase(
                 std::remove_if(planeConfigs.begin(), planeConfigs.end(),
-                    [&capabilities](const auto& planeConfig)
+                    [&videoCapabilities](const auto& planeConfig)
                     {
                         for (const auto& mapping : planeConfig.planeMappings)
                         {
-                            const bool sourceSupported = std::any_of(
-                                capabilities.begin(), capabilities.end(),
-                                [&mapping](const auto& capability)
-                                {
-                                    return capability.type ==
-                                               ::com::rdk::hal::planecontrol::PlaneType::VIDEO &&
-                                           std::find(capability.sourceTypes.begin(),
-                                                     capability.sourceTypes.end(),
-                                                     mapping.sourceType) != capability.sourceTypes.end();
-                                });
+                            if (mapping.destinationPlaneIndex < 0 ||
+                                static_cast<size_t>(mapping.destinationPlaneIndex) >=
+                                    videoCapabilities.size())
+                            {
+                                UT_LOG_INFO(
+                                    "Skipping mapping for unavailable VIDEO plane slot=%d",
+                                    mapping.destinationPlaneIndex);
+                                return true;
+                            }
+                            const auto& capability =
+                                videoCapabilities[mapping.destinationPlaneIndex];
+                            const bool sourceSupported =
+                                std::find(capability.sourceTypes.begin(),
+                                          capability.sourceTypes.end(),
+                                          mapping.sourceType) !=
+                                capability.sourceTypes.end();
                             if (!sourceSupported)
                             {
                                 const std::string sourceTypeName =
                                     sourceTypeToString(mapping.sourceType);
-                                UT_LOG_INFO("Skipping unsupported mapping sourceType=%s, sourceIndex=%d",
-                                            sourceTypeName.c_str(), mapping.sourceIndex);
+                                UT_LOG_INFO(
+                                    "Skipping unsupported mapping sourceType=%s, sourceIndex=%d, planeIndex=%d",
+                                    sourceTypeName.c_str(), mapping.sourceIndex,
+                                    capability.planeIndex);
                                 return true;
                             }
                         }
@@ -660,7 +693,8 @@ public:
         }
         for (size_t i = 0; i < decoderConfigs.size(); ++i)
         {
-            std::set<std::tuple<int32_t, int32_t, uint32_t>> streamVideoMappings;
+            std::set<std::tuple<int32_t, int32_t, int32_t, uint32_t>>
+                streamVideoMappings;
             auto& decoderConfig = decoderConfigs[i];
             for (size_t j = 0; j < planeConfigs.size(); ++j)
             {
@@ -674,7 +708,7 @@ public:
                     const auto& mapping = planeConfig.planeMappings[0];
                     const auto mappingKey = std::make_tuple(
                         static_cast<int32_t>(mapping.sourceType), mapping.sourceIndex,
-                        planeConfig.decoderIds[0]);
+                        mapping.destinationPlaneIndex, planeConfig.decoderIds[0]);
                     if (!streamVideoMappings.insert(mappingKey).second)
                     {
                         UT_LOG_INFO("Skipping duplicate VIDEO_SINK mapping for sourceIndex=%d, decoderId=%u",

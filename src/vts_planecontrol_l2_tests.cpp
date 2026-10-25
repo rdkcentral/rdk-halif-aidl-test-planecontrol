@@ -360,6 +360,29 @@ UT_ADD_TEST(VTS_L2_PlaneControl, TestGetSetVideoSourceDestinationPlaneMapping) {
         });
     UT_ASSERT_NOT_EQUAL(firstVideoCapability, sCapabilities.end());
 
+    std::vector<SourcePlaneMapping> existingMappings;
+    auto cleanupStatus =
+        gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&existingMappings);
+    UT_ASSERT_TRUE(cleanupStatus.isOk())
+        << "Failed to retrieve mappings before cleanup";
+
+    std::vector<SourcePlaneMapping> cleanupMappings;
+    for (const auto& existing : existingMappings) {
+        if (existing.sourceType != SourceType::NONE) {
+            auto unmap = existing;
+            unmap.destinationPlaneIndex = -1;
+            cleanupMappings.push_back(unmap);
+        }
+    }
+    if (!cleanupMappings.empty()) {
+        bool cleanupResult = false;
+        cleanupStatus = gPlaneControlservice->setVideoSourceDestinationPlaneMapping(
+            cleanupMappings, &cleanupResult);
+        PLANE_CONTROL_ASSERT_STATUS(
+            setVideoSourceDestinationPlaneMapping, cleanupStatus, cleanupResult, -1,
+            cleanupMappings);
+    }
+
     bool testedSupportedSourceType = false;
     for (const auto& sourceType : sAllSourceTypes) {
         if (!PlaneSupportsSourceType(*firstVideoCapability, sourceType)) {

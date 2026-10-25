@@ -147,9 +147,9 @@ private:
 /**
  * @brief Validates live plane-to-source mappings against an expected list.
  *
- * Calls getVideoSourceDestinationPlaneMapping() and asserts that every entry
- * in @p planeMapping matches the HAL response in both sourceIndex and
- * destinationPlaneIndex order.
+ * Calls getVideoSourceDestinationPlaneMapping(), verifies that the HAL returns
+ * one entry per advertised VIDEO plane, and finds each expected mapping by
+ * destinationPlaneIndex before comparing its source type and index.
  *
  * @param[in] planeMapping   Expected mappings to verify against.
  */
