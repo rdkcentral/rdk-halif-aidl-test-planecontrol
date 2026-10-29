@@ -107,6 +107,22 @@ void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlaneMapping
                 UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
     UT_ASSERT_TRUE(status.isOk());
     UT_ASSERT_EQUAL(retrievedMappings.size(), static_cast<size_t>(videoPlaneCount));
+    for (const auto& capability : capabilities)
+    {
+        if (capability.type != ::com::rdk::hal::planecontrol::PlaneType::VIDEO)
+        {
+            continue;
+        }
+
+        const auto mappingCount = std::count_if(
+            retrievedMappings.begin(), retrievedMappings.end(),
+            [&capability](const auto& mapping) {
+                return mapping.destinationPlaneIndex == capability.planeIndex;
+            });
+        UT_ASSERT_EQUAL(mappingCount, 1)
+            << "Expected exactly one mapping for VIDEO plane " << capability.planeIndex;
+    }
+
     for (const auto& expected : expectedMapping)
     {
         const auto actual = std::find_if(
@@ -265,10 +281,50 @@ void PlaneControlTest::run()
         return;
     }
 
+    if (mPlaneConfig.testName == "Planecontrol_Swapping" &&
+        mPlaneConfig.planeMappings.size() >= 2)
+    {
+        std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+        PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+        for (size_t mappingIndex = 0;
+             mappingIndex < mPlaneConfig.planeMappings.size();
+             ++mappingIndex)
+        {
+            const auto& destination = mPlaneConfig.planeMappings[mappingIndex];
+            const auto& rotatedSource = mPlaneConfig.planeMappings[
+                (mappingIndex + 1) % mPlaneConfig.planeMappings.size()];
+            const auto capability = std::find_if(
+                capabilities.begin(), capabilities.end(),
+                [&destination](const auto& candidate) {
+                    return candidate.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO &&
+                           candidate.planeIndex == destination.destinationPlaneIndex;
+                });
+            UT_ASSERT_NOT_EQUAL(capability, capabilities.end())
+                << "No VIDEO capability found for plane "
+                << destination.destinationPlaneIndex;
+            if (capability == capabilities.end())
+            {
+                return;
+            }
+
+            if (std::find(capability->sourceTypes.begin(),
+                          capability->sourceTypes.end(),
+                          rotatedSource.sourceType) == capability->sourceTypes.end())
+            {
+                UT_LOG_INFO(
+                    "Skipping Planecontrol_Swapping: VIDEO plane %d does not support rotated source type %d",
+                    destination.destinationPlaneIndex,
+                    static_cast<int>(rotatedSource.sourceType));
+                GTEST_SKIP() << "A rotated source type is unsupported by its destination VIDEO plane";
+                return;
+            }
+        }
+    }
+
     startInputSources();
 
     bool aidl_return = false;
-    const bool skipPreMapping = isGraphicsPlaneClientTest(mPlaneConfig.testName);
+    const bool skipPreMapping = isGraphicsPlaneTestName(mPlaneConfig.testName);
     if (!skipPreMapping)
     {
         UT_ASSERT_TRUE(!mPlaneConfig.planeMappings.empty())
@@ -313,6 +369,13 @@ void PlaneControlTest::run()
         aidl_return = false;
         if (mPlaneConfig.planeMappings.size() >= 2)
         {
+            auto unmapMappings = mPlaneConfig.planeMappings;
+            for (auto& mapping : unmapMappings)
+            {
+                mapping.destinationPlaneIndex = -1;
+            }
+            PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(unmapMappings, aidl_return);
+
             const auto firstSourceType = mPlaneConfig.planeMappings.front().sourceType;
             const auto firstSourceIndex = mPlaneConfig.planeMappings.front().sourceIndex;
             for (size_t i = 0; i < mPlaneConfig.planeMappings.size() - 1; i++)
