@@ -74,12 +74,31 @@ std::vector<int> videoPlaneIndex;
 std::vector<int> graphicsPlaneIndex;
 std::vector<com::rdk::hal::planecontrol::SourcePlaneMapping> planeMapping;
 
+static const planeControl_Cap* findPlaneProfile(int32_t planeIndex)
+{
+    for (const auto& cap : gPlaneControl_hfp)
+    {
+        if (cap.planeIndex == planeIndex)
+        {
+            return &cap;
+        }
+    }
+    return nullptr;
+}
+
 // ---------------------------------------------------------------------------
 // checkPlaneMappings
 // ---------------------------------------------------------------------------
 
 void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> expectedMapping)
 {
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+    const auto videoPlaneCount = std::count_if(
+        capabilities.begin(), capabilities.end(), [](const auto& capability) {
+            return capability.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO;
+        });
+
     std::vector<SourcePlaneMapping> retrievedMappings;
     UT_LOG_INFO("Calling getVideoSourceDestinationPlaneMapping(OUT:retrievedMappings[])");
     auto status = gPlaneControlservice->getVideoSourceDestinationPlaneMapping(&retrievedMappings);
@@ -87,13 +106,38 @@ void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlaneMapping
                 UT_Control_GetMapString(bool_mapTable, status.isOk()),
                 UT_Control_GetMapString(statusException_mapTable, status.exceptionCode()));
     UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_EQUAL(retrievedMappings.size(), expectedMapping.size());
-    for (size_t i = 0; i < expectedMapping.size(); ++i)
+    UT_ASSERT_EQUAL(retrievedMappings.size(), static_cast<size_t>(videoPlaneCount));
+    for (const auto& capability : capabilities)
     {
-        const auto& expected = expectedMapping[i];
-        const auto& actual   = retrievedMappings[i];
-        UT_ASSERT_EQUAL(expected.sourceIndex,            actual.sourceIndex);
-        UT_ASSERT_EQUAL(expected.destinationPlaneIndex,  actual.destinationPlaneIndex);
+        if (capability.type != ::com::rdk::hal::planecontrol::PlaneType::VIDEO)
+        {
+            continue;
+        }
+
+        const auto mappingCount = std::count_if(
+            retrievedMappings.begin(), retrievedMappings.end(),
+            [&capability](const auto& mapping) {
+                return mapping.destinationPlaneIndex == capability.planeIndex;
+            });
+        UT_ASSERT_EQUAL(mappingCount, 1)
+            << "Expected exactly one mapping for VIDEO plane " << capability.planeIndex;
+    }
+
+    for (const auto& expected : expectedMapping)
+    {
+        const auto actual = std::find_if(
+            retrievedMappings.begin(), retrievedMappings.end(),
+            [&expected](const auto& mapping) {
+                return mapping.destinationPlaneIndex == expected.destinationPlaneIndex;
+            });
+        UT_ASSERT_NOT_EQUAL(actual, retrievedMappings.end())
+            << "No mapping returned for VIDEO plane " << expected.destinationPlaneIndex;
+        if (actual == retrievedMappings.end())
+        {
+            continue;
+        }
+        UT_ASSERT_EQUAL(expected.sourceType, actual->sourceType);
+        UT_ASSERT_EQUAL(expected.sourceIndex, actual->sourceIndex);
     }
 }
 
@@ -101,8 +145,13 @@ void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlaneMapping
 // PlaneControlTest constructor
 // ---------------------------------------------------------------------------
 
-PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
-    : mPlaneConfig(planeConfig)
+PlaneControlTest::PlaneControlTest(
+    planeControlTestConfig_t planeConfig,
+    const std::vector<PlaneControlHDMIInputEntry>& hdmiInputList,
+    const std::vector<PlaneControlCompositeInputEntry>& compositeInputList)
+    : mPlaneConfig(std::move(planeConfig)),
+      mHDMIInputList(hdmiInputList),
+      mCompositeInputList(compositeInputList)
 {
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> videoCapabilities;
@@ -133,9 +182,21 @@ PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
 
         for (size_t mappingIndex = 0; mappingIndex < mPlaneConfig.planeMappings.size(); ++mappingIndex)
         {
-            const auto& capability = videoCapabilities[mappingIndex];
-            const auto& sourceTypes = capability.sourceTypes;
             const auto& configuredMapping = mPlaneConfig.planeMappings[mappingIndex];
+            if (configuredMapping.destinationPlaneIndex < 0 ||
+                static_cast<size_t>(configuredMapping.destinationPlaneIndex) >=
+                    videoCapabilities.size())
+            {
+                throw std::runtime_error(
+                    "Configured VIDEO plane slot " +
+                    std::to_string(configuredMapping.destinationPlaneIndex) +
+                    " is unavailable; platform advertises " +
+                    std::to_string(videoCapabilities.size()) + " VIDEO plane(s)");
+            }
+
+            const auto& capability =
+                videoCapabilities[configuredMapping.destinationPlaneIndex];
+            const auto& sourceTypes = capability.sourceTypes;
             const bool sourceSupported = std::find(sourceTypes.begin(), sourceTypes.end(),
                                                    configuredMapping.sourceType) != sourceTypes.end();
             if (!sourceSupported)
@@ -154,6 +215,59 @@ PlaneControlTest::PlaneControlTest(planeControlTestConfig_t planeConfig)
     }
 }
 
+PlaneControlTest::~PlaneControlTest()
+{
+    stopInputSources();
+}
+
+void PlaneControlTest::startInputSources()
+{
+    for (const auto& mapping : mPlaneConfig.planeMappings)
+    {
+        if (mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::HDMI)
+        {
+            if (std::find(mStartedHDMIInputs.begin(), mStartedHDMIInputs.end(),
+                          mapping.sourceIndex) != mStartedHDMIInputs.end())
+            {
+                continue;
+            }
+
+            if (startHdmiInputPath(mapping.sourceIndex))
+            {
+                mStartedHDMIInputs.push_back(mapping.sourceIndex);
+            }
+        }
+        else if (mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::COMPOSITE)
+        {
+            if (std::find(mStartedCompositeInputs.begin(), mStartedCompositeInputs.end(),
+                          mapping.sourceIndex) != mStartedCompositeInputs.end())
+            {
+                continue;
+            }
+
+            if (startCompositeInputPath(mapping.sourceIndex))
+            {
+                mStartedCompositeInputs.push_back(mapping.sourceIndex);
+            }
+        }
+    }
+}
+
+void PlaneControlTest::stopInputSources()
+{
+    for (const auto sourceIndex : mStartedHDMIInputs)
+    {
+        stopHdmiInputPath(sourceIndex);
+    }
+    mStartedHDMIInputs.clear();
+
+    for (const auto sourceIndex : mStartedCompositeInputs)
+    {
+        stopCompositeInputPath(sourceIndex);
+    }
+    mStartedCompositeInputs.clear();
+}
+
 // ---------------------------------------------------------------------------
 // PlaneControlTest::run
 // ---------------------------------------------------------------------------
@@ -167,8 +281,50 @@ void PlaneControlTest::run()
         return;
     }
 
+    if (mPlaneConfig.testName == "Planecontrol_Swapping" &&
+        mPlaneConfig.planeMappings.size() >= 2)
+    {
+        std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+        PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+        for (size_t mappingIndex = 0;
+             mappingIndex < mPlaneConfig.planeMappings.size();
+             ++mappingIndex)
+        {
+            const auto& destination = mPlaneConfig.planeMappings[mappingIndex];
+            const auto& rotatedSource = mPlaneConfig.planeMappings[
+                (mappingIndex + 1) % mPlaneConfig.planeMappings.size()];
+            const auto capability = std::find_if(
+                capabilities.begin(), capabilities.end(),
+                [&destination](const auto& candidate) {
+                    return candidate.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO &&
+                           candidate.planeIndex == destination.destinationPlaneIndex;
+                });
+            UT_ASSERT_NOT_EQUAL(capability, capabilities.end())
+                << "No VIDEO capability found for plane "
+                << destination.destinationPlaneIndex;
+            if (capability == capabilities.end())
+            {
+                return;
+            }
+
+            if (std::find(capability->sourceTypes.begin(),
+                          capability->sourceTypes.end(),
+                          rotatedSource.sourceType) == capability->sourceTypes.end())
+            {
+                UT_LOG_INFO(
+                    "Skipping Planecontrol_Swapping: VIDEO plane %d does not support rotated source type %d",
+                    destination.destinationPlaneIndex,
+                    static_cast<int>(rotatedSource.sourceType));
+                GTEST_SKIP() << "A rotated source type is unsupported by its destination VIDEO plane";
+                return;
+            }
+        }
+    }
+
+    startInputSources();
+
     bool aidl_return = false;
-    const bool skipPreMapping = isGraphicsPlaneClientTest(mPlaneConfig.testName);
+    const bool skipPreMapping = isGraphicsPlaneTestName(mPlaneConfig.testName);
     if (!skipPreMapping)
     {
         UT_ASSERT_TRUE(!mPlaneConfig.planeMappings.empty())
@@ -184,6 +340,23 @@ void PlaneControlTest::run()
         }
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
+        for (const auto& mapping : mPlaneConfig.planeMappings)
+        {
+            setAndVerifyIntProperty(
+                mapping.destinationPlaneIndex,
+                ::com::rdk::hal::planecontrol::Property::VISIBLE, 1);
+        }
+        if (mPlaneConfig.testName == "Planecontrol_Mapping")
+        {
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
+            char prompt[256];
+            snprintf(prompt, sizeof(prompt),
+                     "Validate %s: Is the mapped source visible on plane %d?",
+                     mPlaneConfig.testName.c_str(),
+                     mPlaneConfig.planeMappings.front().destinationPlaneIndex);
+            UT_ASSERT_TRUE(askUserYesNo(prompt));
+        }
         if (mPlaneConfig.testName != "Planecontrol_Mapping" &&
             mPlaneConfig.testName != "Planecontrol_Alpha")
         {
@@ -196,12 +369,24 @@ void PlaneControlTest::run()
         aidl_return = false;
         if (mPlaneConfig.planeMappings.size() >= 2)
         {
+            auto unmapMappings = mPlaneConfig.planeMappings;
+            for (auto& mapping : unmapMappings)
+            {
+                mapping.destinationPlaneIndex = -1;
+            }
+            PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(unmapMappings, aidl_return);
+
+            const auto firstSourceType = mPlaneConfig.planeMappings.front().sourceType;
+            const auto firstSourceIndex = mPlaneConfig.planeMappings.front().sourceIndex;
             for (size_t i = 0; i < mPlaneConfig.planeMappings.size() - 1; i++)
             {
-                SourcePlaneMapping temp = mPlaneConfig.planeMappings[i];
-                mPlaneConfig.planeMappings[i]     = mPlaneConfig.planeMappings[i + 1];
-                mPlaneConfig.planeMappings[i + 1] = temp;
+                mPlaneConfig.planeMappings[i].sourceType =
+                    mPlaneConfig.planeMappings[i + 1].sourceType;
+                mPlaneConfig.planeMappings[i].sourceIndex =
+                    mPlaneConfig.planeMappings[i + 1].sourceIndex;
             }
+            mPlaneConfig.planeMappings.back().sourceType = firstSourceType;
+            mPlaneConfig.planeMappings.back().sourceIndex = firstSourceIndex;
         }
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
@@ -258,6 +443,15 @@ void PlaneControlTest::run()
         aidl_return = false;
         for (const auto& map : mPlaneConfig.planeMappings)
         {
+            const planeControl_Cap* cap = findPlaneProfile(map.destinationPlaneIndex);
+            if (cap == nullptr || !cap->supportsZOrder)
+            {
+                UT_LOG_INFO("Skipping ZORDER for plane %d: supportsZOrder is false",
+                            map.destinationPlaneIndex);
+                GTEST_SKIP() << "Skipping ZORDER for plane " << map.destinationPlaneIndex << ": supportsZOrder is false";
+                continue;
+            }
+
             ::com::rdk::hal::PropertyValue propertyValue;
             for (uint32_t zorder = 0; zorder < mPlaneConfig.planeMappings.size(); zorder++)
             {
@@ -285,25 +479,19 @@ void PlaneControlTest::run()
         aidl_return = false;
         for (const auto& map : mPlaneConfig.planeMappings)
         {
-            ::com::rdk::hal::PropertyValue propertyValue;
             for (uint32_t visibility = 0; visibility < 2; visibility++)
             {
-                propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<
-                    ::com::rdk::hal::PropertyValue::Value::intValue>(visibility);
-                PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,
-                    ::com::rdk::hal::planecontrol::Property::VISIBLE, propertyValue, aidl_return);
+                setAndVerifyIntProperty(
+                    map.destinationPlaneIndex,
+                    ::com::rdk::hal::planecontrol::Property::VISIBLE, visibility);
                 std::this_thread::sleep_for(std::chrono::milliseconds(mPlaneConfig.delay_between_steps));
                 char prompt[256];
                 snprintf(prompt, sizeof(prompt),
-                         "Validate %s: did plane visibility changed?",
-                         mPlaneConfig.testName.c_str());
+                         "Validate %s: Is plane %d visible now?",
+                         mPlaneConfig.testName.c_str(), map.destinationPlaneIndex);
                 bool result = askUserYesNo(prompt);
                 UT_ASSERT_EQUAL(result, (bool)visibility);
             }
-            propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<
-                ::com::rdk::hal::PropertyValue::Value::intValue>(1);
-            PLANE_CONTROL_SET_PROPERTY_POS(map.destinationPlaneIndex,
-                ::com::rdk::hal::planecontrol::Property::VISIBLE, propertyValue, aidl_return);
         }
     }
     // Overscan
@@ -346,6 +534,8 @@ void PlaneControlTest::run()
 
         PlaneControlGraphicsController graphicsBackground;
         const int32_t graphicsPlane = graphicsPlaneIndex.front();
+        setAndVerifyIntProperty(
+            graphicsPlane, ::com::rdk::hal::planecontrol::Property::VISIBLE, 1);
         const bool connected = graphicsBackground.connectPlaneControlProvider(graphicsPlane);
         UT_ASSERT_TRUE(connected)
             << "Failed to connect graphics framebuffer provider for plane " << graphicsPlane;
@@ -389,6 +579,15 @@ void PlaneControlTest::run()
             }
 
             ::com::rdk::hal::PropertyValue propertyValue;
+            const planeControl_Cap* cap = findPlaneProfile(map.destinationPlaneIndex);
+            if (cap == nullptr || !cap->supportsAlpha)
+            {
+                UT_LOG_INFO("Skipping ALPHA for plane %d: supportsAlpha is false",
+                            map.destinationPlaneIndex);
+                GTEST_SKIP() << "Skipping ALPHA for plane " << map.destinationPlaneIndex << ": supportsAlpha is false";
+                continue;
+            }
+
             for (const uint32_t alpha : alphaLevels)
             {
                 propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<
@@ -498,6 +697,8 @@ void PlaneControlTest::run()
 
         for (const auto& index : graphicsPlaneIndex)
         {
+            setAndVerifyIntProperty(
+                index, ::com::rdk::hal::planecontrol::Property::VISIBLE, 1);
             if (clientMode)
             {
                 const GraphicsClientPattern clientPattern = getGraphicsClientPattern();
@@ -638,6 +839,8 @@ void PlaneControlTest::run()
     {
         // Vsync ToDo
     }
+
+    stopInputSources();
 }
 
 /** @} */ // End of Plane_Control_Halif_Test_TestClass

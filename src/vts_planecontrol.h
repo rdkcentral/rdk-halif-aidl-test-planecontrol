@@ -90,7 +90,11 @@
 #include "com/rdk/hal/planecontrol/BnGraphicsFbProviderListener.h"
 #include "com/rdk/hal/planecontrol/AspectRatio.h"
 #include "com/rdk/hal/planecontrol/BnPlaneControlListener.h"
+
+#include "vts_hdmiinput.h"
+#include "vts_compositeinput.h"
 #include "vts_helper_functions.h"
+
 
 using android::sp;
 using android::String16;
@@ -132,6 +136,14 @@ static uint32_t gNoGraphicsTypePlanes = 0;
 
 extern std::vector<planeControl_Cap> gPlaneControl_hfp;
 extern sp<IPlaneControl> gPlaneControlservice;
+
+inline bool PlaneSupportsSourceType(
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& capability,
+    ::com::rdk::hal::planecontrol::SourceType sourceType)
+{
+    return std::find(capability.sourceTypes.begin(), capability.sourceTypes.end(), sourceType) !=
+           capability.sourceTypes.end();
+}
 
 /**
  * @brief Global test configuration pointer for Plane Control tests.
@@ -186,6 +198,32 @@ bool ValidatePropertyList(uint32_t planeIndex, const std::vector<::com::rdk::hal
 
 void validateCapabilityMatch(const ::com::rdk::hal::planecontrol::PlaneCapabilities& actual,
     const planeControl_Cap& expected);
+
+// Full property list per plane type, before capability filtering.
+extern const std::vector<::com::rdk::hal::planecontrol::Property> videoProperties;
+extern const std::vector<::com::rdk::hal::planecontrol::Property> graphicProperties;
+
+// Geometry kept within the maxWidth/maxHeight/frameWidth/frameHeight limits reported by the plane.
+struct PlaneTestGeometry {
+    int32_t x;
+    int32_t y;
+    int32_t width;
+    int32_t height;
+};
+
+bool isPrimaryGraphicsPlane(const std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>& capabilities,
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane);
+bool planeSupportsProperty(const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane,
+    ::com::rdk::hal::planecontrol::Property property);
+bool planeSupportsProperty(const std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>& capabilities,
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane,
+    ::com::rdk::hal::planecontrol::Property property);
+std::vector<::com::rdk::hal::planecontrol::Property> getTestableProperties(
+    const std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities>& capabilities,
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane);
+PlaneTestGeometry getTestGeometry(const ::com::rdk::hal::planecontrol::PlaneCapabilities& plane);
+void setAndVerifyIntProperty(int32_t planeIndex,
+    ::com::rdk::hal::planecontrol::Property property, int32_t value);
 
 // Macro to iterate over all planes and filter by type (VIDEO or GRAPHICS)
 #define PLANE_CONTROL_FOREACH_PLANE_BY_TYPE(planeCount, planeTypeEnum, desiredType, planeIndexVar, body) \
@@ -785,6 +823,8 @@ static const char* PropertyToString(::com::rdk::hal::planecontrol::Property prop
         case ::com::rdk::hal::planecontrol::Property::HEIGHT: return "HEIGHT";
         case ::com::rdk::hal::planecontrol::Property::ZORDER: return "ZORDER";
         case ::com::rdk::hal::planecontrol::Property::ALPHA: return "ALPHA";
+        case ::com::rdk::hal::planecontrol::Property::VISIBLE: return "VISIBLE";
+        case ::com::rdk::hal::planecontrol::Property::OVERSCAN: return "OVERSCAN";
         case ::com::rdk::hal::planecontrol::Property::ASPECT_RATIO: return "ASPECT_RATIO";
         default: return "UNKNOWN";
     }
