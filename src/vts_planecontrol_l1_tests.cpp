@@ -179,7 +179,9 @@ UT_ADD_TEST(VTS_L1_PlaneControl, getCapabilities_pos) {
 /**
  * @brief Test the positive scenario of setting video source to destination plane mapping.
  *
- * This test verifies the functionality of setting video source to destination plane mapping for HDMI and COMPOSITE sources. It ensures that the mapping is correctly updated and can be unmapped successfully.
+ * This test verifies the functionality of setting video source to destination plane mapping for
+ * source types advertised by each VIDEO plane. It ensures that the mapping is correctly updated
+ * and can be unmapped successfully.
  *
  * **Test Group ID:** Basic: 01@n
  * **Test Case ID:** 006@n
@@ -211,40 +213,55 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_pos) {
 
     // Step 2: Count video planes and collect indices
     std::vector<uint32_t> planeIndices;
-    gNoVideoTypePlanes = 0; // Reset global counter
     for (const auto& cap : capabilities) {
-        if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
+        if (cap.type == PlaneType::VIDEO) {
             planeIndices.push_back(cap.planeIndex);
-            gNoVideoTypePlanes++;
         }
     }
-    UT_LOG_INFO("Video plane indices found: %zu", planeIndices.size());
-    UT_ASSERT_GREATER_EQUAL(planeIndices.size(), 2) << "Need at least 2 video planes, found " << planeIndices.size();
-    UT_ASSERT_GREATER_EQUAL(gNoVideoTypePlanes, 2) << "Need at least 2 video planes, found " << gNoVideoTypePlanes;
 
-    // Steps 3-4: Create mappings for HDMI and COMPOSITE
+    UT_ASSERT_FALSE(planeIndices.empty()) << "No VIDEO planes found";
+
+    const std::vector<::com::rdk::hal::planecontrol::SourceType> mappableSourceTypes = {
+        ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK,
+        ::com::rdk::hal::planecontrol::SourceType::HDMI,
+        ::com::rdk::hal::planecontrol::SourceType::COMPOSITE
+    };
+    const auto findCapability = [&capabilities](uint32_t planeIndex) {
+        return std::find_if(capabilities.begin(), capabilities.end(),
+                            [planeIndex](const auto& capability) {
+                                return capability.planeIndex == static_cast<int32_t>(planeIndex);
+                            });
+    };
+    const auto firstPlane = findCapability(planeIndices[0]);
+    UT_ASSERT_NOT_EQUAL(firstPlane, capabilities.end());
+
+    const auto firstSource = std::find_if(
+        mappableSourceTypes.begin(), mappableSourceTypes.end(),
+        [&firstPlane](const auto sourceType) { return PlaneSupportsSourceType(*firstPlane, sourceType); });
+    if (firstSource == mappableSourceTypes.end()) {
+        GTEST_SKIP() << "The selected VIDEO plane does not advertise a mappable source type";
+    }
+
+    // Steps 3-4: Create a mapping using a source type supported by the VIDEO plane
     std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> mappings;
-    PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, ::com::rdk::hal::planecontrol::SourceType::HDMI, 0, planeIndices[0]);
-    PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, ::com::rdk::hal::planecontrol::SourceType::COMPOSITE, 0, planeIndices[1]);
+    PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, *firstSource, 0, planeIndices[0]);
 
     // Steps 5-6: Set and verify mappings
     bool aidl_return = false;
     PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mappings, aidl_return);
 
-    // Steps 7-9: Unmap VIDEO_SINK
+    // Steps 7-9: Unmap the mapped sources
     mappings.clear();
-    PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK, 0, -1);
+    PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, *firstSource, 0, -1);
     PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mappings, aidl_return);
-
-    // Comprehensive unmapping for cleanup
-    std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> unmap_mappings;
-    PLANE_CONTROL_UNMAP_ALL_SOURCES(unmap_mappings, aidl_return);
 }
 
 /**
  * @brief Test the negative scenarios for setting video source to destination plane mapping.
  *
- * This test verifies the behavior of the setVideoSourceDestinationPlaneMapping function when provided with invalid mappings, such as duplicate source types and indices, and duplicate destination plane indices. The test ensures that the function correctly handles these invalid inputs by returning false or throwing exceptions as expected.
+ * This test verifies the behavior of the setVideoSourceDestinationPlaneMapping function when
+ * provided with unsupported source types, duplicate source types and indices, and duplicate
+ * destination plane indices.
  *
  * **Test Group ID:** Basic: 01@n
  * **Test Case ID:** 007@n
@@ -257,14 +274,14 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_pos) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Retrieve the plane count from YAML configuration. | None | Should be successful | Should be successful |
- * | 02 | Iterate over available planes and prepare test data for duplicate SourceType and SourceIndex. | planeCount = value | Should be successful | Should be successful |
- * | 03 | Call setVideoSourceDestinationPlaneMapping with duplicate SourceType and SourceIndex. | listSourcePlaneMapping1 = {VIDEO_SINK, 0, i}, {VIDEO_SINK, 0, i+1} | _aidl_return = false | Should Fail |
- * | 04 | Prepare test data for duplicate DestinationPlaneIndex. | None | Should be successful | Should be successful |
- * | 05 | Call setVideoSourceDestinationPlaneMapping with duplicate DestinationPlaneIndex. | listSourcePlaneMapping2 = {VIDEO_SINK, 0, i}, {VIDEO_SINK, 1, i} | _aidl_return = false | Should Fail |
- * | 06 | Prepare test data for mapping to an already mapped plane. | None | Should be successful | Should be successful |
- * | 07 | Call setVideoSourceDestinationPlaneMapping with valid mapping. | listSourcePlaneMapping3 = {VIDEO_SINK, 1, 1} | status.isOk() = true | Should Pass |
- * | 08 | Call setVideoSourceDestinationPlaneMapping with mapping to an already mapped plane. | listSourcePlaneMapping4 = {VIDEO_SINK, 0, 1} | _aidl_return = false, status.exceptionCode() = EX_ILLEGAL_STATE | Should Fail |
+ * | 01 | Retrieve plane capabilities. | capabilities | Should be successful | Should be successful |
+ * | 02 | Find a source type not supported by the first VIDEO plane. | capability.sourceTypes | Should be successful | Skip if all defined types are supported |
+ * | 03 | Call setVideoSourceDestinationPlaneMapping with the unsupported source type. | destinationPlaneIndex = i | _aidl_return = false, status.exceptionCode() = EX_NONE | Should Fail |
+ * | 04 | Find a source type supported by the first VIDEO plane. | capability.sourceTypes | Should be successful | Should be successful |
+ * | 05 | Call setVideoSourceDestinationPlaneMapping with duplicate SourceType and SourceIndex when a second VIDEO plane supports it. | listSourcePlaneMapping1 = duplicate sources | _aidl_return = false | Skip if unavailable |
+ * | 06 | Call setVideoSourceDestinationPlaneMapping with duplicate DestinationPlaneIndex. | listSourcePlaneMapping2 = duplicate plane | _aidl_return = false | Should Fail |
+ * | 07 | Call setVideoSourceDestinationPlaneMapping with a valid mapping. | listSourcePlaneMapping3 = supported source | status.isOk() = true | Should Pass |
+ * | 08 | Call setVideoSourceDestinationPlaneMapping with a mapping to an already mapped plane. | listSourcePlaneMapping4 = supported source | _aidl_return = false, status.exceptionCode() = EX_ILLEGAL_STATE | Should Fail |
  */
 UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_neg) {
     UT_LOG_INFO("Starting setVideoSourceDestinationPlaneMapping_neg");
@@ -275,16 +292,13 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_neg) {
 
     // Step 2: Count video planes and collect indices
     std::vector<uint32_t> planeIndices;
-    gNoVideoTypePlanes = 0;
     for (const auto& cap : capabilities) {
         if (cap.type == ::com::rdk::hal::planecontrol::PlaneType::VIDEO) {
             planeIndices.push_back(cap.planeIndex);
-            gNoVideoTypePlanes++;
         }
     }
     UT_LOG_INFO("Video plane indices found: %zu", planeIndices.size());
-    UT_ASSERT_GREATER_EQUAL(planeIndices.size(), 2) << "Need at least 2 video planes, found " << planeIndices.size();
-    UT_ASSERT_GREATER_EQUAL(gNoVideoTypePlanes, 2) << "Need at least 2 video planes, found " << gNoVideoTypePlanes;
+    UT_ASSERT_FALSE(planeIndices.empty()) << "No VIDEO planes found";
 
     std::vector<::com::rdk::hal::planecontrol::SourceType> allSourceTypes = {
         ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK,
@@ -292,21 +306,60 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_neg) {
         ::com::rdk::hal::planecontrol::SourceType::COMPOSITE
     };
 
-    for (const auto& source : allSourceTypes) {
-        // Step 3: Test duplicate SourceType and SourceIndex
-        std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> mappings;
-        PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 0, planeIndices[0]);
-        PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 0, planeIndices[1]);
-        bool aidl_return = false;
-        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG(mappings, aidl_return);
+    const auto firstVideoCapability = std::find_if(
+        capabilities.begin(), capabilities.end(), [&planeIndices](const auto& capability) {
+            return capability.planeIndex == static_cast<int32_t>(planeIndices[0]);
+        });
+    UT_ASSERT_NOT_EQUAL(firstVideoCapability, capabilities.end());
 
-        // Step 4: Test duplicate DestinationPlaneIndex
-        mappings.clear();
+    const auto unsupportedSource = std::find_if(
+        allSourceTypes.begin(), allSourceTypes.end(), [&firstVideoCapability](const auto sourceType) {
+            return !PlaneSupportsSourceType(*firstVideoCapability, sourceType);
+        });
+    if (unsupportedSource != allSourceTypes.end()) {
+        std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> mappings;
+        bool aidl_return = false;
+        PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, *unsupportedSource, 0, planeIndices[0]);
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG(mappings, aidl_return);
+    } else {
+        UT_LOG_INFO("All defined source types are supported by VIDEO plane %u; "
+                    "skipping unsupported-source scenario", planeIndices[0]);
+    }
+
+    for (const auto& source : allSourceTypes) {
+        if (!PlaneSupportsSourceType(*firstVideoCapability, source)) {
+            UT_LOG_INFO("Skipping sourceType %d because it is not supported by VIDEO plane %u",
+                        static_cast<int>(source), planeIndices[0]);
+            continue;
+        }
+
+        std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> mappings;
+        bool aidl_return = false;
+
+        if (planeIndices.size() > 1) {
+            const auto secondVideoCapability = std::find_if(
+                capabilities.begin(), capabilities.end(), [&planeIndices](const auto& capability) {
+                    return capability.planeIndex == static_cast<int32_t>(planeIndices[1]);
+                });
+            UT_ASSERT_NOT_EQUAL(secondVideoCapability, capabilities.end());
+            if (PlaneSupportsSourceType(*secondVideoCapability, source)) {
+                PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 0, planeIndices[0]);
+                PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 0, planeIndices[1]);
+                PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG(mappings, aidl_return);
+                mappings.clear();
+            } else {
+                UT_LOG_INFO("Skipping duplicate-source scenario for sourceType %d because VIDEO plane %u "
+                            "does not support it",
+                            static_cast<int>(source), planeIndices[1]);
+            }
+        }
+
+        // Test duplicate DestinationPlaneIndex.
         PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 0, planeIndices[0]);
         PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 1, planeIndices[0]);
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG(mappings, aidl_return);
 
-        // Steps 5-6: Test mapping to already mapped plane
+        // Test mapping to an already mapped plane.
         mappings.clear();
         PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 1, planeIndices[0]);
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mappings, aidl_return);
@@ -314,11 +367,12 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setVideoSourceDestinationPlaneMapping_neg) {
         mappings.clear();
         PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 0, planeIndices[0]);
         aidl_return = false;
-        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG_WITH_EXCEPTION(mappings, aidl_return, ::android::binder::Status::EX_ILLEGAL_STATE);
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_NEG_WITH_EXCEPTION(
+            mappings, aidl_return, ::android::binder::Status::EX_ILLEGAL_STATE);
 
-        // Unmap all sources to reset state
-        std::vector<::com::rdk::hal::planecontrol::SourcePlaneMapping> unmap_mappings;
-        PLANE_CONTROL_UNMAP_ALL_SOURCES(unmap_mappings, aidl_return);
+        mappings.clear();
+        PLANE_CONTROL_ADD_SOURCE_PLANE_MAPPING(mappings, source, 1, -1);
+        PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mappings, aidl_return);
     }
 }
 

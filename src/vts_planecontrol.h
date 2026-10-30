@@ -137,6 +137,14 @@ static uint32_t gNoGraphicsTypePlanes = 0;
 extern std::vector<planeControl_Cap> gPlaneControl_hfp;
 extern sp<IPlaneControl> gPlaneControlservice;
 
+inline bool PlaneSupportsSourceType(
+    const ::com::rdk::hal::planecontrol::PlaneCapabilities& capability,
+    ::com::rdk::hal::planecontrol::SourceType sourceType)
+{
+    return std::find(capability.sourceTypes.begin(), capability.sourceTypes.end(), sourceType) !=
+           capability.sourceTypes.end();
+}
+
 /**
  * @brief Global test configuration pointer for Plane Control tests.
  *

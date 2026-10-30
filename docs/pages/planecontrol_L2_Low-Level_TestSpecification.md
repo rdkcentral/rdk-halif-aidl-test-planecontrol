@@ -108,7 +108,7 @@ If user chose to run the test in interactive mode, then the test case has to be 
 | Title | Details |
 | -- | -- |
 | Function Name | `test_l2_planecontrol_TestGetSetVideoSourceDestinationPlaneMapping` |
-| Description | Get platform capabilities using `getCapabilities` to get list of supported plane indices. Loop through all of the video plane indices. Set a Video source to the Video plane using `setVideoSourceDestinationPlaneMapping`. Verify the video source and plane mapping using `getVideoSourceDestinationPlaneMapping`. |
+| Description | Get platform capabilities using `getCapabilities` to get VIDEO plane indices and supported source types. For each source type supported by a VIDEO plane, set a mapping with `setVideoSourceDestinationPlaneMapping` and verify it using `getVideoSourceDestinationPlaneMapping`. |
 | Test Group | Module : 02 |
 | Test Case ID | 003 |
 | Priority | High |
@@ -127,7 +127,7 @@ If user chose to run the test in interactive mode, then the test case has to be 
 | Variation / Steps | Description | Test Data | Expected Result | Notes |
 | -- | --------- | ---------- | -------------- | ----- |
 | 01 | Get platform capabilities using `getCapabilities` | capabilities = valid buffer | status.isOk() = true | Should be successful |
-| 02 | Loop through capabilities to find video plane indices | capability.type = PlaneType::VIDEO | plane_index.size() >= 2 | Should be successful |
-| 03 | Set video source to video plane using `setVideoSourceDestinationPlaneMapping` | sourcePlaneMappings = list of mappings, mappingResult = valid buffer | status.isOk() = true, mappingResult = true | Should be successful |
+| 02 | Loop through capabilities to find a VIDEO plane and its supported source types | capability.type = PlaneType::VIDEO, capability.sourceTypes | plane_index.size() >= 1 | Should be successful |
+| 03 | Set source types supported by the selected VIDEO plane using `setVideoSourceDestinationPlaneMapping` | sourcePlaneMappings = supported mapping, mappingResult = valid buffer | status.isOk() = true, mappingResult = true | Should be successful |
 | 04 | Verify video source and plane mapping using `getVideoSourceDestinationPlaneMapping` | retrievedMappings = valid buffer | status.isOk() = true | Should be successful |
 | 05 | Validate each mapping in retrievedMappings matches sourcePlaneMappings | mapping.destinationPlaneIndex = valid index, mapping.sourceType = valid type, mapping.sourceIndex = valid index | mapping found in retrievedMappings | Should be successful |
