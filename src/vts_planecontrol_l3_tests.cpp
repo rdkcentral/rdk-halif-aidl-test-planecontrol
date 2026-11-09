@@ -130,7 +130,6 @@ public:
     sp<ValidPlaneControlListener> mPlaneControlListener;
     bool aidlReturn = false;
     bool mPlaneListenerRegistered = false;
-    bool mIsTunnelSupported = false;
     IAVBufferHelper* mAVbufferHelper;
 
     void SetUp() override
@@ -188,26 +187,6 @@ public:
         {
             /*Get the Video Decoder IDs*/
             VIDEODECODER_MANAGER_GETVIDEODECODERIDS(videoDecoderIds);
-
-            // getSupportedOperationalModes() was removed in rdk-halif-aidl 0.23.0 (mode is vendor-selected).
-            // Use the operational modes declared for the platform in the video decoder HFP profile instead.
-            if (vts_videodecoder_parseVideoDecoderHFP() == UT_STATUS_OK)
-            {
-                for (const auto& decoder : gVideodecoders_hfp)
-                {
-                    if (std::find(decoder.supportedOperationalModes.begin(),
-                                  decoder.supportedOperationalModes.end(),
-                                  ::com::rdk::hal::OperationalMode::TUNNELLED) != decoder.supportedOperationalModes.end())
-                    {
-                        mIsTunnelSupported = true;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                UT_LOG_WARNING("Failed to parse video decoder HFP operational modes. Tunnel tests will be skipped.");
-            }
 
             android::ProcessState::self()->startThreadPool();
 
@@ -367,7 +346,7 @@ public:
     void runPlaneControlTest(videoDecoderTestConfiguration_t testConfig,
                              videoDecoderTestConfiguration_t sinkConfig,
                              planeControlTestConfig_t planeConfig,
-                             bool secureDecode, bool isTunnel)
+                             bool secureDecode)
     {
         try
         {
@@ -457,19 +436,19 @@ public:
 
                     bool isSinkAttached = (sinkHandle != nullptr);
                     const bool effectiveSecureDecode = secureDecode && decoderSupportsSecure;
-                    const bool effectiveTunnel = isTunnel && mIsTunnelSupported;
-                    UT_LOG_INFO("[DecoderID: %d] requested secure=%d tunnel=%d; using secure=%d tunnel=%d",
-                                decoderId.value, secureDecode, isTunnel,
-                                effectiveSecureDecode, effectiveTunnel);
+                    UT_LOG_INFO("[DecoderID: %d] requested secure=%d; using secure=%d",
+                                decoderId.value, secureDecode, effectiveSecureDecode);
                     decodeTest = std::make_unique<videoDecoderTest>(decoderId, decoderHandle, decoderControlListener,
                                            decoderEventListener, mAVBufferManager, effectiveSecureDecode,
-                                           effectiveTunnel, testConfig, mAVbufferHelper, isSinkAttached);
+                                           testConfig, mAVbufferHelper, isSinkAttached);
 
                     decoderControlListener->resetQueues();
                     sinkControlListener->resetFirstFrameRendered();
                     sinkEventListener->resetFirstFrameRendered();
 
-                    sinkThread = std::make_unique<std::thread>(&VideoSinkTest::run, sinkTest.get(), effectiveTunnel);
+                    // rdk-halif-aidl 0.23.0: the sink reads the vendor-selected mode on the first decoded frame
+                    VideoSinkTest* sink = sinkTest.get();
+                    sinkThread = std::make_unique<std::thread>([sink]() { sink->runWithDecoderMode(); });
                     decoderThread = std::make_unique<std::thread>(&videoDecoderTest::run, decodeTest.get(), true);
 
                     const bool firstFrameRendered =
@@ -572,7 +551,7 @@ public:
         }
     }
 
-    void runSingleProcessTest(const char *testName, bool secureDecode = false, bool isTunnel = false)
+    void runSingleProcessTest(const char *testName, bool secureDecode = false)
     {
         vector<videoDecoderTestConfiguration_t> decoderConfigs;
         vector<planeControlTestConfig_t> planeConfigs;
@@ -722,7 +701,7 @@ public:
                         continue;
                     }
                 }
-                runPlaneControlTest(decoderConfig, decoderConfig, planeConfig, secureDecode, isTunnel);
+                runPlaneControlTest(decoderConfig, decoderConfig, planeConfig, secureDecode);
             }
         }
     }
