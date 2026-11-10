@@ -431,7 +431,7 @@ public:
                         clockId.value = IAVClock::Id::UNDEFINED;
                     }
 
-                    sinkTest = std::make_unique<VideoSinkTest>(sinkId, sinkHandle, sinkControlListener, sinkEventListener,
+                    sinkTest = std::make_unique<VideoSinkTest>(sinkId, sinkHandle, decoderHandle, sinkControlListener, sinkEventListener,
                                        decoderControlListener, mAVBufferManager, decoderId, clockId, sinkConfig, false);
 
                     bool isSinkAttached = (sinkHandle != nullptr);
@@ -447,8 +447,7 @@ public:
                     sinkEventListener->resetFirstFrameRendered();
 
                     // rdk-halif-aidl 0.23.0: the sink reads the vendor-selected mode on the first decoded frame
-                    VideoSinkTest* sink = sinkTest.get();
-                    sinkThread = std::make_unique<std::thread>([sink]() { sink->runWithDecoderMode(); });
+                    sinkThread = std::make_unique<std::thread>(&VideoSinkTest::run, sinkTest.get());
                     decoderThread = std::make_unique<std::thread>(&videoDecoderTest::run, decodeTest.get(), true);
 
                     const bool firstFrameRendered =
