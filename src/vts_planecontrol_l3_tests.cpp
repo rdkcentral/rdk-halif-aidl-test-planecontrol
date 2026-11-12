@@ -450,41 +450,21 @@ public:
                     sinkThread = std::make_unique<std::thread>(&VideoSinkTest::run, sinkTest.get());
                     decoderThread = std::make_unique<std::thread>(&videoDecoderTest::run, decodeTest.get(), true);
 
-                    const bool firstFrameRendered =
-                        sinkControlListener->waitForFFR(std::chrono::seconds(10)) ||
-                        sinkEventListener->waitForFFR(std::chrono::seconds(10));
-                    if (!firstFrameRendered)
-                    {
-                        const std::string failMessage =
-                            "PlaneControl media path did not reach first-frame-rendered within timeout for decoder=" +
-                            std::to_string(decoderId.value) + " sink=" + std::to_string(sinkId.value) +
-                            " test=" + std::string(testConfig.streamName);
-
-                        if (sinkThread != nullptr && sinkThread->joinable())
-                        {
-                            sinkThread->join();
-                        }
-                        if (decoderThread != nullptr && decoderThread->joinable())
-                        {
-                            decoderThread->join();
-                        }
-                        if (decodeTest != nullptr)
-                        {
-                            decodeTest->closeDecoderSession();
-                        }
-
-                        UT_FAIL_FATAL(failMessage.c_str());
-                        return;
-                    }
-
-                    UT_LOG_INFO("First frame rendered for decoder=%d sink=%d; applying %s properties",
-                                decoderId.value, sinkId.value, planeConfig.testName.c_str());
+                    // rdk-halif-aidl 0.23.0: FFR is reported only once a video plane is mapped,
+                    // so it is waited for in PlaneControlTest::run() right after the mapping
 
                 }
                 try
                 {
                     PlaneControlTest planeControlTest(
                         planeConfig, mHDMIInputList, mCompositeInputList);
+                    if (sinkThread != nullptr)
+                    {
+                        planeControlTest.setFirstFrameRenderedWait([&]() {
+                            return sinkControlListener->waitForFFR(std::chrono::seconds(10)) ||
+                                   sinkEventListener->waitForFFR(std::chrono::seconds(10));
+                        });
+                    }
                     planeControlTest.run();
                 }
                 catch (...)
@@ -751,6 +731,10 @@ public:
         }
         mVideoSinkList.clear();
         mVideoDecoderList.clear();
+
+        /* rdk-halif-aidl 0.23.0: release the AV Buffer helper instance taken in SetUp() */
+        releaseAVBufferHelperInstance(mAVbufferHelper);
+        mAVbufferHelper = nullptr;
         //TODO: check right place to call joinThreadPool
         //android::IPCThreadState::self()->joinThreadPool();
 

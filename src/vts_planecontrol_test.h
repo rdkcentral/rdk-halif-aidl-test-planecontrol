@@ -56,6 +56,7 @@
 #include <condition_variable>
 #include <chrono>
 #include <vector>
+#include <functional>
 
 #include "vts_planecontrol.h"
 #include "vts_planecontrol_parse_testconfig.h"
@@ -199,6 +200,17 @@ public:
      */
     void run();
 
+    /**
+     * @brief Sets how to wait for the video sink's first frame rendered.
+     *
+     * rdk-halif-aidl 0.23.0: onFirstFrameRendered() is reported only once a video plane is mapped,
+     * so run() calls this right after mapping a VIDEO_SINK source. It returns true if FFR arrived.
+     */
+    void setFirstFrameRenderedWait(std::function<bool()> waitForFirstFrameRendered)
+    {
+        mWaitForFirstFrameRendered = std::move(waitForFirstFrameRendered);
+    }
+
 private:
     void startInputSources();
     void stopInputSources();
@@ -213,6 +225,7 @@ private:
     const std::vector<PlaneControlCompositeInputEntry>& mCompositeInputList;
     std::vector<int32_t> mStartedHDMIInputs;
     std::vector<int32_t> mStartedCompositeInputs;
+    std::function<bool()> mWaitForFirstFrameRendered;
 };
 
 #endif // __VTS_PLANECONTROL_TEST_H__
