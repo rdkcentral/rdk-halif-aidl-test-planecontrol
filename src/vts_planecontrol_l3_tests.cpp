@@ -130,8 +130,7 @@ public:
     sp<ValidPlaneControlListener> mPlaneControlListener;
     bool aidlReturn = false;
     bool mPlaneListenerRegistered = false;
-    bool mIsTunnelSupported = false;
-    IAVBufferHelper* mAVbufferHelper;
+    IAVBufferHelper* mAVbufferHelper = nullptr;
 
     void SetUp() override
     {
@@ -188,20 +187,6 @@ public:
         {
             /*Get the Video Decoder IDs*/
             VIDEODECODER_MANAGER_GETVIDEODECODERIDS(videoDecoderIds);
-
-            vector<videodecoder::OperationalMode> supportedModes;
-            Status operationalModeStatus =
-                gVideoDecoderManager->getSupportedOperationalModes(&supportedModes);
-            if (operationalModeStatus.isOk() &&
-                operationalModeStatus.exceptionCode() == Status::EX_NONE)
-            {
-                mIsTunnelSupported = std::find(supportedModes.begin(), supportedModes.end(),
-                    videodecoder::OperationalMode::TUNNELLED) != supportedModes.end();
-            }
-            else
-            {
-                UT_LOG_WARNING("Failed to query decoder operational modes. Tunnel tests will be skipped.");
-            }
 
             android::ProcessState::self()->startThreadPool();
 
@@ -361,7 +346,7 @@ public:
     void runPlaneControlTest(videoDecoderTestConfiguration_t testConfig,
                              videoDecoderTestConfiguration_t sinkConfig,
                              planeControlTestConfig_t planeConfig,
-                             bool secureDecode, bool isTunnel)
+                             bool secureDecode)
     {
         try
         {
@@ -446,61 +431,43 @@ public:
                         clockId.value = IAVClock::Id::UNDEFINED;
                     }
 
-                    sinkTest = std::make_unique<VideoSinkTest>(sinkId, sinkHandle, sinkControlListener, sinkEventListener,
-                                       decoderControlListener, mAVBufferManager, decoderId, clockId, sinkConfig, false);
+                    // planecontrol maps a video plane, so the sink reports first frame rendered once it is mapped
+                    const bool isPlaneMapped = true;
+                    sinkTest = std::make_unique<VideoSinkTest>(sinkId, sinkHandle, decoderHandle, sinkControlListener, sinkEventListener,
+                                       decoderControlListener, mAVBufferManager, decoderId, clockId, sinkConfig, false,
+                                       isPlaneMapped);
 
                     bool isSinkAttached = (sinkHandle != nullptr);
                     const bool effectiveSecureDecode = secureDecode && decoderSupportsSecure;
-                    const bool effectiveTunnel = isTunnel && mIsTunnelSupported;
-                    UT_LOG_INFO("[DecoderID: %d] requested secure=%d tunnel=%d; using secure=%d tunnel=%d",
-                                decoderId.value, secureDecode, isTunnel,
-                                effectiveSecureDecode, effectiveTunnel);
+                    UT_LOG_INFO("[DecoderID: %d] requested secure=%d; using secure=%d",
+                                decoderId.value, secureDecode, effectiveSecureDecode);
                     decodeTest = std::make_unique<videoDecoderTest>(decoderId, decoderHandle, decoderControlListener,
                                            decoderEventListener, mAVBufferManager, effectiveSecureDecode,
-                                           effectiveTunnel, testConfig, mAVbufferHelper, isSinkAttached);
+                                           testConfig, mAVbufferHelper, isSinkAttached);
 
                     decoderControlListener->resetQueues();
                     sinkControlListener->resetFirstFrameRendered();
                     sinkEventListener->resetFirstFrameRendered();
 
-                    sinkThread = std::make_unique<std::thread>(&VideoSinkTest::run, sinkTest.get(), effectiveTunnel);
-                    decoderThread = std::make_unique<std::thread>(&videoDecoderTest::run, decodeTest.get(), true);
+                    // rdk-halif-aidl 0.23.0: the sink reads the vendor-selected mode on the first decoded frame
+                    sinkThread = std::make_unique<std::thread>(&VideoSinkTest::run, sinkTest.get());
+                    decoderThread = std::make_unique<std::thread>(&videoDecoderTest::run, decodeTest.get());
 
-                    const bool firstFrameRendered =
-                        sinkControlListener->waitForFFR(std::chrono::seconds(10)) ||
-                        sinkEventListener->waitForFFR(std::chrono::seconds(10));
-                    if (!firstFrameRendered)
-                    {
-                        const std::string failMessage =
-                            "PlaneControl media path did not reach first-frame-rendered within timeout for decoder=" +
-                            std::to_string(decoderId.value) + " sink=" + std::to_string(sinkId.value) +
-                            " test=" + std::string(testConfig.streamName);
-
-                        if (sinkThread != nullptr && sinkThread->joinable())
-                        {
-                            sinkThread->join();
-                        }
-                        if (decoderThread != nullptr && decoderThread->joinable())
-                        {
-                            decoderThread->join();
-                        }
-                        if (decodeTest != nullptr)
-                        {
-                            decodeTest->closeDecoderSession();
-                        }
-
-                        UT_FAIL_FATAL(failMessage.c_str());
-                        return;
-                    }
-
-                    UT_LOG_INFO("First frame rendered for decoder=%d sink=%d; applying %s properties",
-                                decoderId.value, sinkId.value, planeConfig.testName.c_str());
+                    // rdk-halif-aidl 0.23.0: FFR is reported only once a video plane is mapped,
+                    // so it is waited for in PlaneControlTest::run() right after the mapping
 
                 }
                 try
                 {
                     PlaneControlTest planeControlTest(
                         planeConfig, mHDMIInputList, mCompositeInputList);
+                    if (sinkThread != nullptr)
+                    {
+                        planeControlTest.setFirstFrameRenderedWait([&]() {
+                            return sinkControlListener->waitForFFR(std::chrono::seconds(10)) ||
+                                   sinkEventListener->waitForFFR(std::chrono::seconds(10));
+                        });
+                    }
                     planeControlTest.run();
                 }
                 catch (...)
@@ -566,7 +533,7 @@ public:
         }
     }
 
-    void runSingleProcessTest(const char *testName, bool secureDecode = false, bool isTunnel = false)
+    void runSingleProcessTest(const char *testName, bool secureDecode = false)
     {
         vector<videoDecoderTestConfiguration_t> decoderConfigs;
         vector<planeControlTestConfig_t> planeConfigs;
@@ -716,7 +683,7 @@ public:
                         continue;
                     }
                 }
-                runPlaneControlTest(decoderConfig, decoderConfig, planeConfig, secureDecode, isTunnel);
+                runPlaneControlTest(decoderConfig, decoderConfig, planeConfig, secureDecode);
             }
         }
     }
@@ -767,6 +734,13 @@ public:
         }
         mVideoSinkList.clear();
         mVideoDecoderList.clear();
+
+        /* rdk-halif-aidl 0.23.0: release the AV Buffer helper instance taken in SetUp() (null if SetUp() failed early) */
+        if (mAVbufferHelper != nullptr)
+        {
+            releaseAVBufferHelperInstance(mAVbufferHelper);
+            mAVbufferHelper = nullptr;
+        }
         //TODO: check right place to call joinThreadPool
         //android::IPCThreadState::self()->joinThreadPool();
 

@@ -340,6 +340,25 @@ void PlaneControlTest::run()
         }
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
+
+        /* rdk-halif-aidl 0.23.0: the video sink reports first frame rendered once its plane is mapped */
+        const bool mapsVideoSink = std::any_of(
+            mPlaneConfig.planeMappings.begin(), mPlaneConfig.planeMappings.end(),
+            [](const auto& mapping) {
+                return mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK;
+            });
+        if (mapsVideoSink && mWaitForFirstFrameRendered)
+        {
+            if (!mWaitForFirstFrameRendered())
+            {
+                UT_ASSERT_TRUE(false) << "First frame rendered not received after mapping the video plane: "
+                                      << mPlaneConfig.testName;
+                return;
+            }
+            UT_LOG_INFO("First frame rendered after plane mapping; applying %s properties",
+                        mPlaneConfig.testName.c_str());
+        }
+
         for (const auto& mapping : mPlaneConfig.planeMappings)
         {
             setAndVerifyIntProperty(
