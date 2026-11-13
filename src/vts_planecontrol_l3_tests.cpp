@@ -431,8 +431,11 @@ public:
                         clockId.value = IAVClock::Id::UNDEFINED;
                     }
 
+                    // planecontrol maps a video plane, so the sink reports first frame rendered once it is mapped
+                    const bool isPlaneMapped = true;
                     sinkTest = std::make_unique<VideoSinkTest>(sinkId, sinkHandle, decoderHandle, sinkControlListener, sinkEventListener,
-                                       decoderControlListener, mAVBufferManager, decoderId, clockId, sinkConfig, false);
+                                       decoderControlListener, mAVBufferManager, decoderId, clockId, sinkConfig, false,
+                                       isPlaneMapped);
 
                     bool isSinkAttached = (sinkHandle != nullptr);
                     const bool effectiveSecureDecode = secureDecode && decoderSupportsSecure;
@@ -448,7 +451,7 @@ public:
 
                     // rdk-halif-aidl 0.23.0: the sink reads the vendor-selected mode on the first decoded frame
                     sinkThread = std::make_unique<std::thread>(&VideoSinkTest::run, sinkTest.get());
-                    decoderThread = std::make_unique<std::thread>(&videoDecoderTest::run, decodeTest.get(), true);
+                    decoderThread = std::make_unique<std::thread>(&videoDecoderTest::run, decodeTest.get());
 
                     // rdk-halif-aidl 0.23.0: FFR is reported only once a video plane is mapped,
                     // so it is waited for in PlaneControlTest::run() right after the mapping
