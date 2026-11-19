@@ -65,6 +65,7 @@
 #include "vts_videodecoder.h"
 #include "vts_planecontrol.h"
 #include "vts_planecontrol_test.h"
+#include "vts_hdmioutput.h"
 #include <algorithm>
 #include <condition_variable>
 #include <iterator>
@@ -126,6 +127,7 @@ public:
     vector<tuple<IVideoDecoder::Id, sp<IVideoDecoder>, sp<VideoDecoderControllerListener>, sp<VideoDecoderEventListener>, videodecoder::Capabilities*>> mVideoDecoderList;
     vector<PlaneControlHDMIInputEntry> mHDMIInputList;
     vector<PlaneControlCompositeInputEntry> mCompositeInputList;
+    vector<PlaneControlHDMIOutputEntry> mHDMIOutputList;
     sp<IAVBuffer> mAVBufferManager;
     sp<ValidPlaneControlListener> mPlaneControlListener;
     bool aidlReturn = false;
@@ -299,6 +301,30 @@ public:
             }
         }
 
+        /* HDMI outputs (STB display path), opened like the audio mixer test; a panel has none */
+        if (gHDMIOUTPUTHandle != NULL)
+        {
+            vector<hdmioutput::IHDMIOutput::Id> hdmiOutputIds;
+            HDMIOUTPUT_GET_HDMIOUTPUT_IDS(gHDMIOUTPUTHandle, hdmiOutputIds);
+            UT_LOG_INFO("HDMI Outputs Found: %d", static_cast<int>(hdmiOutputIds.size()));
+            for (const auto& id : hdmiOutputIds)
+            {
+                PlaneControlHDMIOutputEntry entry;
+                entry.id = id;
+                HDMIOUTPUT_GET_HDMIOUTPUT(gHDMIOUTPUTHandle, id, entry.output);
+                entry.controlListener = new HDMIOutputControllerListener();
+                entry.controlListener->setHDMIOutput(entry.output);
+                entry.eventListener = new HDMIOutputEventListener();
+
+                bool registerResult = false;
+                HDMIOUTPUT_REGISTER_EVENT_LISTENER(entry.output, entry.eventListener, registerResult);
+                UT_ASSERT_TRUE(registerResult);
+                HDMIOUTPUT_OPEN(entry.output, entry.controlListener, entry.controller);
+                UT_ASSERT_NOT_EQUAL(entry.controller, nullptr);
+                mHDMIOutputList.push_back(std::move(entry));
+            }
+        }
+
 
         ::android::binder::Status planeListenerStatus =
             gPlaneControlservice->registerListener(mPlaneControlListener, &aidlReturn);
@@ -460,7 +486,7 @@ public:
                 try
                 {
                     PlaneControlTest planeControlTest(
-                        planeConfig, mHDMIInputList, mCompositeInputList);
+                        planeConfig, mHDMIInputList, mCompositeInputList, mHDMIOutputList);
                     if (sinkThread != nullptr)
                     {
                         planeControlTest.setFirstFrameRenderedWait([&]() {
@@ -547,6 +573,57 @@ public:
         {
             std::string errorMsg = std::string("No valid plane control test configurations found - missing test streams or invalid configuration for test: ") + testName;
             UT_FAIL_FATAL(errorMsg.c_str());
+            return;
+        }
+
+        /* Skip steps whose HDMI / composite input is not available or not connected (test setup, not HAL
+         * behaviour; same as the audio mixer test) */
+        planeConfigs.erase(
+            std::remove_if(planeConfigs.begin(), planeConfigs.end(),
+                [this](const auto& planeConfig)
+                {
+                    for (const auto& mapping : planeConfig.planeMappings)
+                    {
+                        if (mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::HDMI)
+                        {
+                            const auto input = std::find_if(mHDMIInputList.begin(), mHDMIInputList.end(),
+                                [&mapping](const auto& entry) { return entry.id.value == mapping.sourceIndex; });
+                            bool connected = false;
+                            if (input != mHDMIInputList.end())
+                            {
+                                HDMIINPUT_GETCONNECTIONSTATE(input->controller, connected);
+                            }
+                            if (!connected)
+                            {
+                                UT_LOG_WARNING("Skipping step: HDMI input %d is not available or not connected",
+                                               mapping.sourceIndex);
+                                return true;
+                            }
+                        }
+                        else if (mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::COMPOSITE)
+                        {
+                            const auto input = std::find_if(mCompositeInputList.begin(), mCompositeInputList.end(),
+                                [&mapping](const auto& entry) { return entry.portId == mapping.sourceIndex; });
+                            compositeinput::PortStatus portStatus;
+                            portStatus.connected = false;
+                            if (input != mCompositeInputList.end())
+                            {
+                                COMPOSITEINPUT_GET_STATUS(input->inputPort, portStatus);
+                            }
+                            if (!portStatus.connected)
+                            {
+                                UT_LOG_WARNING("Skipping step: composite input %d is not available or not connected",
+                                               mapping.sourceIndex);
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }),
+            planeConfigs.end());
+        if (planeConfigs.empty())
+        {
+            UT_IGNORE_TEST() << "No step left to run: the required HDMI / composite inputs are not connected";
             return;
         }
 
@@ -713,6 +790,17 @@ public:
             COMPOSITEINPUT_UNREGISTER_EVENT_LISTENER(entry.inputPort, entry.eventListener);
         }
         mCompositeInputList.clear();
+
+        for (auto& entry : mHDMIOutputList)
+        {
+            bool closeResult = false;
+            HDMIOUTPUT_CLOSE(entry.output, entry.controller, closeResult);
+            UT_ASSERT_TRUE(closeResult);
+            bool unregisterResult = false;
+            HDMIOUTPUT_UNREGISTER_EVENT_LISTENER(entry.output, entry.eventListener, unregisterResult);
+            UT_ASSERT_TRUE(unregisterResult);
+        }
+        mHDMIOutputList.clear();
 
         if (mPlaneControlListener != nullptr)
         {

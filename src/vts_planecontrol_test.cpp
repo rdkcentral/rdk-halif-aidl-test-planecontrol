@@ -148,10 +148,12 @@ void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlaneMapping
 PlaneControlTest::PlaneControlTest(
     planeControlTestConfig_t planeConfig,
     const std::vector<PlaneControlHDMIInputEntry>& hdmiInputList,
-    const std::vector<PlaneControlCompositeInputEntry>& compositeInputList)
+    const std::vector<PlaneControlCompositeInputEntry>& compositeInputList,
+    const std::vector<PlaneControlHDMIOutputEntry>& hdmiOutputList)
     : mPlaneConfig(std::move(planeConfig)),
       mHDMIInputList(hdmiInputList),
-      mCompositeInputList(compositeInputList)
+      mCompositeInputList(compositeInputList),
+      mHDMIOutputList(hdmiOutputList)
 {
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> videoCapabilities;
@@ -218,6 +220,7 @@ PlaneControlTest::PlaneControlTest(
 PlaneControlTest::~PlaneControlTest()
 {
     stopInputSources();
+    stopOutputPaths();
 }
 
 void PlaneControlTest::startInputSources()
@@ -321,6 +324,7 @@ void PlaneControlTest::run()
         }
     }
 
+    startOutputPaths();
     startInputSources();
 
     bool aidl_return = false;
@@ -860,6 +864,7 @@ void PlaneControlTest::run()
     }
 
     stopInputSources();
+    stopOutputPaths();
 }
 
 /** @} */ // End of Plane_Control_Halif_Test_TestClass
