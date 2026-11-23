@@ -28,13 +28,15 @@
 bool waitForHDMIOutputState(const android::sp<hdmioutput::IHDMIOutput>& output, hdmioutput::State target, int32_t timeoutMs)
 {
     hdmioutput::State state = hdmioutput::State::UNKNOWN;
-    for (int32_t waitedMs = 0; ; waitedMs += 10)
+    /* steady-clock deadline, so the time spent in getState() also counts toward the timeout */
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+    while (true)
     {
         if (output->getState(&state).isOk() && state == target)
         {
             return true;
         }
-        if (waitedMs >= timeoutMs)
+        if (std::chrono::steady_clock::now() >= deadline)
         {
             break;
         }

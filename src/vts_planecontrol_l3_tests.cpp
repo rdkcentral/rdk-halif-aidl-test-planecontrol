@@ -807,6 +807,8 @@ public:
             bool closeResult = false;
             HDMIOUTPUT_CLOSE(entry.output, entry.controller, closeResult);
             UT_ASSERT_TRUE(closeResult);
+            /* close() goes through CLOSING; the next SetUp() opens only outputs in CLOSED */
+            waitForHDMIOutputState(entry.output, hdmioutput::State::CLOSED);
             bool unregisterResult = false;
             HDMIOUTPUT_UNREGISTER_EVENT_LISTENER(entry.output, entry.eventListener, unregisterResult);
             UT_ASSERT_TRUE(unregisterResult);
