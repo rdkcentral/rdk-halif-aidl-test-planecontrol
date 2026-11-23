@@ -25,6 +25,26 @@
 #include <chrono>
 #include <thread>
 
+bool waitForHDMIOutputState(const android::sp<hdmioutput::IHDMIOutput>& output, hdmioutput::State target, int32_t timeoutMs)
+{
+    hdmioutput::State state = hdmioutput::State::UNKNOWN;
+    for (int32_t waitedMs = 0; ; waitedMs += 10)
+    {
+        if (output->getState(&state).isOk() && state == target)
+        {
+            return true;
+        }
+        if (waitedMs >= timeoutMs)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    UT_LOG_WARNING("HDMI output did not reach state %d within %d ms (state %d)",
+                   static_cast<int>(target), timeoutMs, static_cast<int>(state));
+    return false;
+}
+
 /* STB display path (same as the audio mixer test): the planes are shown on the HDMI output, so before the test
  * each HDMI output with a connected display (HPD) is started (IHDMIOutputController.start(), allowed only in READY).
  * Outputs already running are left as they are; only the outputs started here are stopped afterwards. */
@@ -48,6 +68,8 @@ void PlaneControlTest::stopOutputPaths()
         if (output != mHDMIOutputList.end())
         {
             HDMIOUTPUT_STOP(output->controller);
+            /* stop() goes through STOPPING; close() at teardown needs READY */
+            waitForHDMIOutputState(output->output, hdmioutput::State::READY);
         }
     }
     mStartedHDMIOutputs.clear();
@@ -82,9 +104,15 @@ bool PlaneControlTest::startHdmiOutputPath(const PlaneControlHDMIOutputEntry& ou
 
     hdmioutput::State state = hdmioutput::State::UNKNOWN;
     HDMIOUTPUT_GET_STATE(output.output, state);
-    if (state != hdmioutput::State::READY)
+    if (state == hdmioutput::State::STARTED)
     {
-        UT_LOG_INFO("HDMI output %d is in state %d (not READY), left as it is", output.id.value, static_cast<int>(state));
+        UT_LOG_INFO("HDMI output %d is already started, left as it is", output.id.value);
+        return false;
+    }
+    /* start() is allowed only in READY: wait if the output is still in a transitional state (OPENING/STOPPING) */
+    if (state != hdmioutput::State::READY && !waitForHDMIOutputState(output.output, hdmioutput::State::READY))
+    {
+        UT_LOG_WARNING("HDMI output %d is not READY, output not started", output.id.value);
         return false;
     }
 

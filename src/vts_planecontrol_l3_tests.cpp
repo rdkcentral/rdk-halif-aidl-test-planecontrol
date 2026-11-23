@@ -312,6 +312,15 @@ public:
                 PlaneControlHDMIOutputEntry entry;
                 entry.id = id;
                 HDMIOUTPUT_GET_HDMIOUTPUT(gHDMIOUTPUTHandle, id, entry.output);
+                /* open() is allowed only in CLOSED: an output already in use is left out (neither opened nor closed here) */
+                hdmioutput::State state = hdmioutput::State::UNKNOWN;
+                HDMIOUTPUT_GET_STATE(entry.output, state);
+                if (state != hdmioutput::State::CLOSED)
+                {
+                    UT_LOG_WARNING("HDMI output %d is already in use (state %d), not opened by the test",
+                                   id.value, static_cast<int>(state));
+                    continue;
+                }
                 entry.controlListener = new HDMIOutputControllerListener();
                 entry.controlListener->setHDMIOutput(entry.output);
                 entry.eventListener = new HDMIOutputEventListener();
@@ -321,6 +330,8 @@ public:
                 UT_ASSERT_TRUE(registerResult);
                 HDMIOUTPUT_OPEN(entry.output, entry.controlListener, entry.controller);
                 UT_ASSERT_NOT_EQUAL(entry.controller, nullptr);
+                /* open() goes through OPENING; start() needs READY */
+                waitForHDMIOutputState(entry.output, hdmioutput::State::READY);
                 mHDMIOutputList.push_back(std::move(entry));
             }
         }

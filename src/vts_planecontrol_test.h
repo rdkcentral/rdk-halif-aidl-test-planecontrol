@@ -69,6 +69,11 @@
 class HDMIOutputControllerListener;
 class HDMIOutputEventListener;
 
+#define HDMI_OUTPUT_STATE_WAIT_MS 2000  /* ms — bounded wait for an HDMI output to leave a transitional state */
+/* Waits until the HDMI output reaches the given state; returns false on timeout */
+bool waitForHDMIOutputState(const android::sp<::com::rdk::hal::hdmioutput::IHDMIOutput>& output,
+                            ::com::rdk::hal::hdmioutput::State target, int32_t timeoutMs = HDMI_OUTPUT_STATE_WAIT_MS);
+
 struct PlaneControlHDMIInputEntry
 {
     hdmiinput::IHDMIInput::Id id;
