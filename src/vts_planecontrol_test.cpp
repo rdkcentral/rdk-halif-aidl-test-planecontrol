@@ -86,6 +86,21 @@ static const planeControl_Cap* findPlaneProfile(int32_t planeIndex)
     return nullptr;
 }
 
+/* Advertised capabilities of the plane with the given index; false if the plane is not advertised */
+static bool getPlaneCapability(int32_t planeIndex, ::com::rdk::hal::planecontrol::PlaneCapabilities& planeCapability)
+{
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+    const auto capability = std::find_if(capabilities.begin(), capabilities.end(),
+        [planeIndex](const auto& entry) { return entry.planeIndex == planeIndex; });
+    if (capability == capabilities.end())
+    {
+        return false;
+    }
+    planeCapability = *capability;
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // checkPlaneMappings
 // ---------------------------------------------------------------------------
@@ -665,6 +680,17 @@ void PlaneControlTest::run()
                 continue;
             }
             std::pair<uint32_t, uint32_t> position = mPlaneConfig.positions[i];
+            /* X and Y are coordinates inside the plane's frame (PlaneCapabilities.frameWidth / frameHeight) */
+            ::com::rdk::hal::planecontrol::PlaneCapabilities planeCapability;
+            if (getPlaneCapability(map.destinationPlaneIndex, planeCapability) &&
+                (position.first >= static_cast<uint32_t>(planeCapability.frameWidth) ||
+                 position.second >= static_cast<uint32_t>(planeCapability.frameHeight)))
+            {
+                UT_LOG_WARNING("Skipping position X=%u, Y=%u for planeIndex=%d: outside its frame %dx%d",
+                               position.first, position.second, map.destinationPlaneIndex,
+                               planeCapability.frameWidth, planeCapability.frameHeight);
+                continue;
+            }
             std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
             PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::X, position.first);
             PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::Y, position.second);
@@ -690,8 +716,19 @@ void PlaneControlTest::run()
         }
 
         const auto& map = mPlaneConfig.planeMappings.front();
+        ::com::rdk::hal::planecontrol::PlaneCapabilities planeCapability;
+        const bool hasCapability = getPlaneCapability(map.destinationPlaneIndex, planeCapability);
         for (const auto& size : mPlaneConfig.size)
         {
+            /* The plane can be set only up to its advertised size (PlaneCapabilities.maxWidth / maxHeight) */
+            if (hasCapability && (size.first > static_cast<uint32_t>(planeCapability.maxHeight) ||
+                                  size.second > static_cast<uint32_t>(planeCapability.maxWidth)))
+            {
+                UT_LOG_WARNING("Skipping size %ux%u for planeIndex=%d: above its maximum %dx%d",
+                               size.second, size.first, map.destinationPlaneIndex,
+                               planeCapability.maxWidth, planeCapability.maxHeight);
+                continue;
+            }
             ::com::rdk::hal::PropertyValue propertyValue;
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<
                 ::com::rdk::hal::PropertyValue::Value::intValue>(size.first);

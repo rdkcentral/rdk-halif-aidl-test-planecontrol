@@ -698,7 +698,8 @@ public:
                         planeConfigs.size(), combinedConfig.size.size());
             planeConfigs.assign(1, std::move(combinedConfig));
         }
-        if (std::strcmp(testName, "Planecontrol_Mapping") == 0)
+        /* Steps that map a source type the destination VIDEO plane does not advertise (PlaneCapabilities.sourceTypes)
+         * are skipped for every test, like the HDMI / composite connection filter above */
         {
             std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
             PLANE_CONTROL_GET_CAPABILITIES(capabilities);
@@ -715,6 +716,10 @@ public:
                     {
                         for (const auto& mapping : planeConfig.planeMappings)
                         {
+                            if (mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::NONE)
+                            {
+                                continue; /* no source mapped (e.g. graphics plane tests) */
+                            }
                             if (mapping.destinationPlaneIndex < 0 ||
                                 static_cast<size_t>(mapping.destinationPlaneIndex) >=
                                     videoCapabilities.size())
@@ -745,6 +750,11 @@ public:
                         return false;
                     }),
                 planeConfigs.end());
+            if (planeConfigs.empty())
+            {
+                UT_IGNORE_TEST() << "No step left to run: the configured source types are not supported by the planes";
+                return;
+            }
         }
         for (size_t i = 0; i < decoderConfigs.size(); ++i)
         {
