@@ -718,6 +718,7 @@ void PlaneControlTest::run()
         const auto& map = mPlaneConfig.planeMappings.front();
         ::com::rdk::hal::planecontrol::PlaneCapabilities planeCapability;
         const bool hasCapability = getPlaneCapability(map.destinationPlaneIndex, planeCapability);
+        size_t sizesExercised = 0;
         for (const auto& size : mPlaneConfig.size)
         {
             /* The plane can be set only up to its advertised size (PlaneCapabilities.maxWidth / maxHeight) */
@@ -729,6 +730,7 @@ void PlaneControlTest::run()
                                planeCapability.maxWidth, planeCapability.maxHeight);
                 continue;
             }
+            ++sizesExercised;
             ::com::rdk::hal::PropertyValue propertyValue;
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<
                 ::com::rdk::hal::PropertyValue::Value::intValue>(size.first);
@@ -747,6 +749,11 @@ void PlaneControlTest::run()
             UT_LOG_INFO("WindowSize validation completed for planeIndex=%d: result=%s",
                         map.destinationPlaneIndex, result ? "yes" : "no");
             UT_ASSERT_TRUE(result);
+        }
+        if (sizesExercised == 0)
+        {
+            UT_IGNORE_TEST() << "No configured window size is supported by planeIndex=" << map.destinationPlaneIndex;
+            return;
         }
     }
     // Graphics plane tests (Client and Auto modes)

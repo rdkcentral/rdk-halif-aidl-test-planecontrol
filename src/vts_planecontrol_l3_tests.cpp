@@ -684,20 +684,6 @@ public:
             UT_FAIL_FATAL("No decoder configurations found for Plane Control test");
             return;
         }
-        if (std::strcmp(testName, "Planecontrol_WindowSize") == 0 &&
-            planeConfigs.size() > 1)
-        {
-            auto combinedConfig = planeConfigs.front();
-            for (size_t configIndex = 1; configIndex < planeConfigs.size(); ++configIndex)
-            {
-                combinedConfig.size.insert(combinedConfig.size.end(),
-                                           planeConfigs[configIndex].size.begin(),
-                                           planeConfigs[configIndex].size.end());
-            }
-            UT_LOG_INFO("Combined %zu WindowSize configurations into one media session with %zu size steps",
-                        planeConfigs.size(), combinedConfig.size.size());
-            planeConfigs.assign(1, std::move(combinedConfig));
-        }
         /* Steps that map a source type the destination VIDEO plane does not advertise (PlaneCapabilities.sourceTypes)
          * are skipped for every test, like the HDMI / composite connection filter above */
         {
@@ -755,6 +741,21 @@ public:
                 UT_IGNORE_TEST() << "No step left to run: the configured source types are not supported by the planes";
                 return;
             }
+        }
+        /* Combine after the capability filter so a supported mapping becomes the session's base */
+        if (std::strcmp(testName, "Planecontrol_WindowSize") == 0 &&
+            planeConfigs.size() > 1)
+        {
+            auto combinedConfig = planeConfigs.front();
+            for (size_t configIndex = 1; configIndex < planeConfigs.size(); ++configIndex)
+            {
+                combinedConfig.size.insert(combinedConfig.size.end(),
+                                           planeConfigs[configIndex].size.begin(),
+                                           planeConfigs[configIndex].size.end());
+            }
+            UT_LOG_INFO("Combined %zu WindowSize configurations into one media session with %zu size steps",
+                        planeConfigs.size(), combinedConfig.size.size());
+            planeConfigs.assign(1, std::move(combinedConfig));
         }
         for (size_t i = 0; i < decoderConfigs.size(); ++i)
         {
