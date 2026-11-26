@@ -783,7 +783,7 @@ UT_ADD_TEST(VTS_L1_PlaneControl, setProperty_neg) {
 
     // Step 7: Test with invalid property value type
     ::com::rdk::hal::PropertyValue invalidTypeValue;
-    invalidTypeValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::stringValue>(::android::String16("InvalidType"));
+    invalidTypeValue.value = ::com::rdk::hal::PropertyValue::Value::make<::com::rdk::hal::PropertyValue::Value::stringValue>(std::string("InvalidType"));
     PLANE_CONTROL_SET_PROPERTY_NEG(validPlaneResourceIndex, ::com::rdk::hal::planecontrol::Property::HEIGHT, invalidTypeValue, aidl_return, ::android::binder::Status::EX_ILLEGAL_ARGUMENT);
 
     // Step 8: Test properties and values rejected by the reported capabilities

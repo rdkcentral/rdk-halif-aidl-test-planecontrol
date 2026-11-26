@@ -56,11 +56,23 @@
 #include <condition_variable>
 #include <chrono>
 #include <vector>
+#include <functional>
 
 #include "vts_planecontrol.h"
 #include "vts_planecontrol_parse_testconfig.h"
 #include "vts_planecontrol_graphicscontroller.h"
 #include "vts_videosink.h"
+/* HDMI output types only: vts_hdmioutput.h (with its 'using namespace hdmioutput') is included by the .cpp files
+ * that use it, otherwise names like PixelFormat become ambiguous for the files including this header */
+#include "com/rdk/hal/hdmioutput/IHDMIOutput.h"
+#include "com/rdk/hal/hdmioutput/IHDMIOutputController.h"
+class HDMIOutputControllerListener;
+class HDMIOutputEventListener;
+
+#define HDMI_OUTPUT_STATE_WAIT_MS 2000  /* ms — bounded wait for an HDMI output to leave a transitional state */
+/* Waits until the HDMI output reaches the given state; returns false on timeout */
+bool waitForHDMIOutputState(const android::sp<::com::rdk::hal::hdmioutput::IHDMIOutput>& output,
+                            ::com::rdk::hal::hdmioutput::State target, int32_t timeoutMs = HDMI_OUTPUT_STATE_WAIT_MS);
 
 struct PlaneControlHDMIInputEntry
 {
@@ -70,6 +82,16 @@ struct PlaneControlHDMIInputEntry
     android::sp<HDMIInputEventListener> eventListener;
     android::sp<hdmiinput::IHDMIInputController> controller;
     hdmiinput::Capabilities capabilities;
+};
+
+/* HDMI output (STB display path), opened by the L3 suite like the HDMI inputs (same as the audio mixer test) */
+struct PlaneControlHDMIOutputEntry
+{
+    ::com::rdk::hal::hdmioutput::IHDMIOutput::Id id;
+    android::sp<::com::rdk::hal::hdmioutput::IHDMIOutput> output;
+    android::sp<HDMIOutputControllerListener> controlListener;
+    android::sp<HDMIOutputEventListener> eventListener;
+    android::sp<::com::rdk::hal::hdmioutput::IHDMIOutputController> controller;
 };
 
 struct PlaneControlCompositeInputEntry
@@ -187,7 +209,8 @@ public:
     PlaneControlTest(
         planeControlTestConfig_t planeConfig,
         const std::vector<PlaneControlHDMIInputEntry>& hdmiInputList,
-        const std::vector<PlaneControlCompositeInputEntry>& compositeInputList);
+        const std::vector<PlaneControlCompositeInputEntry>& compositeInputList,
+        const std::vector<PlaneControlHDMIOutputEntry>& hdmiOutputList);
     ~PlaneControlTest();
 
     /**
@@ -199,6 +222,17 @@ public:
      */
     void run();
 
+    /**
+     * @brief Sets how to wait for the video sink's first frame rendered.
+     *
+     * rdk-halif-aidl 0.23.0: onFirstFrameRendered() is reported only once a video plane is mapped,
+     * so run() calls this right after mapping a VIDEO_SINK source. It returns true if FFR arrived.
+     */
+    void setFirstFrameRenderedWait(std::function<bool()> waitForFirstFrameRendered)
+    {
+        mWaitForFirstFrameRendered = std::move(waitForFirstFrameRendered);
+    }
+
 private:
     void startInputSources();
     void stopInputSources();
@@ -206,13 +240,19 @@ private:
     void stopHdmiInputPath(int32_t hdmiInputIndex);
     bool startCompositeInputPath(int32_t compositeInputIndex);
     void stopCompositeInputPath(int32_t compositeInputIndex);
+    void startOutputPaths();
+    void stopOutputPaths();
+    bool startHdmiOutputPath(const PlaneControlHDMIOutputEntry& output);
 
     ::com::rdk::hal::videosink::IVideoSink::Id mSinkId;
     planeControlTestConfig_t                   mPlaneConfig;
     const std::vector<PlaneControlHDMIInputEntry>& mHDMIInputList;
     const std::vector<PlaneControlCompositeInputEntry>& mCompositeInputList;
+    const std::vector<PlaneControlHDMIOutputEntry>& mHDMIOutputList;
+    std::vector<int32_t> mStartedHDMIOutputs;
     std::vector<int32_t> mStartedHDMIInputs;
     std::vector<int32_t> mStartedCompositeInputs;
+    std::function<bool()> mWaitForFirstFrameRendered;
 };
 
 #endif // __VTS_PLANECONTROL_TEST_H__

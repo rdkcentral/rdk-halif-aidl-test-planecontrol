@@ -86,6 +86,21 @@ static const planeControl_Cap* findPlaneProfile(int32_t planeIndex)
     return nullptr;
 }
 
+/* Advertised capabilities of the plane with the given index; false if the plane is not advertised */
+static bool getPlaneCapability(int32_t planeIndex, ::com::rdk::hal::planecontrol::PlaneCapabilities& planeCapability)
+{
+    std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
+    PLANE_CONTROL_GET_CAPABILITIES(capabilities);
+    const auto capability = std::find_if(capabilities.begin(), capabilities.end(),
+        [planeIndex](const auto& entry) { return entry.planeIndex == planeIndex; });
+    if (capability == capabilities.end())
+    {
+        return false;
+    }
+    planeCapability = *capability;
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // checkPlaneMappings
 // ---------------------------------------------------------------------------
@@ -148,10 +163,12 @@ void checkPlaneMappings(vector<::com::rdk::hal::planecontrol::SourcePlaneMapping
 PlaneControlTest::PlaneControlTest(
     planeControlTestConfig_t planeConfig,
     const std::vector<PlaneControlHDMIInputEntry>& hdmiInputList,
-    const std::vector<PlaneControlCompositeInputEntry>& compositeInputList)
+    const std::vector<PlaneControlCompositeInputEntry>& compositeInputList,
+    const std::vector<PlaneControlHDMIOutputEntry>& hdmiOutputList)
     : mPlaneConfig(std::move(planeConfig)),
       mHDMIInputList(hdmiInputList),
-      mCompositeInputList(compositeInputList)
+      mCompositeInputList(compositeInputList),
+      mHDMIOutputList(hdmiOutputList)
 {
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> capabilities;
     std::vector<::com::rdk::hal::planecontrol::PlaneCapabilities> videoCapabilities;
@@ -218,6 +235,7 @@ PlaneControlTest::PlaneControlTest(
 PlaneControlTest::~PlaneControlTest()
 {
     stopInputSources();
+    stopOutputPaths();
 }
 
 void PlaneControlTest::startInputSources()
@@ -321,6 +339,7 @@ void PlaneControlTest::run()
         }
     }
 
+    startOutputPaths();
     startInputSources();
 
     bool aidl_return = false;
@@ -340,6 +359,25 @@ void PlaneControlTest::run()
         }
         PLANE_CONTROL_SET_VIDEO_SOURCE_MAPPING_POS(mPlaneConfig.planeMappings, aidl_return);
         checkPlaneMappings(mPlaneConfig.planeMappings);
+
+        /* rdk-halif-aidl 0.23.0: the video sink reports first frame rendered once its plane is mapped */
+        const bool mapsVideoSink = std::any_of(
+            mPlaneConfig.planeMappings.begin(), mPlaneConfig.planeMappings.end(),
+            [](const auto& mapping) {
+                return mapping.sourceType == ::com::rdk::hal::planecontrol::SourceType::VIDEO_SINK;
+            });
+        if (mapsVideoSink && mWaitForFirstFrameRendered)
+        {
+            if (!mWaitForFirstFrameRendered())
+            {
+                UT_ASSERT_TRUE(false) << "First frame rendered not received after mapping the video plane: "
+                                      << mPlaneConfig.testName;
+                return;
+            }
+            UT_LOG_INFO("First frame rendered after plane mapping; applying %s properties",
+                        mPlaneConfig.testName.c_str());
+        }
+
         for (const auto& mapping : mPlaneConfig.planeMappings)
         {
             setAndVerifyIntProperty(
@@ -642,6 +680,17 @@ void PlaneControlTest::run()
                 continue;
             }
             std::pair<uint32_t, uint32_t> position = mPlaneConfig.positions[i];
+            /* X and Y are coordinates inside the plane's frame (PlaneCapabilities.frameWidth / frameHeight) */
+            ::com::rdk::hal::planecontrol::PlaneCapabilities planeCapability;
+            if (getPlaneCapability(map.destinationPlaneIndex, planeCapability) &&
+                (position.first >= static_cast<uint32_t>(planeCapability.frameWidth) ||
+                 position.second >= static_cast<uint32_t>(planeCapability.frameHeight)))
+            {
+                UT_LOG_WARNING("Skipping position X=%u, Y=%u for planeIndex=%d: outside its frame %dx%d",
+                               position.first, position.second, map.destinationPlaneIndex,
+                               planeCapability.frameWidth, planeCapability.frameHeight);
+                continue;
+            }
             std::vector<::com::rdk::hal::planecontrol::PropertyKVPair> propertyKVList;
             PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::X, position.first);
             PLANE_CONTROL_ADD_PROP_TO_LIST(propertyKVList, ::com::rdk::hal::planecontrol::Property::Y, position.second);
@@ -667,8 +716,21 @@ void PlaneControlTest::run()
         }
 
         const auto& map = mPlaneConfig.planeMappings.front();
+        ::com::rdk::hal::planecontrol::PlaneCapabilities planeCapability;
+        const bool hasCapability = getPlaneCapability(map.destinationPlaneIndex, planeCapability);
+        size_t sizesExercised = 0;
         for (const auto& size : mPlaneConfig.size)
         {
+            /* The plane can be set only up to its advertised size (PlaneCapabilities.maxWidth / maxHeight) */
+            if (hasCapability && (size.first > static_cast<uint32_t>(planeCapability.maxHeight) ||
+                                  size.second > static_cast<uint32_t>(planeCapability.maxWidth)))
+            {
+                UT_LOG_WARNING("Skipping size %ux%u for planeIndex=%d: above its maximum %dx%d",
+                               size.second, size.first, map.destinationPlaneIndex,
+                               planeCapability.maxWidth, planeCapability.maxHeight);
+                continue;
+            }
+            ++sizesExercised;
             ::com::rdk::hal::PropertyValue propertyValue;
             propertyValue.value = ::com::rdk::hal::PropertyValue::Value::make<
                 ::com::rdk::hal::PropertyValue::Value::intValue>(size.first);
@@ -687,6 +749,11 @@ void PlaneControlTest::run()
             UT_LOG_INFO("WindowSize validation completed for planeIndex=%d: result=%s",
                         map.destinationPlaneIndex, result ? "yes" : "no");
             UT_ASSERT_TRUE(result);
+        }
+        if (sizesExercised == 0)
+        {
+            UT_IGNORE_TEST() << "No configured window size is supported by planeIndex=" << map.destinationPlaneIndex;
+            return;
         }
     }
     // Graphics plane tests (Client and Auto modes)
@@ -841,6 +908,7 @@ void PlaneControlTest::run()
     }
 
     stopInputSources();
+    stopOutputPaths();
 }
 
 /** @} */ // End of Plane_Control_Halif_Test_TestClass
