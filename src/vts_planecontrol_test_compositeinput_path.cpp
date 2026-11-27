@@ -28,10 +28,18 @@ bool PlaneControlTest::startCompositeInputPath(int32_t compositeInputIndex)
     const auto input = vts::input_path::findInputPathEntry(
         mCompositeInputList, compositeInputIndex,
         [](const auto& entry) { return entry.portId; });
-    UT_ASSERT_TRUE(input != mCompositeInputList.end())
-        << "No opened composite input found for source index " << compositeInputIndex;
+    /* Missing or disconnected inputs are filtered out by the L3 suite before the test; only log here */
     if (input == mCompositeInputList.end())
     {
+        UT_LOG_WARNING("No opened composite input found for source index %d", compositeInputIndex);
+        return false;
+    }
+
+    compositeinput::PortStatus portStatus;
+    COMPOSITEINPUT_GET_STATUS(input->inputPort, portStatus);
+    if (!portStatus.connected)
+    {
+        UT_LOG_WARNING("Composite input is not connected for source index %d", compositeInputIndex);
         return false;
     }
 

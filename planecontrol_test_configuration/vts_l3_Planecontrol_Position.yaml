@@ -29,7 +29,7 @@ planecontrol:
               source: VIDEO_SINK
               source_index: 1
               decoderId: 1
-              X: 720
-              Y: 1280
+              X: 640
+              Y: 360
               height: 720
               width: 1280
